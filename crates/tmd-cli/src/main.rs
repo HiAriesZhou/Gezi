@@ -2,6 +2,7 @@ mod ansi;
 mod cli;
 #[cfg(test)]
 mod snapshots;
+mod theme_select;
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
@@ -35,8 +36,14 @@ fn main() -> ExitCode {
         }
     };
 
-    // Only the built-in default theme exists until T5.
-    let lines = render(&md, width, &Theme::default());
+    let theme = match pick_theme(&cli.theme) {
+        Ok(theme) => theme,
+        Err(err) => {
+            eprintln!("tmd: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let lines = render(&md, width, &theme);
     let hyperlinks = io::stdout().is_terminal();
     match write_out(io::stdout().lock(), &ansi::to_ansi(&lines, hyperlinks)) {
         Ok(()) => ExitCode::SUCCESS,
@@ -47,6 +54,36 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The theme `--theme` names; `auto` picks default-dark or default-light
+/// by the terminal's background.
+fn pick_theme(name: &str) -> Result<Theme, String> {
+    let name = if name == theme_select::AUTO {
+        let dark = theme_select::auto_is_dark(
+            io::stdout().is_terminal(),
+            query_dark_background,
+            std::env::var("COLORFGBG").ok().as_deref(),
+        );
+        if dark {
+            "default-dark"
+        } else {
+            "default-light"
+        }
+    } else {
+        name
+    };
+    theme_select::load(name, theme_select::config_dir().as_deref())
+}
+
+/// Asks the terminal whether its background is dark, waiting at most
+/// 300 ms.
+fn query_dark_background() -> Option<bool> {
+    let mut options = terminal_colorsaurus::QueryOptions::default();
+    options.timeout = std::time::Duration::from_millis(300);
+    terminal_colorsaurus::theme_mode(options)
+        .ok()
+        .map(|mode| mode == terminal_colorsaurus::ThemeMode::Dark)
 }
 
 /// Opens `path` for reading. Directories are rejected here because on Unix
