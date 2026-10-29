@@ -65,3 +65,20 @@ fn html_block_with_only_tags_or_comments_leaves_no_row() {
 fn html_block_text_wraps_to_width() {
     assert_eq!(plain("<div>one two three</div>", 9), ["one two", "three"]);
 }
+
+#[test]
+fn inline_script_content_is_hidden() {
+    assert_eq!(
+        plain("text <script>alert(1)</script> after", 80),
+        ["text  after"]
+    );
+    assert_eq!(plain("a <style>p { color: red }</style>b", 80), ["a b"]);
+}
+
+#[test]
+fn html_table_cells_are_separated() {
+    assert_eq!(
+        plain("<table><tr><td>a</td><td>b</td></tr></table>", 80),
+        ["a b"]
+    );
+}
