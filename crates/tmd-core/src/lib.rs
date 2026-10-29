@@ -14,12 +14,14 @@ mod parse;
 mod style;
 mod table;
 mod theme;
+mod theme_file;
 mod width;
 mod wrap;
 
 pub use line::{Line, Span};
 pub use style::{Color, Style};
 pub use theme::{Symbols, TableSymbols, Theme};
+pub use theme_file::ThemeError;
 
 /// Renders `md` into rows at most `width` columns wide.
 ///

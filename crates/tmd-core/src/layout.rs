@@ -3,6 +3,7 @@
 use crate::code;
 use crate::line::Span;
 use crate::parse::{Block, Item};
+use crate::style::Style;
 use crate::table;
 use crate::theme::Theme;
 use crate::width::{text_width, truncate};
@@ -37,8 +38,13 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
         Block::Paragraph(spans) => wrap(spans, width),
         Block::Heading { level, spans } => {
             let mut rows = wrap(spans, width);
-            if *level == 2 {
-                rows.push(rule_row(theme, width));
+            let underline = match level {
+                1 => Some((&theme.symbols.h1_rule, &theme.h1)),
+                2 => Some((&theme.symbols.h2_rule, &theme.rule)),
+                _ => None,
+            };
+            if let Some((symbol, style)) = underline.filter(|(symbol, _)| !symbol.is_empty()) {
+                rows.push(rule_row(symbol, style, width));
             }
             rows
         }
@@ -52,15 +58,15 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
             items,
         } => list(ctx, *start, *tight, items, width),
         Block::Quote(children) => quote(ctx, children, width),
-        Block::Rule => vec![rule_row(theme, width)],
+        Block::Rule => vec![rule_row(&theme.symbols.rule, &theme.rule, width)],
         Block::Table(table) => table::layout(theme, table, width),
     }
 }
 
-fn rule_row(theme: &Theme, width: usize) -> Row {
-    let symbol = &theme.symbols.rule;
+/// `symbol` repeated across the row, cut to fit if it is wide.
+fn rule_row(symbol: &str, style: &Style, width: usize) -> Row {
     let repeated = symbol.repeat(width / text_width(symbol).max(1));
-    vec![Span::new(truncate(&repeated, width), theme.rule.clone())]
+    vec![Span::new(truncate(&repeated, width), style.clone())]
 }
 
 fn quote(ctx: &Ctx, children: &[Block], width: usize) -> Vec<Row> {
