@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 32
+assertion_line: 47
 expression: ansi
 ---
 \e[1;95m列表\e[0m
@@ -51,4 +51,4 @@ expression: ansi
 \e[96m• \e[0m代码：
 
   \e[100m                                                                            \e[0m\e[2;100msh\e[0m
-  \e[100mcargo run -- fixtures/lists.md                                                \e[0m
+  \e[38;2;143;161;179;100mcargo\e[0m\e[38;2;192;197;206;100m run -- fixtures/lists.md\e[0m\e[100m                                                \e[0m

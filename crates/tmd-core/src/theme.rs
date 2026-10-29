@@ -5,6 +5,9 @@ use crate::style::{Color, Style};
 /// Only the built-in default exists until T5 adds TOML themes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Theme {
+    /// Whether the theme is meant for a dark background; picks the code
+    /// highlighting colors.
+    pub dark: bool,
     pub h1: Style,
     pub h2: Style,
     /// Headings of level 3 and below.
@@ -59,6 +62,7 @@ impl Default for Theme {
     fn default() -> Self {
         let gray = Color::Ansi(8);
         Self {
+            dark: true,
             h1: Style::fg(Color::Ansi(13)).bold(),
             h2: Style::fg(Color::Ansi(12)).bold(),
             h3: Style::fg(Color::Ansi(14)),

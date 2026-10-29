@@ -4,6 +4,7 @@
 //! terminal library; output backends live in `tmd-cli`.
 
 mod code;
+mod highlight;
 mod html;
 mod layout;
 mod line;
