@@ -1,0 +1,44 @@
+---
+source: crates/tmd-cli/src/snapshots.rs
+assertion_line: 35
+expression: ansi
+---
+\e[1;95mTMD 基本元素\e[0m
+
+这是一个普通段落，混合了中文和 English words。段落里有 \e[1m粗体\e[0m、\e[3m斜体\e[0m、\e[9m删除线\e[0m 和 \e[93;100m行内代码\e[0m，也可以 \e[1;3m又粗又斜\e[0m，或者 \e[1m粗体里套 \e[0m\e[1;93;100m代码\e[0m。
+
+A long English paragraph that should wrap at the terminal width without breaking
+words in the middle, unless a single word like
+Supercalifragilisticexpialidocious_and_then_some_more_letters_to_overflow is
+wider than the line.
+
+\e[1;94m二级标题\e[0m
+\e[90m────────────────────────────────────────────────────────────────────────────────\e[0m
+
+链接：\e[4;94mpulldown-cmark\e[0m，自动链接：\e[4;94mhttps://example.com\e[0m，\e[1m粗体链接 \e[0m\e[1;4;94mdocs\e[0m。
+
+第一行末尾两个空格是硬换行
+第二行紧接着出现。 第三行是软换行，会和上一行接在一起。
+
+\e[96m三级标题\e[0m
+
+\e[96m四级标题\e[0m
+
+\e[96m五级标题\e[0m
+
+\e[96m六级标题\e[0m
+
+\e[90m────────────────────────────────────────────────────────────────────────────────\e[0m
+
+图片：\e[90m[图片: 终端截图]\e[0m，没有替代文字的图片：\e[90m[图片]\e[0m。
+
+行内 HTML：\e[90m<kbd>\e[0mCtrl\e[90m</kbd>\e[0m+\e[90m<kbd>\e[0mC\e[90m</kbd>\e[0m。
+
+\e[90m<details>\e[0m
+\e[90m<summary>HTML 块</summary>\e[0m
+\e[90m原样灰色显示。\e[0m
+\e[90m</details>\e[0m
+
+\e[90m────────────────────────────────────────────────────────────────────────────────\e[0m
+
+最后一段。
