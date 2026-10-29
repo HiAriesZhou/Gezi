@@ -19,7 +19,7 @@ wider than the line.
 链接：pulldown-cmark，自动链接：https://example.com，粗体链接 docs。
 
 第一行末尾两个空格是硬换行
-第二行紧接着出现。 第三行是软换行，会和上一行接在一起。
+第二行紧接着出现。第三行是软换行，会和上一行接在一起。
 
 三级标题
 

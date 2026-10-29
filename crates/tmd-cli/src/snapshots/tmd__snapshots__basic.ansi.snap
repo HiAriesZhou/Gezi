@@ -19,7 +19,7 @@ wider than the line.
 链接：\e[4;94mpulldown-cmark\e[0m，自动链接：\e[4;94mhttps://example.com\e[0m，\e[1m粗体链接 \e[0m\e[1;4;94mdocs\e[0m。
 
 第一行末尾两个空格是硬换行
-第二行紧接着出现。 第三行是软换行，会和上一行接在一起。
+第二行紧接着出现。第三行是软换行，会和上一行接在一起。
 
 \e[96m三级标题\e[0m
 
