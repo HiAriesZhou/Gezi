@@ -1,0 +1,44 @@
+# Built-in theme for light backgrounds, using only the 16 ANSI colors so it
+# follows the terminal's own palette. Field reference: themes/README.md.
+dark = false
+
+[styles]
+h1 = { fg = "ansi:5", bold = true }
+h2 = { fg = "ansi:4", bold = true }
+h3 = { fg = "ansi:6" }
+text = {}
+bold = { bold = true }
+italic = { italic = true }
+strike = { strike = true }
+inline_code = { fg = "ansi:1", bg = "ansi:7" }
+code_block = { bg = "ansi:7" }
+link = { fg = "ansi:4", underline = true }
+quote_bar = { fg = "bright:0" }
+list_marker = { fg = "ansi:6" }
+rule = { fg = "bright:0" }
+table_border = { fg = "bright:0" }
+table_header = { bold = true }
+muted = { fg = "bright:0" }
+fold = { fg = "bright:0" }
+
+[symbols]
+bullets = ["•", "◦", "▪"]
+task_unchecked = "☐"
+task_checked = "☑"
+quote_bar = "│"
+rule = "─"
+h1_rule = ""
+h2_rule = "─"
+
+[symbols.table]
+top_left = "┌"
+top_mid = "┬"
+top_right = "┐"
+mid_left = "├"
+mid_mid = "┼"
+mid_right = "┤"
+bottom_left = "└"
+bottom_mid = "┴"
+bottom_right = "┘"
+vertical = "│"
+horizontal = "─"
