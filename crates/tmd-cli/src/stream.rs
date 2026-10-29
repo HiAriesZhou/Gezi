@@ -127,7 +127,9 @@ impl ActiveArea {
         }
         queue!(out, Clear(ClearType::FromCursorDown))?;
         out.write_all(to_ansi(&frame.committed, true).as_bytes())?;
-        let room = usize::from(height.saturating_sub(1)).max(1);
+        // The cursor's own row is below the active rows, so a one-row
+        // terminal has no room for any.
+        let room = usize::from(height.saturating_sub(1));
         let visible: &[Line] = &frame.active[frame.active.len().saturating_sub(room)..];
         out.write_all(to_ansi(visible, true).as_bytes())?;
         self.shown = visible.len();
@@ -292,6 +294,20 @@ mod tests {
         assert!(
             next.contains("\x1b[3F"),
             "moves back over the three shown rows"
+        );
+    }
+
+    /// A one-row terminal has no room for active rows: showing one
+    /// pushed it into history on every frame.
+    #[test]
+    fn one_row_terminal_shows_no_active_rows() {
+        let mut area = ActiveArea::default();
+        let out = drawn(&mut area, &frame(&["c1"], &["a1"]), 1);
+        assert!(out.contains("c1\n") && !out.contains("a1"));
+        let next = drawn(&mut area, &frame(&[], &["a2"]), 1);
+        assert!(
+            !next.contains("F"),
+            "nothing shown, nothing to move back over"
         );
     }
 
