@@ -177,3 +177,10 @@ fn symbol_errors_point_at_the_symbol_not_a_same_named_style() {
     let dotted = "dark = true\nsymbols.rule = \"\"\n";
     assert_eq!(Theme::from_toml(dotted).unwrap_err().line, Some(2));
 }
+
+#[test]
+fn rule_wider_than_the_row_is_cut_not_dropped() {
+    let theme = Theme::from_toml("[symbols]\nrule = \"─ \"\n").unwrap();
+    let out = crate::render("a\n\n---\n\nb", 1, &theme);
+    assert_eq!(out[2].plain_text(), "─");
+}
