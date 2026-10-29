@@ -2,7 +2,11 @@
 
 use crate::line::Span;
 use crate::style::Style;
-use crate::width::{char_width, is_wide, text_width};
+use crate::width::{cluster_width, clusters, text_width};
+
+/// Stands in for a character wider than the whole row (only possible when
+/// the row is one column wide), so no row overflows.
+const TOO_WIDE: &str = "…";
 
 /// A row of spans being built.
 pub(crate) type Row = Vec<Span>;
@@ -71,11 +75,10 @@ fn tokenize(spans: &[Span]) -> Vec<Token> {
 /// can break around it; narrow runs join the open word before them, and
 /// punctuation joins the side it belongs to.
 fn push_word_segments(tokens: &mut Vec<Token>, text: &str, style: &Style) {
-    for segment in split_wide(text) {
+    for (segment, wide) in split_wide(text) {
         let (Some(first), Some(last)) = (segment.chars().next(), segment.chars().last()) else {
             continue;
         };
-        let wide = is_wide(first);
         let entry = (segment.to_string(), style.clone());
         let ends_open = NO_ROW_END.contains(last);
         match tokens.last_mut() {
@@ -95,22 +98,25 @@ fn push_word_segments(tokens: &mut Vec<Token>, text: &str, style: &Style) {
     }
 }
 
-/// Splits `text` into single wide characters and runs of narrow ones.
-fn split_wide(text: &str) -> Vec<&str> {
+/// Splits `text` into single wide clusters and runs of narrow ones; the
+/// flag says whether a segment is a wide cluster.
+fn split_wide(text: &str) -> Vec<(&str, bool)> {
     let mut segments = Vec::new();
     let mut start = 0;
-    for (i, c) in text.char_indices() {
-        if is_wide(c) {
-            if start < i {
-                segments.push(&text[start..i]);
+    let mut offset = 0;
+    for cluster in clusters(text) {
+        let end = offset + cluster.len();
+        if cluster_width(cluster) >= 2 {
+            if start < offset {
+                segments.push((&text[start..offset], false));
             }
-            let end = i + c.len_utf8();
-            segments.push(&text[i..end]);
+            segments.push((cluster, true));
             start = end;
         }
+        offset = end;
     }
     if start < text.len() {
-        segments.push(&text[start..]);
+        segments.push((&text[start..], false));
     }
     segments
 }
@@ -185,17 +191,28 @@ pub(crate) fn wrap(spans: &[Span], width: usize) -> Vec<Row> {
     rows
 }
 
-/// Fills rows character by character with a word too wide for one row.
+/// Fills rows cluster by cluster with a word too wide for one row.
 fn hard_break(pieces: &[(String, Style)], width: usize, row: &mut Row, rows: &mut Vec<Row>) {
     for (text, style) in pieces {
-        for c in text.chars() {
+        for cluster in clusters(text) {
+            let (cluster, w) = fit_cluster(cluster, width);
             let used = row_width(row);
-            if used > 0 && used + char_width(c) > width {
+            if used > 0 && used + w > width {
                 rows.push(std::mem::take(row));
             }
-            let mut buf = [0; 4];
-            push_text(row, c.encode_utf8(&mut buf), style);
+            push_text(row, cluster, style);
         }
+    }
+}
+
+/// `cluster` and its width, or a one-column stand-in when it is wider than
+/// the whole row.
+fn fit_cluster(cluster: &str, width: usize) -> (&str, usize) {
+    let w = cluster_width(cluster);
+    if w > width {
+        (TOO_WIDE, text_width(TOO_WIDE))
+    } else {
+        (cluster, w)
     }
 }
 
@@ -207,13 +224,13 @@ pub(crate) fn hard_wrap_lines(text: &str, width: usize) -> Vec<String> {
     for line in text.lines() {
         let mut current = String::new();
         let mut used = 0;
-        for c in line.chars() {
-            let w = char_width(c);
+        for cluster in clusters(line) {
+            let (cluster, w) = fit_cluster(cluster, width);
             if used > 0 && used + w > width {
                 rows.push(std::mem::take(&mut current));
                 used = 0;
             }
-            current.push(c);
+            current.push_str(cluster);
             used += w;
         }
         rows.push(current);
