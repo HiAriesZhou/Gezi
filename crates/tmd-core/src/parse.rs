@@ -101,6 +101,8 @@ struct Inline {
     /// A soft break waiting for the next character, with its style; it
     /// becomes a space unless both neighbors are wide characters.
     pending_soft_break: Option<Style>,
+    /// Inside an inline `<script>` or `<style>`, whose content is hidden.
+    hidden: bool,
 }
 
 impl Inline {
@@ -112,6 +114,7 @@ impl Inline {
             image_alt: None,
             nested_images: 0,
             pending_soft_break: None,
+            hidden: false,
         }
     }
 
@@ -131,6 +134,9 @@ impl Inline {
     }
 
     fn text(&mut self, text: &str, style: Style) {
+        if self.hidden {
+            return;
+        }
         let text = clean_inline(text);
         let Some(first) = text.chars().next() else {
             return;
@@ -174,14 +180,16 @@ impl Inline {
                     let style = self.style();
                     self.text(&text, style);
                 }
-                Piece::Break => {
+                Piece::Break if !self.hidden => {
                     let style = self.style();
                     self.spans.push(Span::new("\n", style));
                 }
+                Piece::Break => {}
                 Piece::Image(alt) => {
                     let style = self.style().patch(muted);
                     self.text(&image_label(alt.as_deref().unwrap_or("")), style);
                 }
+                Piece::Hide(start) => self.hidden = start,
             }
         }
     }

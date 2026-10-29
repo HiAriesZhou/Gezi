@@ -18,6 +18,9 @@ pub(crate) enum Piece {
     Break,
     /// An `<img>`, with its alt text when present and non-empty.
     Image(Option<String>),
+    /// Start (`true`) or end of a `<script>` or `<style>` whose content
+    /// arrives as separate inline events and must stay hidden.
+    Hide(bool),
 }
 
 /// Pieces of inline HTML: tags hidden, `<br>` as a break, `<img>` as an
@@ -30,6 +33,7 @@ pub(crate) fn inline(html: &str) -> Vec<Piece> {
             Raw::LineBreak => Some(Piece::Break),
             Raw::BlockBreak => None,
             Raw::Image(alt) => Some(Piece::Image(alt)),
+            Raw::Hide(start) => Some(Piece::Hide(start)),
         })
         .collect()
 }
@@ -60,13 +64,19 @@ pub(crate) fn block(html: &str) -> Vec<Piece> {
                 }
                 flush_breaks(&mut out, breaks, line_breaks);
                 (breaks, line_breaks) = (0, 0);
-                out.push(Piece::Text(text));
+                match out.last_mut() {
+                    Some(Piece::Text(last)) => last.push_str(&text),
+                    _ => out.push(Piece::Text(text)),
+                }
             }
             Raw::Image(alt) => {
                 flush_breaks(&mut out, breaks, line_breaks);
                 (breaks, line_breaks) = (0, 0);
                 out.push(Piece::Image(alt));
             }
+            // A block holds the whole element, so its content is already
+            // skipped.
+            Raw::Hide(_) => {}
         }
     }
     trim_line_ends(out)
@@ -125,6 +135,9 @@ enum Raw {
     /// Start or end of a block tag.
     BlockBreak,
     Image(Option<String>),
+    /// A script or style element opens (`true`) without closing in this
+    /// text, or closes (`false`) without having opened in it.
+    Hide(bool),
 }
 
 fn scan(html: &str) -> Vec<Raw> {
@@ -149,12 +162,17 @@ fn scan(html: &str) -> Vec<Raw> {
                 rest = &rest[consumed..];
                 match item {
                     Markup::Hidden => {}
-                    Markup::Tag(tag) => {
-                        if !tag.closing && HIDDEN_CONTENT_TAGS.contains(&tag.name.as_str()) {
-                            rest = after_closing(rest, &tag.name).unwrap_or("");
+                    Markup::Tag(tag) if HIDDEN_CONTENT_TAGS.contains(&tag.name.as_str()) => {
+                        if tag.closing {
+                            out.push(Raw::Hide(false));
+                        } else if let Some(after) = after_closing(rest, &tag.name) {
+                            rest = after;
+                        } else {
+                            out.push(Raw::Hide(true));
+                            rest = "";
                         }
-                        out.extend(tag_piece(&tag));
                     }
+                    Markup::Tag(tag) => out.extend(tag_piece(&tag)),
                 }
             }
             None => {
@@ -179,6 +197,7 @@ fn tag_piece(tag: &Tag) -> Option<Raw> {
             Some(Raw::Image(alt.filter(|alt| !alt.trim().is_empty())))
         }
         name if BLOCK_TAGS.contains(&name) => Some(Raw::BlockBreak),
+        "td" | "th" if tag.closing => Some(Raw::Text(" ".to_string())),
         _ => None,
     }
 }
@@ -420,6 +439,21 @@ mod tests {
     #[test]
     fn quoted_greater_than_does_not_end_a_tag() {
         assert_eq!(block(r#"<p title="a > b">text</p>"#), [text("text")]);
+    }
+
+    #[test]
+    fn table_cells_are_separated() {
+        assert_eq!(
+            block("<table><tr><td>a</td><td>b</td></tr><tr><th>c</th><th>d</th></tr></table>"),
+            [text("a b"), Piece::Break, text("c d")]
+        );
+    }
+
+    #[test]
+    fn inline_script_and_style_mark_hidden_ranges() {
+        assert_eq!(inline("<script>"), [Piece::Hide(true)]);
+        assert_eq!(inline("</SCRIPT>"), [Piece::Hide(false)]);
+        assert_eq!(inline("<style>p{}</style>"), []);
     }
 
     /// Unclosed `<!`, `<?` and many script tags used to rescan the rest of
