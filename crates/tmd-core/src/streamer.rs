@@ -23,7 +23,8 @@ pub struct Frame {
 #[derive(Debug, Clone)]
 pub struct Streamer {
     buffer: String,
-    /// Source offset everything before which has been committed.
+    /// The boundary of the previous frame: every row whose source ends at
+    /// or before it has been committed.
     committed: usize,
     width: u16,
     theme: Theme,
@@ -58,10 +59,13 @@ impl Streamer {
     fn frame(&mut self, boundary: usize) -> Frame {
         let boundary = boundary.max(self.committed);
         let mut frame = Frame::default();
+        // A row is committed by the frame whose boundary first reaches its
+        // end. Its start does not matter: a block's range can run past the
+        // next line's start (a list into the indentation after it).
         for line in render(&self.buffer, self.width, &self.theme) {
             if line.src.end > boundary {
                 frame.active.push(line);
-            } else if line.src.start >= self.committed {
+            } else if line.src.end > self.committed {
                 frame.committed.push(line);
             }
             // Otherwise the line was committed by an earlier call.
