@@ -131,10 +131,17 @@ fn scan(html: &str) -> Vec<Raw> {
     let mut out = Vec::new();
     let mut text = String::new();
     let mut rest = html;
+    // Markup other than a comment needs a `>` after its `<`; past the last
+    // one, every `<` is text. Checking this up front keeps scanning linear
+    // when `<!` or `<?` repeat without ever closing.
+    let last_gt = html.rfind('>');
     while let Some(lt) = rest.find('<') {
         text.push_str(&rest[..lt]);
         rest = &rest[lt..];
-        match markup(rest) {
+        let at = html.len() - rest.len();
+        let can_close = last_gt.is_some_and(|gt| gt > at) || rest.starts_with("<!--");
+        let found = if can_close { markup(rest) } else { None };
+        match found {
             Some((consumed, item)) => {
                 if !text.is_empty() {
                     out.push(Raw::Text(decode_entities(&std::mem::take(&mut text))));
@@ -144,7 +151,7 @@ fn scan(html: &str) -> Vec<Raw> {
                     Markup::Hidden => {}
                     Markup::Tag(tag) => {
                         if !tag.closing && HIDDEN_CONTENT_TAGS.contains(&tag.name.as_str()) {
-                            rest = skip_past_closing(rest, &tag.name);
+                            rest = after_closing(rest, &tag.name).unwrap_or("");
                         }
                         out.extend(tag_piece(&tag));
                     }
@@ -237,17 +244,21 @@ fn tag_end(text: &str) -> Option<usize> {
     None
 }
 
-/// The rest of `text` after `</name>`, or nothing when it never closes.
-fn skip_past_closing<'a>(text: &'a str, name: &str) -> &'a str {
-    let lower = text.to_ascii_lowercase();
-    let closing = format!("</{name}");
-    match lower.find(&closing) {
-        Some(start) => {
-            let after = &text[start..];
-            after.find('>').map_or("", |i| &after[i + 1..])
+/// The rest of `text` after `</name>` (case-insensitive), or `None` when
+/// the element does not close in `text`. Compares in place so many script
+/// tags in one block do not copy the rest of it each time.
+fn after_closing<'a>(text: &'a str, name: &str) -> Option<&'a str> {
+    text.match_indices("</").find_map(|(start, _)| {
+        let after = &text[start + 2..];
+        let matches = after
+            .as_bytes()
+            .get(..name.len())
+            .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name.as_bytes()));
+        if !matches {
+            return None;
         }
-        None => "",
-    }
+        Some(after.find('>').map_or("", |gt| &after[gt + 1..]))
+    })
 }
 
 /// The value of attribute `name` (case-insensitive) in a tag's attribute
@@ -409,5 +420,26 @@ mod tests {
     #[test]
     fn quoted_greater_than_does_not_end_a_tag() {
         assert_eq!(block(r#"<p title="a > b">text</p>"#), [text("text")]);
+    }
+
+    /// Unclosed `<!`, `<?` and many script tags used to rescan the rest of
+    /// the block for every `<`, taking quadratic time.
+    #[test]
+    fn scanning_stays_linear_on_pathological_markup() {
+        let cases = [
+            format!("<div>{}", "<!".repeat(400_000)),
+            format!("<div>{}", "<?".repeat(400_000)),
+            format!("<div>{}", "<script></script>".repeat(50_000)),
+        ];
+        for html in &cases {
+            let start = std::time::Instant::now();
+            let _ = block(html);
+            let elapsed = start.elapsed();
+            assert!(
+                elapsed < std::time::Duration::from_secs(1),
+                "{}… took {elapsed:?}",
+                &html[..12]
+            );
+        }
     }
 }
