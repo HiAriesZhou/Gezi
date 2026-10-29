@@ -1,6 +1,7 @@
 //! Behavior tests for `render`.
 
 mod cjk;
+mod html;
 mod tables;
 
 use crate::{Color, Line, Style, Theme, render};
@@ -176,17 +177,11 @@ fn long_code_lines_wrap_inside_the_block() {
 }
 
 #[test]
-fn images_and_html() {
+fn image_placeholders_are_muted() {
     let theme = Theme::default();
-    let out = lines("![a cat](cat.png) <b>hi</b>\n\n<div>\nraw\n</div>", 80);
-    let text: Vec<String> = out.iter().map(Line::plain_text).collect();
-    assert_eq!(
-        text,
-        ["[图片: a cat] <b>hi</b>", "", "<div>", "raw", "</div>"]
-    );
+    let out = lines("![a cat](cat.png) and ![](x.png)", 80);
+    assert_eq!(out[0].plain_text(), "[图片: a cat] and [图片]");
     assert_eq!(style_of(&out, "图片").fg, theme.muted.fg);
-    assert_eq!(style_of(&out, "<b>").fg, theme.muted.fg);
-    assert_eq!(style_of(&out, "<div>").fg, theme.muted.fg);
 }
 
 #[test]

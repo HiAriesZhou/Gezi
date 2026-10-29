@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 32
+assertion_line: 39
 expression: ansi
 ---
 \e[1;95mTMD 基本元素\e[0m
@@ -33,12 +33,10 @@ wider than the line.
 
 图片：\e[90m[图片: 终端截图]\e[0m，没有替代文字的图片：\e[90m[图片]\e[0m。
 
-行内 HTML：\e[90m<kbd>\e[0mCtrl\e[90m</kbd>\e[0m+\e[90m<kbd>\e[0mC\e[90m</kbd>\e[0m。
+行内 HTML：Ctrl+C。
 
-\e[90m<details>\e[0m
-\e[90m<summary>HTML 块</summary>\e[0m
-\e[90m原样灰色显示。\e[0m
-\e[90m</details>\e[0m
+HTML 块
+原样灰色显示。
 
 \e[90m────────────────────────────────────────────────────────────────────────────────\e[0m
 
