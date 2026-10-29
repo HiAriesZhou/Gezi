@@ -1,9 +1,10 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 34
+assertion_line: 42
 expression: plain(&lines)
 ---
 列表
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 • 苹果
 • 香蕉

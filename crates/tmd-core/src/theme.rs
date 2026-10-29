@@ -67,7 +67,7 @@ pub struct TableSymbols {
 }
 
 /// Built-in themes: name and TOML source.
-const BUILTIN: [(&str, &str); 2] = [
+const BUILTIN: [(&str, &str); 3] = [
     (
         "default-dark",
         include_str!("../../../themes/default-dark.toml"),
@@ -75,6 +75,10 @@ const BUILTIN: [(&str, &str); 2] = [
     (
         "default-light",
         include_str!("../../../themes/default-light.toml"),
+    ),
+    (
+        "neon-tokyo",
+        include_str!("../../../themes/neon-tokyo.toml"),
     ),
 ];
 

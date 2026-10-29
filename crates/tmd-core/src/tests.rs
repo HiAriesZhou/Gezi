@@ -36,6 +36,7 @@ fn headings_hide_markers_and_use_theme_styles() {
         text,
         [
             "One",
+            "━".repeat(20).as_str(),
             "",
             "Two",
             "─".repeat(20).as_str(),
@@ -240,7 +241,7 @@ fn deep_nesting_and_long_markers_still_fit_narrow_widths() {
 #[test]
 fn lists_separated_by_blank_lines_are_loose_without_paragraphs() {
     assert_eq!(plain("- > a\n\n- > b", 80), ["• │ a", "", "• │ b"]);
-    assert_eq!(plain("- # h1\n\n- # h2", 80), ["• h1", "", "• h2"]);
+    assert_eq!(plain("- ### h1\n\n- ### h2", 80), ["• h1", "", "• h2"]);
     assert_eq!(plain("> - a\n>\n> - b", 80), ["│ • a", "│", "│ • b"]);
     assert_eq!(plain("- a\n- b", 80), ["• a", "• b"]);
 }

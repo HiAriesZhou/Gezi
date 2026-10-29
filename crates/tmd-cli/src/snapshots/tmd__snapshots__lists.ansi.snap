@@ -4,6 +4,7 @@ assertion_line: 47
 expression: ansi
 ---
 \e[1;95m列表\e[0m
+\e[1;95m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m
 
 \e[96m• \e[0m苹果
 \e[96m• \e[0m香蕉
@@ -29,7 +30,7 @@ expression: ansi
 
 \e[96m☐ \e[0m写测试
 \e[96m☑ \e[0m写实现
-\e[96m☐ \e[0m跑 \e[93;100mcargo test\e[0m
+\e[96m☐ \e[0m跑 \e[91;100mcargo test\e[0m
   \e[96m☑ \e[0m嵌套的任务
 
 \e[1;94m松散列表\e[0m

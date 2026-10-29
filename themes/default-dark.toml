@@ -5,12 +5,12 @@ dark = true
 [styles]
 h1 = { fg = "bright:5", bold = true }
 h2 = { fg = "bright:4", bold = true }
-h3 = { fg = "bright:6" }
+h3 = { fg = "bright:6", bold = true }
 text = {}
-bold = { bold = true }
-italic = { italic = true }
+bold = { fg = "bright:3", bold = true }
+italic = { fg = "bright:2", italic = true }
 strike = { strike = true }
-inline_code = { fg = "bright:3", bg = "bright:0" }
+inline_code = { fg = "bright:1", bg = "bright:0" }
 code_block = { bg = "bright:0" }
 link = { fg = "bright:4", underline = true }
 quote_bar = { fg = "bright:0" }
@@ -27,7 +27,7 @@ task_unchecked = "☐"
 task_checked = "☑"
 quote_bar = "│"
 rule = "─"
-h1_rule = ""
+h1_rule = "━"
 h2_rule = "─"
 
 [symbols.table]
