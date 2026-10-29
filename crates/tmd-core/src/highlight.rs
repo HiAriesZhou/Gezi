@@ -1,11 +1,15 @@
 //! Code highlighting with syntect's built-in syntaxes and themes, loaded
 //! the first time a code block needs them.
+//!
+//! Streaming re-renders the whole buffer for every frame, and highlighting
+//! is most of a render's cost, so results are cached per code block with
+//! the parser state after each line: a block that grew, or kept its first
+//! lines, only highlights what is new.
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
-use syntect::easy::HighlightLines;
-use syntect::highlighting::{FontStyle, ThemeSet};
-use syntect::parsing::SyntaxSet;
+use syntect::highlighting::{FontStyle, HighlightIterator, HighlightState, Highlighter, ThemeSet};
+use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 
 use crate::style::{Color, Style};
 
@@ -13,6 +17,10 @@ use crate::style::{Color, Style};
 /// some syntaxes (Perl, Ruby) take quadratic time on one long line, and
 /// input is untrusted. Hand-written code rarely comes close.
 const MAX_LINE_BYTES: usize = 1000;
+
+/// Code blocks whose highlighting is kept; the least recently used goes
+/// first.
+const MAX_CACHED_BLOCKS: usize = 32;
 
 const DARK_THEME: &str = "base16-ocean.dark";
 const LIGHT_THEME: &str = "InspiredGitHub";
@@ -35,15 +43,50 @@ const ALIASES: &[(&str, &str)] = &[
 
 static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
 static THEMES: OnceLock<ThemeSet> = OnceLock::new();
+static CACHE: Mutex<Cache> = Mutex::new(Cache {
+    entries: Vec::new(),
+});
+
+type Pieces = Vec<(String, Style)>;
+
+/// Highlighted blocks, most recently used last.
+#[derive(Default)]
+struct Cache {
+    entries: Vec<Entry>,
+}
+
+struct Entry {
+    syntax: String,
+    dark: bool,
+    lines: Vec<Checkpoint>,
+}
+
+/// One highlighted line and the parser state after it.
+#[derive(Clone)]
+struct Checkpoint {
+    line: String,
+    pieces: Pieces,
+    parse: ParseState,
+    highlight: HighlightState,
+}
 
 /// Styled pieces for each line of `lines`, or `None` when the language is
 /// unknown. Styles carry only foreground color and font attributes; the
 /// caller lays them over the code block background.
-pub(crate) fn highlight(
+pub(crate) fn highlight(lang: &str, lines: &[&str], dark: bool) -> Option<Vec<Pieces>> {
+    // A poisoned lock only means a panic elsewhere; the cache is still valid.
+    let mut cache = CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    highlight_with(&mut cache, lang, lines, dark)
+}
+
+fn highlight_with(
+    cache: &mut Cache,
     lang: &str,
     lines: &[&str],
     dark: bool,
-) -> Option<Vec<Vec<(String, Style)>>> {
+) -> Option<Vec<Pieces>> {
     if lines.iter().any(|line| line.len() > MAX_LINE_BYTES) {
         return None;
     }
@@ -61,22 +104,77 @@ pub(crate) fn highlight(
     let theme = themes
         .themes
         .get(if dark { DARK_THEME } else { LIGHT_THEME })?;
+    let highlighter = Highlighter::new(theme);
 
-    let mut highlighter = HighlightLines::new(syntax, theme);
-    let mut out = Vec::with_capacity(lines.len());
-    for line in lines {
+    let mut entry = cache.take_longest_prefix(&syntax.name, dark, lines);
+    let (mut parse, mut state) = match entry.lines.last() {
+        Some(last) => (last.parse.clone(), last.highlight.clone()),
+        None => (
+            ParseState::new(syntax),
+            HighlightState::new(&highlighter, ScopeStack::new()),
+        ),
+    };
+    for line in &lines[entry.lines.len()..] {
         // The newline-aware syntaxes need each line to end with `\n`.
         let source = format!("{line}\n");
-        let pieces = highlighter.highlight_line(&source, syntaxes).ok()?;
-        out.push(
-            pieces
-                .into_iter()
-                .map(|(style, text)| (text.trim_end_matches('\n').to_string(), convert(style)))
-                .filter(|(text, _)| !text.is_empty())
-                .collect(),
-        );
+        let ops = parse.parse_line(&source, syntaxes).ok()?;
+        let pieces = HighlightIterator::new(&mut state, &ops, &source, &highlighter)
+            .map(|(style, text)| (text.trim_end_matches('\n').to_string(), convert(style)))
+            .filter(|(text, _)| !text.is_empty())
+            .collect();
+        entry.lines.push(Checkpoint {
+            line: (*line).to_string(),
+            pieces,
+            parse: parse.clone(),
+            highlight: state.clone(),
+        });
     }
+    let out = entry.lines.iter().map(|line| line.pieces.clone()).collect();
+    cache.store(entry);
     Some(out)
+}
+
+impl Cache {
+    /// The cached lines that start `lines`, as an entry to extend. An entry
+    /// that `lines` fully extends is taken out; a partial match is copied,
+    /// so two blocks sharing their first lines keep separate entries.
+    fn take_longest_prefix(&mut self, syntax: &str, dark: bool, lines: &[&str]) -> Entry {
+        let best = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.syntax == syntax && entry.dark == dark)
+            .map(|(i, entry)| {
+                let shared = entry
+                    .lines
+                    .iter()
+                    .zip(lines)
+                    .take_while(|(cached, line)| cached.line == **line)
+                    .count();
+                (i, shared)
+            })
+            .max_by_key(|&(_, shared)| shared);
+        match best {
+            Some((i, shared)) if shared == self.entries[i].lines.len() => self.entries.remove(i),
+            Some((i, shared)) if shared > 0 => Entry {
+                syntax: syntax.to_string(),
+                dark,
+                lines: self.entries[i].lines[..shared].to_vec(),
+            },
+            _ => Entry {
+                syntax: syntax.to_string(),
+                dark,
+                lines: Vec::new(),
+            },
+        }
+    }
+
+    fn store(&mut self, entry: Entry) {
+        self.entries.push(entry);
+        if self.entries.len() > MAX_CACHED_BLOCKS {
+            self.entries.remove(0);
+        }
+    }
 }
 
 fn convert(style: syntect::highlighting::Style) -> Style {
@@ -87,5 +185,67 @@ fn convert(style: syntect::highlighting::Style) -> Style {
         italic: style.font_style.contains(FontStyle::ITALIC),
         underline: style.font_style.contains(FontStyle::UNDERLINE),
         ..Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RUST: [&str; 8] = [
+        "/* a block comment",
+        "   still comment */",
+        "fn main() {",
+        "    let s = \"text\";",
+        "    println!(\"{s}\");",
+        "}",
+        "",
+        "struct X;",
+    ];
+
+    fn fresh(lines: &[&str]) -> Option<Vec<Vec<(String, Style)>>> {
+        highlight_with(&mut Cache::default(), "rust", lines, true)
+    }
+
+    #[test]
+    fn growing_block_reuses_and_matches_a_fresh_highlight() {
+        let mut cache = Cache::default();
+        for end in 1..=RUST.len() {
+            let lines = &RUST[..end];
+            assert_eq!(
+                highlight_with(&mut cache, "rust", lines, true),
+                fresh(lines),
+                "{end} lines"
+            );
+        }
+        assert_eq!(cache.entries.len(), 1, "one block, one entry");
+    }
+
+    #[test]
+    fn edited_lines_and_shared_prefixes_match_a_fresh_highlight() {
+        let mut cache = Cache::default();
+        let mut edited = RUST.to_vec();
+        edited[1] = "   no longer the end";
+        for lines in [&RUST[..], &edited[..], &RUST[..], &edited[..]] {
+            assert_eq!(
+                highlight_with(&mut cache, "rust", lines, true),
+                fresh(lines)
+            );
+        }
+        assert_eq!(
+            cache.entries.len(),
+            2,
+            "two blocks sharing a prefix keep separate entries"
+        );
+    }
+
+    #[test]
+    fn cache_is_bounded() {
+        let mut cache = Cache::default();
+        for n in 0..(MAX_CACHED_BLOCKS + 10) {
+            let line = format!("let x{n} = {n};");
+            highlight_with(&mut cache, "rust", &[line.as_str()], true);
+        }
+        assert_eq!(cache.entries.len(), MAX_CACHED_BLOCKS);
     }
 }
