@@ -184,3 +184,19 @@ proptest! {
         prop_assert_eq!(all, full);
     }
 }
+
+/// A list's source range runs into the indentation of the line after it
+/// (`0..17` here, while that line starts at 15). Rows straddling the
+/// committed offset were skipped as if already committed.
+#[test]
+fn rows_whose_range_runs_into_the_next_line_are_not_lost() {
+    for md in ["1. foo\n2. bar\n\n  Next para.\n", "-\n b\n"] {
+        let full = render(md, 40, &Theme::default());
+        let by_line: Vec<&str> = md.split_inclusive('\n').collect();
+        let by_byte = chunks(md, &[1]);
+        for pieces in [by_line, by_byte] {
+            let (all, _) = stream(&pieces, 40);
+            assert_eq!(texts(&all), texts(&full), "{md:?}");
+        }
+    }
+}
