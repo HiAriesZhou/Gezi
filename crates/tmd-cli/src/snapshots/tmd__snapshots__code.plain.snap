@@ -1,0 +1,37 @@
+---
+source: crates/tmd-cli/src/snapshots.rs
+assertion_line: 32
+expression: plain(&lines)
+---
+代码块
+
+带语言名：
+
+                                                                            rust
+fn main() {                                                                     
+    println!("你好, tmd");                                                        
+}                                                                               
+
+没写语言：
+
+plain text block                                                                
+    tab 开头的行                                                                    
+
+缩进式代码块：
+
+indented code                                                                   
+second line                                                                     
+
+代码块里的 markdown 标记不渲染：
+
+                                                                        markdown
+# 不是标题                                                                          
+**不是粗体** `不是代码`                                                                 
+
+超长的行会在块内换行：
+
+                                                                            text
+this line is deliberately much longer than eighty columns so the renderer has to
+ wrap it inside the block                                                       
+
+空代码块：

@@ -1,0 +1,28 @@
+---
+source: crates/tmd-cli/src/snapshots.rs
+assertion_line: 35
+expression: ansi
+---
+\e[1;95m引用\e[0m
+
+\e[90m│ \e[0m单层引用，里面有 \e[1m粗体\e[0m 和 \e[4;94m链接\e[0m。 这一行是同一段的软换行。
+
+\e[90m│ \e[0m引用里有两段。
+\e[90m│\e[0m
+\e[90m│ \e[0m这是第二段，文字比较长，用来测试引用里的段落按宽度换行之后，每一行左边都有竖线 and the bar stays on every wrapped
+\e[90m│ \e[0mline.
+
+\e[90m│ \e[0m第一层
+\e[90m│\e[0m
+\e[90m│ \e[0m\e[90m│ \e[0m第二层
+\e[90m│ \e[0m\e[90m│\e[0m
+\e[90m│ \e[0m\e[90m│ \e[0m\e[90m│ \e[0m第三层
+
+\e[90m│ \e[0m引用里的列表：
+\e[90m│\e[0m
+\e[90m│ \e[0m\e[96m• \e[0m一
+\e[90m│ \e[0m\e[96m• \e[0m二
+\e[90m│\e[0m
+\e[90m│ \e[0m引用里的代码：
+\e[90m│\e[0m
+\e[90m│ \e[0m\e[100mlet x = 1;                                                                    \e[0m
