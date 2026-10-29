@@ -8,6 +8,10 @@ use crate::theme::Theme;
 use crate::width::{text_width, truncate};
 use crate::wrap::{Row, hard_wrap_lines, push_text, wrap};
 
+/// Columns a quote or list must leave for its content, enough for one wide
+/// character; with less room the bar or marker is dropped instead.
+const MIN_CONTENT: usize = 2;
+
 pub(crate) struct Ctx<'t> {
     pub theme: &'t Theme,
     /// How many lists enclose the current block; picks the bullet.
@@ -55,10 +59,9 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
 }
 
 fn rule_row(theme: &Theme, width: usize) -> Row {
-    vec![Span::new(
-        theme.symbols.rule.repeat(width),
-        theme.rule.clone(),
-    )]
+    let symbol = &theme.symbols.rule;
+    let repeated = symbol.repeat(width / text_width(symbol).max(1));
+    vec![Span::new(truncate(&repeated, width), theme.rule.clone())]
 }
 
 fn code(theme: &Theme, lang: Option<&str>, text: &str, width: usize) -> Vec<Row> {
@@ -90,7 +93,7 @@ fn code(theme: &Theme, lang: Option<&str>, text: &str, width: usize) -> Vec<Row>
 fn quote(ctx: &Ctx, children: &[Block], width: usize) -> Vec<Row> {
     let bar = &ctx.theme.symbols.quote_bar;
     let prefix = format!("{bar} ");
-    if text_width(&prefix) >= width {
+    if text_width(&prefix) + MIN_CONTENT > width {
         // No room left for content beside the bar; drop it so rows still fit.
         return blocks(ctx, children, width, false);
     }
@@ -122,7 +125,7 @@ fn list(ctx: &Ctx, start: Option<u64>, tight: bool, items: &[Item], width: usize
             rows.push(Row::new());
         }
         let mut marker = marker(ctx, start.map(|n| n + i as u64), item.task);
-        if text_width(&marker) >= width {
+        if text_width(&marker) + MIN_CONTENT > width {
             // No room left for content beside the marker; drop it so rows
             // still fit.
             marker.clear();
