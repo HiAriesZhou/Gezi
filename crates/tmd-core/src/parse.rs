@@ -4,6 +4,7 @@ use std::ops::Range;
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
+use crate::html::{self, Piece};
 use crate::line::Span;
 use crate::style::Style;
 use crate::theme::Theme;
@@ -31,7 +32,6 @@ pub(crate) enum Block {
     },
     Quote(Vec<Block>),
     Rule,
-    Html(String),
     Table(Table),
 }
 
@@ -162,6 +162,27 @@ impl Inline {
         match self.spans.last_mut() {
             Some(last) if last.style == style && last.text != "\n" => last.text.push_str(text),
             _ => self.spans.push(Span::new(text, style)),
+        }
+    }
+
+    /// Adds HTML text in the current style, breaks as hard line breaks and
+    /// images as placeholders in `muted`.
+    fn html_pieces(&mut self, pieces: Vec<Piece>, muted: &Style) {
+        for piece in pieces {
+            match piece {
+                Piece::Text(text) => {
+                    let style = self.style();
+                    self.text(&text, style);
+                }
+                Piece::Break => {
+                    let style = self.style();
+                    self.spans.push(Span::new("\n", style));
+                }
+                Piece::Image(alt) => {
+                    let style = self.style().patch(muted);
+                    self.text(&image_label(alt.as_deref().unwrap_or("")), style);
+                }
+            }
         }
     }
 
@@ -358,8 +379,8 @@ impl<'t> Builder<'t> {
                 }
             }
             TagEnd::HtmlBlock => {
-                if let Some(html) = self.html.take() {
-                    self.push_block(Block::Html(html));
+                if let Some(raw) = self.html.take() {
+                    self.html_block(&raw);
                 }
             }
             TagEnd::List(_) => {
@@ -417,12 +438,7 @@ impl<'t> Builder<'t> {
                 if inline.nested_images > 0 {
                     inline.nested_images -= 1;
                 } else if let Some(alt) = inline.image_alt.take() {
-                    let label = if alt.is_empty() {
-                        "[图片]".to_string()
-                    } else {
-                        format!("[图片: {alt}]")
-                    };
-                    inline.text(&label, style);
+                    inline.text(&image_label(&alt), style);
                 }
             }
             _ => {}
@@ -444,9 +460,24 @@ impl<'t> Builder<'t> {
         if let Some(block) = &mut self.html {
             block.push_str(html);
         } else {
-            let style = self.inline_mut().style().patch(&self.theme.muted);
-            self.inline_mut().text(html, style);
+            let muted = self.theme.muted.clone();
+            let inline = self.inline_mut();
+            if inline.image_alt.is_none() {
+                inline.html_pieces(html::inline(html), &muted);
+            }
         }
+    }
+
+    /// An HTML block shown as its text, like a paragraph; nothing at all
+    /// when only tags and comments remain.
+    fn html_block(&mut self, raw: &str) {
+        let pieces = html::block(raw);
+        if pieces.is_empty() {
+            return;
+        }
+        let mut inline = Inline::new(InlineKind::Paragraph, self.theme.text.clone());
+        inline.html_pieces(pieces, &self.theme.muted);
+        self.push_block(inline.into_block());
     }
 
     /// The open inline run, opening an implicit paragraph for the bare text
@@ -469,7 +500,6 @@ impl<'t> Builder<'t> {
                 lang,
                 text: clean_block(&text),
             },
-            Block::Html(text) => Block::Html(clean_block(&text)),
             other => other,
         };
         match self.frames.last_mut() {
@@ -514,6 +544,15 @@ fn items_separated_by_blank_line(md: &str, item_starts: &[usize]) -> bool {
             .chars()
             .all(|c| matches!(c, ' ' | '\t' | '\r' | '>'))
     })
+}
+
+/// Placeholder text for an image with alt text `alt`.
+fn image_label(alt: &str) -> String {
+    if alt.is_empty() {
+        "[图片]".to_string()
+    } else {
+        format!("[图片: {alt}]")
+    }
 }
 
 fn align(alignment: Alignment) -> Align {
