@@ -78,6 +78,8 @@ tmd: theme file ~/.config/tmd/themes/mine.toml: line 3: invalid color "blu": ...
 
 ## `[symbols]`
 
+所有符号都不能含控制字符（例如 ESC、换行），否则报错：它们会作为控制序列直接发给终端。
+
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `bullets` | 字符串数组 | 各层无序列表的符号，层数超过时循环使用，至少一个 |
