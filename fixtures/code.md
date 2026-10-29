@@ -8,6 +8,40 @@ fn main() {
 }
 ```
 
+TypeScript：
+
+```typescript
+interface User {
+  name: string;
+  age?: number;
+}
+
+const greet = (user: User): string => `你好，${user.name}`;
+```
+
+Python：
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float  # 坐标
+
+    def norm(self) -> float:
+        return (self.x ** 2 + self.y ** 2) ** 0.5
+```
+
+Bash：
+
+```bash
+for f in fixtures/*.md; do
+  echo "渲染 $f"
+  cargo run -q -- "$f" | head -n 5
+done
+```
+
 没写语言：
 
 ```
