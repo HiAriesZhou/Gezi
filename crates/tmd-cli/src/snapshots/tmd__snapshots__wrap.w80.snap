@@ -1,0 +1,28 @@
+---
+source: crates/tmd-cli/src/snapshots.rs
+assertion_line: 34
+expression: plain(&lines)
+---
+换行
+
+中英文混排的长段落：Rust 的所有权（ownership）规则保证内存安全，不需要垃圾回收器
+（garbage collector）。每个值都有一个所有者，同一时间只能有一个所有者；当所有者
+离开作用域，这个值就会被丢弃。借用（borrowing）允许在不取得所有权的情况下使用值
+，可变借用和不可变借用不能同时存在。
+
+源码里中文之间的软换行：这一行在源码里被拆成了三行，渲染后应该连在一起，中间没有
+空格。
+
+中文和英文之间的软换行：这里接英文 English continues here, and then 中文接回来。
+
+A very long English word:
+Pneumonoultramicroscopicsilicovolcanoconiosis_with_extra_suffix_to_make_it_longe
+r_than_eighty_columns 会被硬断。
+
+全角标点连续出现：「这是引号」，（这是括号），《这是书名号》——破折号……省略号。
+
+│ 引用里的中英文混排长段落也按显示宽度换行，each wrapped line keeps the quote
+│ bar on the left side.
+
+• 列表项里的中英文混排长段落也按显示宽度换行，续行和第一行的文字对齐 and English
+  words stay whole.
