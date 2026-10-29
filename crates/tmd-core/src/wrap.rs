@@ -27,13 +27,23 @@ enum Token {
     /// in a row may be broken between with no space, as around CJK.
     Word {
         pieces: Vec<(String, Style)>,
-        /// Whether following narrow text continues this word; false for a
+        /// Whether following narrow text continues this word; false after a
         /// wide character, which stands alone.
         open: bool,
+        /// Whether the word ends with opening punctuation and so must stay
+        /// with whatever follows.
+        glue: bool,
     },
     Space(Vec<(String, Style)>),
     Break,
 }
+
+/// Closing punctuation that must not start a row (Chinese line-breaking
+/// rules); it stays with the text before it.
+const NO_ROW_START: &str = "，。、；：！？）」』》〉】〕”’…—,.;:!?)]}";
+/// Opening punctuation that must not end a row; it stays with the text
+/// after it.
+const NO_ROW_END: &str = "（「『《〈【〔“‘";
 
 fn tokenize(spans: &[Span]) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
@@ -58,16 +68,28 @@ fn tokenize(spans: &[Span]) -> Vec<Token> {
 }
 
 /// Adds non-space text: each wide character becomes its own word so rows
-/// can break around it; narrow runs join the open word before them.
+/// can break around it; narrow runs join the open word before them, and
+/// punctuation joins the side it belongs to.
 fn push_word_segments(tokens: &mut Vec<Token>, text: &str, style: &Style) {
     for segment in split_wide(text) {
-        let wide = segment.chars().next().is_some_and(is_wide);
+        let (Some(first), Some(last)) = (segment.chars().next(), segment.chars().last()) else {
+            continue;
+        };
+        let wide = is_wide(first);
         let entry = (segment.to_string(), style.clone());
+        let ends_open = NO_ROW_END.contains(last);
         match tokens.last_mut() {
-            Some(Token::Word { pieces, open: true }) if !wide => pieces.push(entry),
+            Some(Token::Word { pieces, open, glue })
+                if *glue || NO_ROW_START.contains(first) || (*open && !wide) =>
+            {
+                pieces.push(entry);
+                *open = !wide;
+                *glue = ends_open;
+            }
             _ => tokens.push(Token::Word {
                 pieces: vec![entry],
                 open: !wide,
+                glue: ends_open,
             }),
         }
     }

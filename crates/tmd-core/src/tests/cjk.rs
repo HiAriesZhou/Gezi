@@ -39,3 +39,30 @@ fn code_blocks_pad_to_display_width() {
         assert_eq!(line.width(), 12, "{:?}", line.plain_text());
     }
 }
+
+#[test]
+fn closing_punctuation_never_starts_a_row() {
+    assert_eq!(plain("一二三，四五", 6), ["一二", "三，四", "五"]);
+    assert_eq!(plain("一二——三", 5), ["一", "二——", "三"]);
+    assert_eq!(plain("一二三。", 6), ["一二", "三。"]);
+}
+
+#[test]
+fn opening_punctuation_never_ends_a_row() {
+    assert_eq!(plain("一二（三）", 6), ["一二", "（三）"]);
+    assert_eq!(plain("一二「三", 6), ["一二", "「三"]);
+}
+
+#[test]
+fn rows_still_fit_with_punctuation_rules() {
+    let md = "「这是引号」，（这是括号），《这是书名号》——破折号……省略号。";
+    for width in 4u16..=30 {
+        for line in lines(md, width) {
+            assert!(
+                line.width() <= usize::from(width),
+                "width {width}: {:?}",
+                line.plain_text()
+            );
+        }
+    }
+}
