@@ -216,25 +216,26 @@ fn fit_cluster(cluster: &str, width: usize) -> (&str, usize) {
     }
 }
 
-/// Breaks preformatted text into rows of at most `width` columns, one or
-/// more rows per source line.
-pub(crate) fn hard_wrap_lines(text: &str, width: usize) -> Vec<String> {
+/// Breaks one line of preformatted spans into rows of at most `width`
+/// columns, between clusters, keeping each span's style. Always returns at
+/// least one row.
+pub(crate) fn hard_wrap_spans(spans: &[Span], width: usize) -> Vec<Row> {
     let width = width.max(1);
     let mut rows = Vec::new();
-    for line in text.lines() {
-        let mut current = String::new();
-        let mut used = 0;
-        for cluster in clusters(line) {
+    let mut row = Row::new();
+    let mut used = 0;
+    for span in spans {
+        for cluster in clusters(&span.text) {
             let (cluster, w) = fit_cluster(cluster, width);
             if used > 0 && used + w > width {
-                rows.push(std::mem::take(&mut current));
+                rows.push(std::mem::take(&mut row));
                 used = 0;
             }
-            current.push_str(cluster);
+            push_text(&mut row, cluster, &span.style);
             used += w;
         }
-        rows.push(current);
     }
+    rows.push(row);
     rows
 }
 
@@ -293,7 +294,15 @@ mod tests {
     }
 
     #[test]
-    fn hard_wrap_lines_keeps_empty_lines() {
-        assert_eq!(hard_wrap_lines("abcde\n\nx", 3), ["abc", "de", "", "x"]);
+    fn hard_wrap_spans_keeps_styles_across_breaks() {
+        let bold = Style::default().bold();
+        let spans = vec![
+            Span::new("ab", Style::default()),
+            Span::new("cde", bold.clone()),
+        ];
+        let rows = hard_wrap_spans(&spans, 3);
+        assert_eq!(plain(&rows), ["abc", "de"]);
+        assert_eq!(rows[0][1].style, bold);
+        assert_eq!(plain(&hard_wrap_spans(&[], 3)), [""]);
     }
 }
