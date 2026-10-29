@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 34
+assertion_line: 42
 expression: plain(&lines)
 ---
 TMD 基本元素
@@ -44,7 +44,7 @@ https://example.com，粗体链接 docs。
 行内 HTML：Ctrl+C。
 
 HTML 块
-原样灰色显示。
+HTML 块里的文字按正文显示。
 
 ────────────────────────────────────────
 

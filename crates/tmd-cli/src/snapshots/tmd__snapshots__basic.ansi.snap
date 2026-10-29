@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 39
+assertion_line: 47
 expression: ansi
 ---
 \e[1;95mTMD 基本元素\e[0m
@@ -36,7 +36,7 @@ wider than the line.
 行内 HTML：Ctrl+C。
 
 HTML 块
-原样灰色显示。
+HTML 块里的文字按正文显示。
 
 \e[90m────────────────────────────────────────────────────────────────────────────────\e[0m
 
