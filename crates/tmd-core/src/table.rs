@@ -95,23 +95,45 @@ fn table_width(widths: &[usize]) -> usize {
     1 + widths.iter().map(|w| w + 3).sum::<usize>()
 }
 
-/// Narrows the widest column one cell at a time until the table fits or
-/// every column is down to [`MIN_COLUMN`].
-fn fit_widths(mut widths: Vec<usize>, width: usize) -> Vec<usize> {
-    while table_width(&widths) > width {
-        let Some((index, &widest)) = widths
-            .iter()
-            .enumerate()
-            .max_by_key(|&(index, w)| (*w, std::cmp::Reverse(index)))
-        else {
-            break;
-        };
-        if widest <= MIN_COLUMN {
+/// Narrows columns as if the widest were cut one cell at a time (leftmost
+/// first on ties) until the table fits or every column is down to
+/// [`MIN_COLUMN`], but computes the result directly: find the largest cap
+/// that fits, then hand the leftover cells to the rightmost capped columns.
+fn fit_widths(widths: Vec<usize>, width: usize) -> Vec<usize> {
+    if table_width(&widths) <= width {
+        return widths;
+    }
+    let budget = width.saturating_sub(table_width(&vec![0; widths.len()]));
+    let capped = |cap: usize| -> usize { widths.iter().map(|&w| w.min(cap)).sum() };
+    if capped(MIN_COLUMN) > budget {
+        return widths.iter().map(|&w| w.min(MIN_COLUMN)).collect();
+    }
+    // Largest cap whose total fits; `capped` grows with `cap`.
+    let (mut low, mut high) = (
+        MIN_COLUMN,
+        widths.iter().copied().max().unwrap_or(MIN_COLUMN),
+    );
+    while low < high {
+        let mid = low + (high - low).div_ceil(2);
+        if capped(mid) <= budget {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    let cap = low;
+    let mut extra = budget - capped(cap);
+    let mut result: Vec<usize> = widths.iter().map(|&w| w.min(cap)).collect();
+    for (fitted, &natural) in result.iter_mut().zip(&widths).rev() {
+        if extra == 0 {
             break;
         }
-        widths[index] -= 1;
+        if natural > cap {
+            *fitted += 1;
+            extra -= 1;
+        }
     }
-    widths
+    result
 }
 
 fn border(theme: &Theme, widths: &[usize], left: &str, mid: &str, right: &str) -> Row {
@@ -189,4 +211,44 @@ fn cut(row: Row, width: usize) -> Row {
     push_text(&mut out, &" ".repeat(room - used), &Style::default());
     push_text(&mut out, ELLIPSIS, &Style::default());
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The original one-cell-at-a-time narrowing, kept as the oracle.
+    fn fit_widths_stepwise(mut widths: Vec<usize>, width: usize) -> Vec<usize> {
+        while table_width(&widths) > width {
+            let (index, &widest) = widths
+                .iter()
+                .enumerate()
+                .max_by_key(|&(index, w)| (*w, std::cmp::Reverse(index)))
+                .unwrap();
+            if widest <= MIN_COLUMN {
+                break;
+            }
+            widths[index] -= 1;
+        }
+        widths
+    }
+
+    #[test]
+    fn fit_widths_matches_stepwise_narrowing() {
+        let mut state = 7u64;
+        let mut next = |bound: u64| {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (state >> 33) % bound
+        };
+        for _ in 0..2000 {
+            let columns = 1 + next(12) as usize;
+            let widths: Vec<usize> = (0..columns).map(|_| 1 + next(30) as usize).collect();
+            let width = 1 + next(200) as usize;
+            assert_eq!(
+                fit_widths(widths.clone(), width),
+                fit_widths_stepwise(widths.clone(), width),
+                "{widths:?} at {width}"
+            );
+        }
+    }
 }
