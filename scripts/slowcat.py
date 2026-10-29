@@ -6,6 +6,7 @@ its answer. Used to try tmd's streaming by hand:
 """
 
 import argparse
+import os
 import sys
 import time
 
@@ -34,7 +35,12 @@ def main() -> int:
             out.write(data[start : start + CHUNK])
             out.flush()
             time.sleep(pause)
-    except (BrokenPipeError, KeyboardInterrupt):
+    except BrokenPipeError:
+        # The reader quit (e.g. tmd was interrupted). Point stdout at
+        # /dev/null so the flush at interpreter exit does not fail again.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
+    except KeyboardInterrupt:
         return 0
     return 0
 
