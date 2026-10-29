@@ -1,6 +1,7 @@
 //! Behavior tests for `render`.
 
 mod cjk;
+mod code;
 mod html;
 mod tables;
 
