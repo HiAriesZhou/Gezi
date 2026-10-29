@@ -2,7 +2,7 @@
 
 use crate::line::Span;
 use crate::style::Style;
-use crate::width::{char_width, text_width};
+use crate::width::{char_width, is_wide, text_width};
 
 /// A row of spans being built.
 pub(crate) type Row = Vec<Span>;
@@ -23,8 +23,14 @@ fn row_width(row: &Row) -> usize {
 }
 
 enum Token {
-    /// Consecutive non-space pieces, possibly in several styles.
-    Word(Vec<(String, Style)>),
+    /// Unbreakable non-space pieces, possibly in several styles. Two words
+    /// in a row may be broken between with no space, as around CJK.
+    Word {
+        pieces: Vec<(String, Style)>,
+        /// Whether following narrow text continues this word; false for a
+        /// wide character, which stands alone.
+        open: bool,
+    },
     Space(Vec<(String, Style)>),
     Break,
 }
@@ -37,18 +43,54 @@ fn tokenize(spans: &[Span]) -> Vec<Token> {
             continue;
         }
         for piece in split_spaces(&span.text) {
-            let is_space = piece.starts_with(' ');
             let entry = (piece.to_string(), span.style.clone());
-            match (tokens.last_mut(), is_space) {
-                (Some(Token::Space(pieces)), true) | (Some(Token::Word(pieces)), false) => {
-                    pieces.push(entry)
+            if piece.starts_with(' ') {
+                match tokens.last_mut() {
+                    Some(Token::Space(pieces)) => pieces.push(entry),
+                    _ => tokens.push(Token::Space(vec![entry])),
                 }
-                (_, true) => tokens.push(Token::Space(vec![entry])),
-                (_, false) => tokens.push(Token::Word(vec![entry])),
+            } else {
+                push_word_segments(&mut tokens, piece, &span.style);
             }
         }
     }
     tokens
+}
+
+/// Adds non-space text: each wide character becomes its own word so rows
+/// can break around it; narrow runs join the open word before them.
+fn push_word_segments(tokens: &mut Vec<Token>, text: &str, style: &Style) {
+    for segment in split_wide(text) {
+        let wide = segment.chars().next().is_some_and(is_wide);
+        let entry = (segment.to_string(), style.clone());
+        match tokens.last_mut() {
+            Some(Token::Word { pieces, open: true }) if !wide => pieces.push(entry),
+            _ => tokens.push(Token::Word {
+                pieces: vec![entry],
+                open: !wide,
+            }),
+        }
+    }
+}
+
+/// Splits `text` into single wide characters and runs of narrow ones.
+fn split_wide(text: &str) -> Vec<&str> {
+    let mut segments = Vec::new();
+    let mut start = 0;
+    for (i, c) in text.char_indices() {
+        if is_wide(c) {
+            if start < i {
+                segments.push(&text[start..i]);
+            }
+            let end = i + c.len_utf8();
+            segments.push(&text[i..end]);
+            start = end;
+        }
+    }
+    if start < text.len() {
+        segments.push(&text[start..]);
+    }
+    segments
 }
 
 /// Splits `text` into alternating runs of spaces and non-spaces.
@@ -94,7 +136,7 @@ pub(crate) fn wrap(spans: &[Span], width: usize) -> Vec<Row> {
                     pending_space.extend(pieces);
                 }
             }
-            Token::Word(pieces) => {
+            Token::Word { pieces, .. } => {
                 let word_width = pieces_width(&pieces);
                 let fits = row_width(&row) + pieces_width(&pending_space) + word_width <= width;
                 if fits {

@@ -1,11 +1,12 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 32
+assertion_line: 29
 expression: plain(&lines)
 ---
 TMD 基本元素
 
-这是一个普通段落，混合了中文和 English words。段落里有 粗体、斜体、删除线 和 行内代码，也可以 又粗又斜，或者 粗体里套 代码。
+这是一个普通段落，混合了中文和 English words。段落里有 粗体、斜体、删除线 和 行
+内代码，也可以 又粗又斜，或者 粗体里套 代码。
 
 A long English paragraph that should wrap at the terminal width without breaking
 words in the middle, unless a single word like

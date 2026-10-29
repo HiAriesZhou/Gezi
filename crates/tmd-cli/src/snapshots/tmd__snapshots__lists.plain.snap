@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 32
+assertion_line: 29
 expression: plain(&lines)
 ---
 列表
@@ -10,7 +10,8 @@ expression: plain(&lines)
   ◦ 小香蕉
     ▪ 更小的香蕉
       • 第四层，符号循环
-• 樱桃，这一项的文字比较长，用来测试列表项换行之后，续行是否和第一行的文字对齐 and English too.
+• 樱桃，这一项的文字比较长，用来测试列表项换行之后，续行是否和第一行的文字对齐
+  and English too.
 
 1. 第一步
 2. 第二步
