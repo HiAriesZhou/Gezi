@@ -1,11 +1,12 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 35
+assertion_line: 32
 expression: ansi
 ---
 \e[1;95mTMD 基本元素\e[0m
 
-这是一个普通段落，混合了中文和 English words。段落里有 \e[1m粗体\e[0m、\e[3m斜体\e[0m、\e[9m删除线\e[0m 和 \e[93;100m行内代码\e[0m，也可以 \e[1;3m又粗又斜\e[0m，或者 \e[1m粗体里套 \e[0m\e[1;93;100m代码\e[0m。
+这是一个普通段落，混合了中文和 English words。段落里有 \e[1m粗体\e[0m、\e[3m斜体\e[0m、\e[9m删除线\e[0m 和 \e[93;100m行\e[0m
+\e[93;100m内代码\e[0m，也可以 \e[1;3m又粗又斜\e[0m，或者 \e[1m粗体里套 \e[0m\e[1;93;100m代码\e[0m。
 
 A long English paragraph that should wrap at the terminal width without breaking
 words in the middle, unless a single word like

@@ -4,7 +4,7 @@ use crate::line::Span;
 use crate::parse::{Block, Item};
 use crate::style::Style;
 use crate::theme::Theme;
-use crate::width::text_width;
+use crate::width::{text_width, truncate};
 use crate::wrap::{Row, hard_wrap_lines, push_text, wrap};
 
 pub(crate) struct Ctx<'t> {
@@ -63,15 +63,15 @@ fn code(theme: &Theme, lang: Option<&str>, text: &str, width: usize) -> Vec<Row>
     let style = &theme.code_block;
     let mut rows = Vec::new();
     if let Some(lang) = lang {
-        let label: String = lang.chars().take(width).collect();
-        let pad = width - text_width(&label);
+        let label = truncate(lang, width);
+        let pad = width - text_width(label);
         let label_style = Style {
             dim: true,
             ..style.clone()
         };
         let mut row = Row::new();
         push_text(&mut row, &" ".repeat(pad), style);
-        push_text(&mut row, &label, &label_style);
+        push_text(&mut row, label, &label_style);
         rows.push(row);
     }
     let mut lines = hard_wrap_lines(text, width);
