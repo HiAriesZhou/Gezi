@@ -57,6 +57,33 @@ fn blank_row_after_a_code_block_starts_after_its_last_line() {
     );
 }
 
+/// Some syntaxes (Perl, Ruby) take quadratic time on one long line; such
+/// blocks are shown without highlighting.
+#[test]
+fn blocks_with_very_long_lines_skip_highlighting() {
+    let md = format!("```perl\n{}\n```", "s/a/b/; ".repeat(10_000));
+    let start = std::time::Instant::now();
+    let out = lines(&md, 80);
+    let elapsed = start.elapsed();
+    assert!(!has_rgb(&out));
+    assert!(
+        elapsed < std::time::Duration::from_secs(1),
+        "took {elapsed:?}"
+    );
+    assert!(
+        has_rgb(&lines("```perl\ns/a/b/;\n```", 80)),
+        "short Perl still highlights"
+    );
+}
+
+#[test]
+fn nested_code_rows_use_the_top_level_block_source() {
+    let md = "> ```\n> a\n> b\n> ```\n";
+    let out = lines(md, 20);
+    assert!(out.iter().all(|line| line.src == out[0].src));
+    assert_eq!(out[0].src.start, 0);
+}
+
 fn has_rgb(lines: &[crate::Line]) -> bool {
     lines
         .iter()
