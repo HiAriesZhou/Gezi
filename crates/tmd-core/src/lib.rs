@@ -9,6 +9,7 @@ mod html;
 mod layout;
 mod line;
 mod parse;
+mod streamer;
 mod style;
 mod table;
 mod theme;
@@ -17,6 +18,7 @@ mod width;
 mod wrap;
 
 pub use line::{Line, Span};
+pub use streamer::{Frame, Streamer};
 pub use style::{Color, Style};
 pub use theme::{Symbols, TableSymbols, Theme};
 pub use theme_file::ThemeError;

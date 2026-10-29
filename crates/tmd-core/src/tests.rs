@@ -3,6 +3,7 @@
 mod cjk;
 mod code;
 mod html;
+mod stream;
 mod tables;
 mod theme;
 
