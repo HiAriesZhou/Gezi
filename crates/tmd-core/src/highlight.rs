@@ -9,6 +9,11 @@ use syntect::parsing::SyntaxSet;
 
 use crate::style::{Color, Style};
 
+/// Lines longer than this (in bytes) turn highlighting off for the block:
+/// some syntaxes (Perl, Ruby) take quadratic time on one long line, and
+/// input is untrusted. Hand-written code rarely comes close.
+const MAX_LINE_BYTES: usize = 1000;
+
 const DARK_THEME: &str = "base16-ocean.dark";
 const LIGHT_THEME: &str = "InspiredGitHub";
 
@@ -39,6 +44,9 @@ pub(crate) fn highlight(
     lines: &[&str],
     dark: bool,
 ) -> Option<Vec<Vec<(String, Style)>>> {
+    if lines.iter().any(|line| line.len() > MAX_LINE_BYTES) {
+        return None;
+    }
     let syntaxes = SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines);
     let lang = lang.to_ascii_lowercase();
     let token = ALIASES
