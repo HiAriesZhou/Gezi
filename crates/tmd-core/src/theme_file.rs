@@ -2,6 +2,7 @@
 //! built-in default theme for the file's background (`dark`).
 
 use serde::Deserialize;
+use toml::Spanned;
 
 use crate::style::{Color, Style};
 use crate::theme::{Symbols, TableSymbols, Theme};
@@ -33,7 +34,14 @@ pub(crate) fn parse(source: &str, base: Option<&Theme>) -> Result<Theme, ThemeEr
         line: err.span().map(|span| line_of(source, span.start)),
         message: err.message().trim().to_string(),
     })?;
-    resolve(file, base).map_err(|missing| missing.locate(source))
+    validate(&file.symbols).map_err(|invalid| ThemeError {
+        line: Some(line_of(source, invalid.span.start)),
+        message: format!("{}: {}", invalid.path, invalid.message),
+    })?;
+    resolve(file, base).map_err(|missing| ThemeError {
+        line: None,
+        message: format!("{}: missing", missing.path),
+    })
 }
 
 /// The theme `dark` selects as the base for a file that sets `dark`.
@@ -151,16 +159,18 @@ pub(crate) fn parse_color(text: &str) -> Option<Color> {
     }
 }
 
+/// Symbols keep their position in the file so validation errors can name
+/// the line.
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct SymbolsFile {
-    bullets: Option<Vec<String>>,
-    task_unchecked: Option<String>,
-    task_checked: Option<String>,
-    quote_bar: Option<String>,
-    rule: Option<String>,
-    h1_rule: Option<String>,
-    h2_rule: Option<String>,
+    bullets: Option<Spanned<Vec<String>>>,
+    task_unchecked: Option<Spanned<String>>,
+    task_checked: Option<Spanned<String>>,
+    quote_bar: Option<Spanned<String>>,
+    rule: Option<Spanned<String>>,
+    h1_rule: Option<Spanned<String>>,
+    h2_rule: Option<Spanned<String>>,
     #[serde(default)]
     table: TableFile,
 }
@@ -168,47 +178,26 @@ struct SymbolsFile {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct TableFile {
-    top_left: Option<String>,
-    top_mid: Option<String>,
-    top_right: Option<String>,
-    mid_left: Option<String>,
-    mid_mid: Option<String>,
-    mid_right: Option<String>,
-    bottom_left: Option<String>,
-    bottom_mid: Option<String>,
-    bottom_right: Option<String>,
-    vertical: Option<String>,
-    horizontal: Option<String>,
+    top_left: Option<Spanned<String>>,
+    top_mid: Option<Spanned<String>>,
+    top_right: Option<Spanned<String>>,
+    mid_left: Option<Spanned<String>>,
+    mid_mid: Option<Spanned<String>>,
+    mid_right: Option<Spanned<String>>,
+    bottom_left: Option<Spanned<String>>,
+    bottom_mid: Option<Spanned<String>>,
+    bottom_right: Option<Spanned<String>>,
+    vertical: Option<Spanned<String>>,
+    horizontal: Option<Spanned<String>>,
 }
 
-/// A field that is missing (with no base to copy from) or invalid, named
-/// by its TOML path.
-struct FieldError {
+/// A required field missing from a theme with no base to copy from.
+struct Missing {
     path: &'static str,
-    message: String,
 }
 
-impl FieldError {
-    /// Finds the line where the field's key is written, if it is.
-    fn locate(self, source: &str) -> ThemeError {
-        let key = self.path.rsplit('.').next().unwrap_or(self.path);
-        let line = source.lines().position(|line| {
-            line.trim_start()
-                .strip_prefix(key)
-                .is_some_and(|rest| rest.trim_start().starts_with('='))
-        });
-        ThemeError {
-            line: line.map(|i| i + 1),
-            message: format!("{}: {}", self.path, self.message),
-        }
-    }
-}
-
-fn pick<T>(value: Option<T>, base: Option<T>, path: &'static str) -> Result<T, FieldError> {
-    value.or(base).ok_or(FieldError {
-        path,
-        message: "missing".to_string(),
-    })
+fn pick<T>(value: Option<T>, base: Option<T>, path: &'static str) -> Result<T, Missing> {
+    value.or(base).ok_or(Missing { path })
 }
 
 macro_rules! style {
@@ -223,11 +212,15 @@ macro_rules! style {
 
 macro_rules! symbol {
     ($file:expr, $base:expr, $field:ident, $path:expr) => {
-        pick($file.$field, $base.map(|b| b.$field.clone()), $path)?
+        pick(
+            $file.$field.map(Spanned::into_inner),
+            $base.map(|b| b.$field.clone()),
+            $path,
+        )?
     };
 }
 
-fn resolve(file: ThemeFile, base: Option<&Theme>) -> Result<Theme, FieldError> {
+fn resolve(file: ThemeFile, base: Option<&Theme>) -> Result<Theme, Missing> {
     let s = file.styles;
     let theme = Theme {
         dark: pick(file.dark, base.map(|b| b.dark), "dark")?,
@@ -250,11 +243,10 @@ fn resolve(file: ThemeFile, base: Option<&Theme>) -> Result<Theme, FieldError> {
         fold: style!(s, base, fold),
         symbols: resolve_symbols(file.symbols, base.map(|b| &b.symbols))?,
     };
-    validate(&theme.symbols)?;
     Ok(theme)
 }
 
-fn resolve_symbols(file: SymbolsFile, base: Option<&Symbols>) -> Result<Symbols, FieldError> {
+fn resolve_symbols(file: SymbolsFile, base: Option<&Symbols>) -> Result<Symbols, Missing> {
     let t = file.table;
     let bt = base.map(|b| &b.table);
     Ok(Symbols {
@@ -281,50 +273,89 @@ fn resolve_symbols(file: SymbolsFile, base: Option<&Symbols>) -> Result<Symbols,
     })
 }
 
-/// Table layout assumes one-column border characters; rules and markers
-/// may be wider but not empty.
-fn validate(symbols: &Symbols) -> Result<(), FieldError> {
+/// A symbol in the file that cannot be drawn safely.
+struct Invalid {
+    path: &'static str,
+    span: std::ops::Range<usize>,
+    message: String,
+}
+
+/// What a symbol must satisfy besides containing no control characters.
+#[derive(Clone, Copy)]
+enum Rule {
+    /// Exactly one column: table layout assumes it.
+    OneColumn,
+    /// At least one column.
+    Visible,
+    /// May be empty (no line).
+    Any,
+}
+
+/// Checks the symbols written in the file. Control characters would reach
+/// the terminal as escape sequences, so none are allowed anywhere.
+fn validate(symbols: &SymbolsFile) -> Result<(), Invalid> {
     let t = &symbols.table;
-    let one_column = [
-        (&t.top_left, "symbols.table.top_left"),
-        (&t.top_mid, "symbols.table.top_mid"),
-        (&t.top_right, "symbols.table.top_right"),
-        (&t.mid_left, "symbols.table.mid_left"),
-        (&t.mid_mid, "symbols.table.mid_mid"),
-        (&t.mid_right, "symbols.table.mid_right"),
-        (&t.bottom_left, "symbols.table.bottom_left"),
-        (&t.bottom_mid, "symbols.table.bottom_mid"),
-        (&t.bottom_right, "symbols.table.bottom_right"),
-        (&t.vertical, "symbols.table.vertical"),
-        (&t.horizontal, "symbols.table.horizontal"),
+    let checks = [
+        (
+            &symbols.task_unchecked,
+            "symbols.task_unchecked",
+            Rule::Visible,
+        ),
+        (&symbols.task_checked, "symbols.task_checked", Rule::Visible),
+        (&symbols.quote_bar, "symbols.quote_bar", Rule::Visible),
+        (&symbols.rule, "symbols.rule", Rule::Visible),
+        (&symbols.h1_rule, "symbols.h1_rule", Rule::Any),
+        (&symbols.h2_rule, "symbols.h2_rule", Rule::Any),
+        (&t.top_left, "symbols.table.top_left", Rule::OneColumn),
+        (&t.top_mid, "symbols.table.top_mid", Rule::OneColumn),
+        (&t.top_right, "symbols.table.top_right", Rule::OneColumn),
+        (&t.mid_left, "symbols.table.mid_left", Rule::OneColumn),
+        (&t.mid_mid, "symbols.table.mid_mid", Rule::OneColumn),
+        (&t.mid_right, "symbols.table.mid_right", Rule::OneColumn),
+        (&t.bottom_left, "symbols.table.bottom_left", Rule::OneColumn),
+        (&t.bottom_mid, "symbols.table.bottom_mid", Rule::OneColumn),
+        (
+            &t.bottom_right,
+            "symbols.table.bottom_right",
+            Rule::OneColumn,
+        ),
+        (&t.vertical, "symbols.table.vertical", Rule::OneColumn),
+        (&t.horizontal, "symbols.table.horizontal", Rule::OneColumn),
     ];
-    for (symbol, path) in one_column {
-        if text_width(symbol) != 1 {
-            return Err(FieldError {
+    for (symbol, path, rule) in checks {
+        if let Some(symbol) = symbol {
+            check(symbol.get_ref(), rule).map_err(|message| Invalid {
                 path,
-                message: format!("{symbol:?} must be exactly one column wide"),
-            });
+                span: symbol.span(),
+                message,
+            })?;
         }
     }
-    let visible = [
-        (&symbols.task_unchecked, "symbols.task_unchecked"),
-        (&symbols.task_checked, "symbols.task_checked"),
-        (&symbols.quote_bar, "symbols.quote_bar"),
-        (&symbols.rule, "symbols.rule"),
-    ];
-    for (symbol, path) in visible {
-        if text_width(symbol) == 0 {
-            return Err(FieldError {
-                path,
-                message: "must not be empty".to_string(),
-            });
-        }
-    }
-    if symbols.bullets.is_empty() || symbols.bullets.iter().any(|b| text_width(b) == 0) {
-        return Err(FieldError {
+    if let Some(bullets) = &symbols.bullets {
+        let invalid = |message: String| Invalid {
             path: "symbols.bullets",
-            message: "needs at least one non-empty bullet".to_string(),
-        });
+            span: bullets.span(),
+            message,
+        };
+        if bullets.get_ref().is_empty() {
+            return Err(invalid("needs at least one bullet".to_string()));
+        }
+        for bullet in bullets.get_ref() {
+            check(bullet, Rule::Visible).map_err(invalid)?;
+        }
     }
     Ok(())
+}
+
+fn check(symbol: &str, rule: Rule) -> Result<(), String> {
+    if symbol.chars().any(char::is_control) {
+        return Err(format!("{symbol:?} must not contain control characters"));
+    }
+    match rule {
+        Rule::OneColumn if text_width(symbol) != 1 => {
+            Err(format!("{symbol:?} must be exactly one column wide"))
+        }
+        Rule::Visible if text_width(symbol) == 0 => Err("must not be empty".to_string()),
+        _ => Ok(()),
+    }
 }
