@@ -11,7 +11,7 @@ use crate::ansi::to_ansi;
 
 const WIDTHS: [u16; 3] = [40, 80, 120];
 const ANSI_WIDTH: u16 = 80;
-const FIXTURES: [&str; 7] = [
+const FIXTURES: [&str; 8] = [
     "basic",
     "lists",
     "quotes",
@@ -19,6 +19,7 @@ const FIXTURES: [&str; 7] = [
     "cjk-table",
     "wrap",
     "html",
+    "long",
 ];
 
 fn fixture(name: &str) -> String {
