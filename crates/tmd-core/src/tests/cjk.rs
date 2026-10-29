@@ -95,3 +95,23 @@ fn emoji_zwj_sequences_stay_whole() {
     let family = "👨\u{200D}👩\u{200D}👧";
     assert_eq!(plain(&family.repeat(2), 2), [family, family]);
 }
+
+#[test]
+fn wide_characters_fit_narrow_nested_content() {
+    let cases = [
+        "> > 1. x\n>      ```\n>      中文\n>      ```",
+        "> 中文",
+        "中文",
+    ];
+    for md in cases {
+        for width in 1u16..=20 {
+            for line in lines(md, width) {
+                assert!(
+                    line.width() <= usize::from(width),
+                    "width {width}, {md:?}: {:?}",
+                    line.plain_text()
+                );
+            }
+        }
+    }
+}
