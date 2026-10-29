@@ -18,9 +18,11 @@ use crate::style::{Color, Style};
 /// input is untrusted. Hand-written code rarely comes close.
 const MAX_LINE_BYTES: usize = 1000;
 
-/// Code blocks whose highlighting is kept; the least recently used goes
-/// first.
-const MAX_CACHED_BLOCKS: usize = 32;
+/// Highlighted lines kept across all blocks; the least recently used
+/// blocks go first. Bounded by lines, not blocks: each render visits every
+/// block in order, so fewer slots than blocks would evict each block just
+/// before it is needed again.
+const MAX_CACHED_LINES: usize = 20_000;
 
 const DARK_THEME: &str = "base16-ocean.dark";
 const LIGHT_THEME: &str = "InspiredGitHub";
@@ -171,8 +173,9 @@ impl Cache {
 
     fn store(&mut self, entry: Entry) {
         self.entries.push(entry);
-        if self.entries.len() > MAX_CACHED_BLOCKS {
-            self.entries.remove(0);
+        let mut lines: usize = self.entries.iter().map(|e| e.lines.len()).sum();
+        while lines > MAX_CACHED_LINES && self.entries.len() > 1 {
+            lines -= self.entries.remove(0).lines.len();
         }
     }
 }
@@ -239,13 +242,29 @@ mod tests {
         );
     }
 
+    /// Rendering visits every block in order each frame; with more blocks
+    /// than a fixed slot count, least-recently-used eviction dropped each
+    /// block just before it was needed again.
+    #[test]
+    fn many_small_blocks_stay_cached() {
+        let mut cache = Cache::default();
+        let blocks: Vec<String> = (0..200).map(|n| format!("let x{n} = {n};")).collect();
+        for _ in 0..2 {
+            for block in &blocks {
+                highlight_with(&mut cache, "rust", &[block.as_str()], true);
+            }
+        }
+        assert_eq!(cache.entries.len(), blocks.len());
+    }
+
     #[test]
     fn cache_is_bounded() {
         let mut cache = Cache::default();
-        for n in 0..(MAX_CACHED_BLOCKS + 10) {
+        for n in 0..(MAX_CACHED_LINES + 10) {
             let line = format!("let x{n} = {n};");
             highlight_with(&mut cache, "rust", &[line.as_str()], true);
         }
-        assert_eq!(cache.entries.len(), MAX_CACHED_BLOCKS);
+        let lines: usize = cache.entries.iter().map(|e| e.lines.len()).sum();
+        assert_eq!(lines, MAX_CACHED_LINES);
     }
 }
