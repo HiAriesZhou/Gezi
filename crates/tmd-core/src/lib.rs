@@ -3,6 +3,8 @@
 //! Turns markdown into styled lines. This crate must not depend on any
 //! terminal library; output backends live in `tmd-cli`.
 
+use std::ops::Range;
+
 mod code;
 mod highlight;
 mod html;
@@ -35,7 +37,7 @@ pub fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line> {
         if i > 0 {
             lines.push(Line {
                 spans: Vec::new(),
-                src: top[i - 1].src.clone(),
+                src: separator_src(&top[i - 1], lines.last()),
             });
         }
         if let parse::Block::Code(code) = &top_block.block {
@@ -58,6 +60,17 @@ pub fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line> {
         );
     }
     lines
+}
+
+/// Source range of the blank row after `block`: the block's own range,
+/// except after a code block, whose rows are committed line by line while
+/// streaming. There it covers only what follows the last code row (the
+/// closing fence), so it still starts after the committed offset.
+fn separator_src(block: &parse::TopBlock, last_row: Option<&Line>) -> Range<usize> {
+    match (&block.block, last_row) {
+        (parse::Block::Code(_), Some(row)) => row.src.end.min(block.src.end)..block.src.end,
+        _ => block.src.clone(),
+    }
 }
 
 #[cfg(test)]
