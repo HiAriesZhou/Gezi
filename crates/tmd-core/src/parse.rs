@@ -2,7 +2,10 @@
 
 use std::ops::Range;
 
-use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{
+    Alignment, BrokenLink, CodeBlockKind, CowStr, Event, HeadingLevel, LinkType, Options, Parser,
+    Tag, TagEnd,
+};
 
 use crate::html::{self, Piece};
 use crate::line::Span;
@@ -77,13 +80,21 @@ pub(crate) struct TopBlock {
 }
 
 pub(crate) fn parse(md: &str, theme: &Theme) -> Vec<TopBlock> {
-    let options =
-        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS | Options::ENABLE_TABLES;
     let mut builder = Builder::new(md, theme);
-    for (event, range) in Parser::new_ext(md, options).into_offset_iter() {
+    for (event, range) in events(md) {
         builder.event(event, range);
     }
     builder.finish()
+}
+
+/// Markdown events with source ranges, as every part of tmd parses them.
+/// An unresolved reference still yields a link with an empty URL: while
+/// streaming, its definition may not have arrived yet.
+pub(crate) fn events(md: &str) -> impl Iterator<Item = (Event<'_>, Range<usize>)> {
+    let options =
+        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS | Options::ENABLE_TABLES;
+    let unresolved = |_: BrokenLink| Some((CowStr::Borrowed(""), CowStr::Borrowed("")));
+    Parser::new_with_broken_link_callback(md, options, Some(unresolved)).into_offset_iter()
 }
 
 enum Frame {
@@ -111,6 +122,9 @@ struct Inline {
     image_alt: Option<String>,
     /// Images nested inside the alt text being collected.
     nested_images: usize,
+    /// For each open link, whether it is an unresolved reference whose
+    /// brackets are shown.
+    link_brackets: Vec<bool>,
     /// A soft break waiting for the next character, with its style; it
     /// becomes a space unless both neighbors are wide characters.
     pending_soft_break: Option<Style>,
@@ -126,6 +140,7 @@ impl Inline {
             styles: vec![base],
             image_alt: None,
             nested_images: 0,
+            link_brackets: Vec::new(),
             pending_soft_break: None,
             hidden: false,
         }
@@ -354,12 +369,29 @@ impl<'t> Builder<'t> {
             Tag::Emphasis => self.inline_mut().push_style(&theme.italic),
             Tag::Strong => self.inline_mut().push_style(&theme.bold),
             Tag::Strikethrough => self.inline_mut().push_style(&theme.strike),
-            Tag::Link { dest_url, .. } => {
+            Tag::Link {
+                link_type,
+                dest_url,
+                ..
+            } => {
+                let unresolved = matches!(
+                    link_type,
+                    LinkType::ShortcutUnknown
+                        | LinkType::CollapsedUnknown
+                        | LinkType::ReferenceUnknown
+                );
+                let url = clean_inline(&dest_url);
                 let style = Style {
-                    link: Some(clean_inline(&dest_url)),
+                    link: (!url.is_empty()).then_some(url),
                     ..self.theme.link.clone()
                 };
-                self.inline_mut().push_style(&style);
+                let inline = self.inline_mut();
+                inline.push_style(&style);
+                inline.link_brackets.push(unresolved);
+                if unresolved {
+                    let style = inline.style();
+                    inline.text("[", style);
+                }
             }
             Tag::Table(aligns) => {
                 self.table = Some(Table {
@@ -455,7 +487,15 @@ impl<'t> Builder<'t> {
                     self.push_block(Block::Table(table));
                 }
             }
-            TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => {
+            TagEnd::Link => {
+                let inline = self.inline_mut();
+                if inline.link_brackets.pop() == Some(true) {
+                    let style = inline.style();
+                    inline.text("]", style);
+                }
+                inline.pop_style();
+            }
+            TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
                 self.inline_mut().pop_style();
             }
             TagEnd::Image => {
