@@ -51,10 +51,6 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
         Block::Quote(children) => quote(ctx, children, width),
         Block::Rule => vec![rule_row(theme, width)],
         Block::Table(table) => table::layout(theme, table, width),
-        Block::Html(text) => hard_wrap_lines(text, width)
-            .into_iter()
-            .map(|line| vec![Span::new(line, theme.muted.clone())])
-            .collect(),
     }
 }
 
