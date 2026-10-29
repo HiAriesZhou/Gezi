@@ -147,6 +147,8 @@ fn first_difference(streamed: &[String], full: &[String]) -> String {
     )
 }
 
+const LONG: &str = include_str!("../../../../fixtures/long.md");
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
@@ -163,5 +165,22 @@ proptest! {
             prop_assert!(a == b, "{} at {}: {}", name, width, first_difference(&a, &b));
             prop_assert_eq!(all, full, "{} at {}: styles or sources differ", name, width);
         }
+    }
+}
+
+proptest! {
+    // long.md takes hundreds of pushes per case; fewer cases keep the
+    // suite fast while still covering its long code block and table.
+    #![proptest_config(ProptestConfig::with_cases(8))]
+
+    #[test]
+    fn streaming_long_document_matches_a_full_render(
+        sizes in prop::collection::vec(1usize..=50, 1..64),
+    ) {
+        let (all, _) = stream(&chunks(LONG, &sizes), 80);
+        let full = render(LONG, 80, &Theme::default());
+        let (a, b) = (texts(&all), texts(&full));
+        prop_assert!(a == b, "long: {}", first_difference(&a, &b));
+        prop_assert_eq!(all, full);
     }
 }
