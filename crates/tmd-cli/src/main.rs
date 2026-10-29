@@ -2,6 +2,7 @@ mod ansi;
 mod cli;
 #[cfg(test)]
 mod snapshots;
+mod stream;
 mod theme_select;
 
 use std::fs::File;
@@ -12,11 +13,29 @@ use std::process::ExitCode;
 use clap::Parser;
 use tmd_core::{Theme, render};
 
-use crate::cli::{Cli, resolve_width};
+use crate::cli::{Cli, InputFormat, resolve_width};
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let width = resolve_width(cli.width, terminal_width());
+    // Picked before any input is read: `auto` may ask the terminal.
+    let theme = match pick_theme(&cli.theme) {
+        Ok(theme) => theme,
+        Err(err) => {
+            eprintln!("tmd: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if should_stream(&cli) {
+        return match stream::run(Box::new(io::stdin()), theme, cli.width) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("tmd: {err}");
+                ExitCode::FAILURE
+            }
+        };
+    }
 
     let input: Box<dyn Read> = match &cli.file {
         Some(path) => match open_file(path) {
@@ -36,13 +55,6 @@ fn main() -> ExitCode {
         }
     };
 
-    let theme = match pick_theme(&cli.theme) {
-        Ok(theme) => theme,
-        Err(err) => {
-            eprintln!("tmd: {err}");
-            return ExitCode::FAILURE;
-        }
-    };
     let lines = render(&md, width, &theme);
     let hyperlinks = io::stdout().is_terminal();
     match write_out(io::stdout().lock(), &ansi::to_ansi(&lines, hyperlinks)) {
@@ -54,6 +66,17 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Streams when markdown is piped in and the output is a terminal: the
+/// input may be an AI tool still writing. Otherwise the input is read to
+/// the end and printed once (`--ansi` asks for that explicitly).
+fn should_stream(cli: &Cli) -> bool {
+    cli.file.is_none()
+        && cli.from == InputFormat::Text
+        && !cli.ansi
+        && !io::stdin().is_terminal()
+        && io::stdout().is_terminal()
 }
 
 /// The theme `--theme` names; `auto` picks default-dark or default-light
