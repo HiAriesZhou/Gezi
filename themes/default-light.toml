@@ -5,10 +5,10 @@ dark = false
 [styles]
 h1 = { fg = "ansi:5", bold = true }
 h2 = { fg = "ansi:4", bold = true }
-h3 = { fg = "ansi:6" }
+h3 = { fg = "ansi:6", bold = true }
 text = {}
-bold = { bold = true }
-italic = { italic = true }
+bold = { fg = "ansi:3", bold = true }
+italic = { fg = "ansi:2", italic = true }
 strike = { strike = true }
 inline_code = { fg = "ansi:1", bg = "ansi:7" }
 code_block = { bg = "ansi:7" }
@@ -27,7 +27,7 @@ task_unchecked = "☐"
 task_checked = "☑"
 quote_bar = "│"
 rule = "─"
-h1_rule = ""
+h1_rule = "━"
 h2_rule = "─"
 
 [symbols.table]

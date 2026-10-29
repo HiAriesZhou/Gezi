@@ -104,3 +104,39 @@ fn default_themes_use_only_the_16_ansi_colors() {
         }
     }
 }
+
+#[test]
+fn neon_tokyo_is_true_color() {
+    let theme = Theme::builtin("neon-tokyo").expect("neon-tokyo is built in");
+    assert!(theme.dark);
+    assert!(matches!(theme.h1.fg, Color::Rgb(..)));
+    assert!(matches!(theme.inline_code.fg, Color::Rgb(0x4d, 0xf2, 0xff)));
+}
+
+/// Chinese fonts often have no bold or italic face, so built-in themes
+/// also color them.
+#[test]
+fn built_in_themes_color_bold_and_italic() {
+    for name in Theme::builtin_names() {
+        let theme = Theme::builtin(name).unwrap();
+        assert!(theme.bold.bold && theme.bold.fg != Color::Reset, "{name}");
+        assert!(
+            theme.italic.italic && theme.italic.fg != Color::Reset,
+            "{name}"
+        );
+        assert_ne!(theme.bold.fg, theme.italic.fg, "{name}");
+    }
+}
+
+#[test]
+fn heading_levels_are_distinguishable() {
+    use crate::render;
+    for name in Theme::builtin_names() {
+        let theme = Theme::builtin(name).unwrap();
+        let out = render("# one\n\n## two\n\n### three", 10, &theme);
+        let rows: Vec<String> = out.iter().map(|l| l.plain_text()).collect();
+        assert_eq!(rows[1], "━".repeat(10), "{name}: thick line under level 1");
+        assert_eq!(rows[4], "─".repeat(10), "{name}: thin line under level 2");
+        assert!(theme.h3.bold && theme.h3.fg != theme.h2.fg, "{name}");
+    }
+}
