@@ -1,0 +1,26 @@
+# Built-in true-color theme for dark backgrounds, after the Tokyo Night
+# palette with a neon accent. Field reference: themes/README.md.
+dark = true
+
+[styles]
+h1 = { fg = "#ff007c", bold = true }
+h2 = { fg = "#7aa2f7", bold = true }
+h3 = { fg = "#2ac3de", bold = true }
+text = { fg = "#c0caf5" }
+bold = { fg = "#ff9e64", bold = true }
+italic = { fg = "#bb9af7", italic = true }
+strike = { fg = "#565f89", strike = true }
+inline_code = { fg = "#4df2ff", bg = "#24283b" }
+code_block = { bg = "#1f2335" }
+link = { fg = "#7dcfff", underline = true }
+quote_bar = { fg = "#565f89" }
+list_marker = { fg = "#9ece6a" }
+rule = { fg = "#3b4261" }
+table_border = { fg = "#565f89" }
+table_header = { fg = "#c0caf5", bold = true }
+muted = { fg = "#565f89" }
+fold = { fg = "#565f89" }
+
+[symbols]
+bullets = ["◆", "◇", "▸"]
+h1_rule = "━"

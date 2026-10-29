@@ -50,7 +50,8 @@ fn readme_style_header() {
             "[图片: TMD logo]",
             "[图片: CI] [图片: License: MIT]",
             "",
-            "tmd"
+            "tmd",
+            "━".repeat(80).as_str()
         ]
     );
 }

@@ -1,9 +1,10 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 34
+assertion_line: 42
 expression: plain(&lines)
 ---
 换行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 中英文混排的长段落：Rust 的所有权
 （ownership）规则保证内存安全，不需要垃
