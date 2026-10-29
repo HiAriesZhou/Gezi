@@ -66,3 +66,32 @@ fn rows_still_fit_with_punctuation_rules() {
         }
     }
 }
+
+#[test]
+fn emoji_sequences_never_panic_or_overflow() {
+    let heart = "\u{2764}\u{FE0F}";
+    let row = heart.repeat(5);
+    let cases = [
+        row.clone(),
+        format!("```\n{row}\n```"),
+        format!("```{row}\nx\n```"),
+        format!("| a | b |\n|---|---|\n| {} | {row} |", heart.repeat(6)),
+    ];
+    for md in &cases {
+        for width in 1u16..=40 {
+            for line in lines(md, width) {
+                assert!(
+                    line.width() <= usize::from(width),
+                    "width {width}, {md:?}: {:?}",
+                    line.plain_text()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn emoji_zwj_sequences_stay_whole() {
+    let family = "👨\u{200D}👩\u{200D}👧";
+    assert_eq!(plain(&family.repeat(2), 2), [family, family]);
+}
