@@ -41,8 +41,8 @@ https://example.com，粗体链接 docs。
 图片：[图片: 终端截图]，没有替代文字的图
 片：[图片]。
 
-行内 HTML：<kbd>Ctrl</kbd>+<kbd>C</kbd>
-。
+行内 HTML：
+<kbd>Ctrl</kbd>+<kbd>C</kbd>。
 
 <details>
 <summary>HTML 块</summary>
