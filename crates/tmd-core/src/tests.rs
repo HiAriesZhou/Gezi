@@ -1,6 +1,7 @@
 //! Behavior tests for `render`.
 
 mod cjk;
+mod tables;
 
 use crate::{Color, Line, Style, Theme, render};
 
@@ -224,6 +225,7 @@ fn deep_nesting_and_long_markers_still_fit_narrow_widths() {
         "- a\n  - b\n    - c\n      - d\n        - e\n          - f\n            - g",
         "123456789. x",
         "- item\n  > quote\n  > - inner\n  >   - inner2\n  >     > deep",
+        "> | 表头 | b |\n> |-|-|\n> | 中文内容 | d |",
     ];
     for md in cases {
         for width in 1u16..=20 {

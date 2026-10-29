@@ -3,6 +3,7 @@
 use crate::line::Span;
 use crate::parse::{Block, Item};
 use crate::style::Style;
+use crate::table;
 use crate::theme::Theme;
 use crate::width::{text_width, truncate};
 use crate::wrap::{Row, hard_wrap_lines, push_text, wrap};
@@ -45,6 +46,7 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
         } => list(ctx, *start, *tight, items, width),
         Block::Quote(children) => quote(ctx, children, width),
         Block::Rule => vec![rule_row(theme, width)],
+        Block::Table(table) => table::layout(theme, table, width),
         Block::Html(text) => hard_wrap_lines(text, width)
             .into_iter()
             .map(|line| vec![Span::new(line, theme.muted.clone())])
