@@ -140,3 +140,40 @@ fn heading_levels_are_distinguishable() {
         assert!(theme.h3.bold && theme.h3.fg != theme.h2.fg, "{name}");
     }
 }
+
+#[test]
+fn control_characters_in_symbols_are_rejected() {
+    let cases = [
+        (
+            "[symbols]\nbullets = [\"\\u001b]0;x\\u0007*\"]\n",
+            2,
+            "symbols.bullets",
+        ),
+        (
+            "[symbols]\nquote_bar = \"\\u001b[2J|\"\n",
+            2,
+            "symbols.quote_bar",
+        ),
+        ("[symbols]\n\nrule = \"\\r\"\n", 3, "symbols.rule"),
+        (
+            "[symbols.table]\nvertical = \"\\u001b\"\n",
+            2,
+            "symbols.table.vertical",
+        ),
+        ("[symbols]\nh1_rule = \"a\\nb\"\n", 2, "symbols.h1_rule"),
+    ];
+    for (source, line, needle) in cases {
+        let err = Theme::from_toml(source).expect_err(source);
+        assert_eq!(err.line, Some(line), "{source:?}: {err}");
+        assert!(err.to_string().contains(needle), "{source:?}: {err}");
+    }
+}
+
+#[test]
+fn symbol_errors_point_at_the_symbol_not_a_same_named_style() {
+    let source = "[styles]\nrule = { fg = \"ansi:1\" }\n\n[symbols]\nrule = \"\"\n";
+    let err = Theme::from_toml(source).unwrap_err();
+    assert_eq!(err.line, Some(5), "{err}");
+    let dotted = "dark = true\nsymbols.rule = \"\"\n";
+    assert_eq!(Theme::from_toml(dotted).unwrap_err().line, Some(2));
+}
