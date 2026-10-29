@@ -250,3 +250,24 @@ fn lists_separated_by_blank_lines_are_loose_without_paragraphs() {
 fn image_inside_image_alt_keeps_the_outer_label() {
     assert_eq!(plain("![a ![b](x) c](y)", 80), ["[图片: a b c]"]);
 }
+
+/// Streaming renders a reference before its definition may arrive, so an
+/// unresolved `[foo]` is styled as a link already; its brackets stay so
+/// prose like `arr[0]` still reads right.
+#[test]
+fn unresolved_references_keep_brackets_and_link_style() {
+    let theme = Theme::default();
+    let out = lines("see [foo] and arr[0] and [a][b]", 80);
+    assert_eq!(out[0].plain_text(), "see [foo] and arr[0] and [a]");
+    let foo = style_of(&out, "foo");
+    assert_eq!(foo.fg, theme.link.fg);
+    assert!(foo.underline);
+    assert_eq!(foo.link, None, "no URL to open");
+
+    let defined = lines("see [foo]\n\n[foo]: https://a.io", 80);
+    assert_eq!(defined[0].plain_text(), "see foo");
+    assert_eq!(
+        style_of(&defined, "foo").link.as_deref(),
+        Some("https://a.io")
+    );
+}
