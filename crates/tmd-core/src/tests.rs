@@ -4,6 +4,7 @@ mod cjk;
 mod code;
 mod html;
 mod tables;
+mod theme;
 
 use crate::{Color, Line, Style, Theme, render};
 

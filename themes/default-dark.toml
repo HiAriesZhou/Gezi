@@ -1,0 +1,44 @@
+# Built-in theme for dark backgrounds, using only the 16 ANSI colors so it
+# follows the terminal's own palette. Field reference: themes/README.md.
+dark = true
+
+[styles]
+h1 = { fg = "bright:5", bold = true }
+h2 = { fg = "bright:4", bold = true }
+h3 = { fg = "bright:6" }
+text = {}
+bold = { bold = true }
+italic = { italic = true }
+strike = { strike = true }
+inline_code = { fg = "bright:3", bg = "bright:0" }
+code_block = { bg = "bright:0" }
+link = { fg = "bright:4", underline = true }
+quote_bar = { fg = "bright:0" }
+list_marker = { fg = "bright:6" }
+rule = { fg = "bright:0" }
+table_border = { fg = "bright:0" }
+table_header = { bold = true }
+muted = { fg = "bright:0" }
+fold = { fg = "bright:0" }
+
+[symbols]
+bullets = ["•", "◦", "▪"]
+task_unchecked = "☐"
+task_checked = "☑"
+quote_bar = "│"
+rule = "─"
+h1_rule = ""
+h2_rule = "─"
+
+[symbols.table]
+top_left = "┌"
+top_mid = "┬"
+top_right = "┐"
+mid_left = "├"
+mid_mid = "┼"
+mid_right = "┤"
+bottom_left = "└"
+bottom_mid = "┴"
+bottom_right = "┘"
+vertical = "│"
+horizontal = "─"
