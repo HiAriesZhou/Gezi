@@ -20,6 +20,8 @@ pub struct Theme {
     pub quote_bar: Style,
     pub list_marker: Style,
     pub rule: Style,
+    pub table_border: Style,
+    pub table_header: Style,
     /// Raw HTML and image placeholders.
     pub muted: Style,
     pub symbols: Symbols,
@@ -34,6 +36,23 @@ pub struct Symbols {
     pub quote_bar: String,
     /// Repeated to draw rules and the line under level-2 headings.
     pub rule: String,
+    pub table: TableSymbols,
+}
+
+/// Box-drawing characters for table borders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableSymbols {
+    pub top_left: String,
+    pub top_mid: String,
+    pub top_right: String,
+    pub mid_left: String,
+    pub mid_mid: String,
+    pub mid_right: String,
+    pub bottom_left: String,
+    pub bottom_mid: String,
+    pub bottom_right: String,
+    pub vertical: String,
+    pub horizontal: String,
 }
 
 impl Default for Theme {
@@ -53,6 +72,8 @@ impl Default for Theme {
             quote_bar: Style::fg(gray),
             list_marker: Style::fg(Color::Ansi(14)),
             rule: Style::fg(gray),
+            table_border: Style::fg(gray),
+            table_header: Style::default().bold(),
             muted: Style::fg(gray),
             symbols: Symbols {
                 bullets: ["•", "◦", "▪"].map(String::from).to_vec(),
@@ -60,6 +81,19 @@ impl Default for Theme {
                 task_checked: "☑".into(),
                 quote_bar: "│".into(),
                 rule: "─".into(),
+                table: TableSymbols {
+                    top_left: "┌".into(),
+                    top_mid: "┬".into(),
+                    top_right: "┐".into(),
+                    mid_left: "├".into(),
+                    mid_mid: "┼".into(),
+                    mid_right: "┤".into(),
+                    bottom_left: "└".into(),
+                    bottom_mid: "┴".into(),
+                    bottom_right: "┘".into(),
+                    vertical: "│".into(),
+                    horizontal: "─".into(),
+                },
             },
         }
     }

@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use crate::line::Span;
 use crate::style::Style;
@@ -32,6 +32,22 @@ pub(crate) enum Block {
     Quote(Vec<Block>),
     Rule,
     Html(String),
+    Table(Table),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Align {
+    Left,
+    Center,
+    Right,
+}
+
+/// Table cells as inline spans; rows may be shorter than `aligns`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct Table {
+    pub aligns: Vec<Align>,
+    pub header: Vec<Vec<Span>>,
+    pub rows: Vec<Vec<Vec<Span>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -48,7 +64,8 @@ pub(crate) struct TopBlock {
 }
 
 pub(crate) fn parse(md: &str, theme: &Theme) -> Vec<TopBlock> {
-    let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let options =
+        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS | Options::ENABLE_TABLES;
     let mut builder = Builder::new(md, theme);
     for (event, range) in Parser::new_ext(md, options).into_offset_iter() {
         builder.event(event, range);
@@ -169,6 +186,9 @@ struct Builder<'t> {
     inline: Option<Inline>,
     code: Option<(Option<String>, String)>,
     html: Option<String>,
+    table: Option<Table>,
+    /// Cells of the table row being built.
+    row: Vec<Vec<Span>>,
 }
 
 impl<'t> Builder<'t> {
@@ -182,6 +202,8 @@ impl<'t> Builder<'t> {
             inline: None,
             code: None,
             html: None,
+            table: None,
+            row: Vec::new(),
         }
     }
 
@@ -195,6 +217,7 @@ impl<'t> Builder<'t> {
             && self.inline.is_none()
             && self.code.is_none()
             && self.html.is_none()
+            && self.table.is_none()
     }
 
     fn event(&mut self, event: Event, range: Range<usize>) {
@@ -295,6 +318,16 @@ impl<'t> Builder<'t> {
                 };
                 self.inline_mut().push_style(&style);
             }
+            Tag::Table(aligns) => {
+                self.table = Some(Table {
+                    aligns: aligns.into_iter().map(align).collect(),
+                    ..Table::default()
+                });
+            }
+            Tag::TableHead | Tag::TableRow => self.row.clear(),
+            Tag::TableCell => {
+                self.inline = Some(Inline::new(InlineKind::Paragraph, theme.text.clone()));
+            }
             Tag::Image { .. } => {
                 let inline = self.inline_mut();
                 if inline.image_alt.is_some() {
@@ -305,7 +338,7 @@ impl<'t> Builder<'t> {
                     inline.image_alt = Some(String::new());
                 }
             }
-            // Tables arrive in T3; the rest are not enabled in the parser options.
+            // Not enabled in the parser options.
             _ => {}
         }
     }
@@ -352,6 +385,27 @@ impl<'t> Builder<'t> {
                     && let Some(Frame::List { items, .. }) = self.frames.last_mut()
                 {
                     items.push(item);
+                }
+            }
+            TagEnd::TableCell => {
+                let spans = self.inline.take().map(|inline| inline.spans);
+                self.row.push(spans.unwrap_or_default());
+            }
+            TagEnd::TableHead => {
+                let cells = std::mem::take(&mut self.row);
+                if let Some(table) = &mut self.table {
+                    table.header = cells;
+                }
+            }
+            TagEnd::TableRow => {
+                let cells = std::mem::take(&mut self.row);
+                if let Some(table) = &mut self.table {
+                    table.rows.push(cells);
+                }
+            }
+            TagEnd::Table => {
+                if let Some(table) = self.table.take() {
+                    self.push_block(Block::Table(table));
                 }
             }
             TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => {
@@ -460,6 +514,14 @@ fn items_separated_by_blank_line(md: &str, item_starts: &[usize]) -> bool {
             .chars()
             .all(|c| matches!(c, ' ' | '\t' | '\r' | '>'))
     })
+}
+
+fn align(alignment: Alignment) -> Align {
+    match alignment {
+        Alignment::None | Alignment::Left => Align::Left,
+        Alignment::Center => Align::Center,
+        Alignment::Right => Align::Right,
+    }
 }
 
 fn heading_level(level: HeadingLevel) -> u8 {

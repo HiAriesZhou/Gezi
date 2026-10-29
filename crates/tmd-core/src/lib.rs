@@ -7,13 +7,14 @@ mod layout;
 mod line;
 mod parse;
 mod style;
+mod table;
 mod theme;
 mod width;
 mod wrap;
 
 pub use line::{Line, Span};
 pub use style::{Color, Style};
-pub use theme::{Symbols, Theme};
+pub use theme::{Symbols, TableSymbols, Theme};
 
 /// Renders `md` into rows at most `width` columns wide.
 ///
