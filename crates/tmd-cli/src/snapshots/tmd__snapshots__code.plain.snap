@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 32
+assertion_line: 29
 expression: plain(&lines)
 ---
 代码块
@@ -9,13 +9,13 @@ expression: plain(&lines)
 
                                                                             rust
 fn main() {                                                                     
-    println!("你好, tmd");                                                        
+    println!("你好, tmd");                                                      
 }                                                                               
 
 没写语言：
 
 plain text block                                                                
-    tab 开头的行                                                                    
+    tab 开头的行                                                                
 
 缩进式代码块：
 
@@ -25,8 +25,8 @@ second line
 代码块里的 markdown 标记不渲染：
 
                                                                         markdown
-# 不是标题                                                                          
-**不是粗体** `不是代码`                                                                 
+# 不是标题                                                                      
+**不是粗体** `不是代码`                                                         
 
 超长的行会在块内换行：
 

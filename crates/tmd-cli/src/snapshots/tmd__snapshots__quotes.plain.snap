@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 32
+assertion_line: 29
 expression: plain(&lines)
 ---
 引用
@@ -9,8 +9,8 @@ expression: plain(&lines)
 
 │ 引用里有两段。
 │
-│ 这是第二段，文字比较长，用来测试引用里的段落按宽度换行之后，每一行左边都有竖线 and the bar stays on every wrapped
-│ line.
+│ 这是第二段，文字比较长，用来测试引用里的段落按宽度换行之后，每一行左边都有竖线
+│ and the bar stays on every wrapped line.
 
 │ 第一层
 │

@@ -1,5 +1,7 @@
 //! Behavior tests for `render`.
 
+mod cjk;
+
 use crate::{Color, Line, Style, Theme, render};
 
 fn lines(md: &str, width: u16) -> Vec<Line> {

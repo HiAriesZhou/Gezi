@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 35
+assertion_line: 32
 expression: ansi
 ---
 \e[1;95m引用\e[0m
@@ -9,8 +9,8 @@ expression: ansi
 
 \e[90m│ \e[0m引用里有两段。
 \e[90m│\e[0m
-\e[90m│ \e[0m这是第二段，文字比较长，用来测试引用里的段落按宽度换行之后，每一行左边都有竖线 and the bar stays on every wrapped
-\e[90m│ \e[0mline.
+\e[90m│ \e[0m这是第二段，文字比较长，用来测试引用里的段落按宽度换行之后，每一行左边都有竖线
+\e[90m│ \e[0mand the bar stays on every wrapped line.
 
 \e[90m│ \e[0m第一层
 \e[90m│\e[0m
