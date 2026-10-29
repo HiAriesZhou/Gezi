@@ -1,12 +1,12 @@
 //! Block tree to rows of spans that fit a given width.
 
+use crate::code;
 use crate::line::Span;
 use crate::parse::{Block, Item};
-use crate::style::Style;
 use crate::table;
 use crate::theme::Theme;
 use crate::width::{text_width, truncate};
-use crate::wrap::{Row, hard_wrap_lines, push_text, wrap};
+use crate::wrap::{Row, push_text, wrap};
 
 /// Columns a quote or list must leave for its content, enough for one wide
 /// character; with less room the bar or marker is dropped instead.
@@ -42,7 +42,10 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
             }
             rows
         }
-        Block::Code { lang, text } => code(theme, lang.as_deref(), text, width),
+        Block::Code(block) => code::rows(theme, block, width)
+            .into_iter()
+            .map(|(row, _)| row)
+            .collect(),
         Block::List {
             start,
             tight,
@@ -58,32 +61,6 @@ fn rule_row(theme: &Theme, width: usize) -> Row {
     let symbol = &theme.symbols.rule;
     let repeated = symbol.repeat(width / text_width(symbol).max(1));
     vec![Span::new(truncate(&repeated, width), theme.rule.clone())]
-}
-
-fn code(theme: &Theme, lang: Option<&str>, text: &str, width: usize) -> Vec<Row> {
-    let style = &theme.code_block;
-    let mut rows = Vec::new();
-    if let Some(lang) = lang {
-        let label = truncate(lang, width);
-        let pad = width - text_width(label);
-        let label_style = Style {
-            dim: true,
-            ..style.clone()
-        };
-        let mut row = Row::new();
-        push_text(&mut row, &" ".repeat(pad), style);
-        push_text(&mut row, label, &label_style);
-        rows.push(row);
-    }
-    let mut lines = hard_wrap_lines(text, width);
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-    for line in lines {
-        let pad = width - text_width(&line);
-        rows.push(vec![Span::new(line + &" ".repeat(pad), style.clone())]);
-    }
-    rows
 }
 
 fn quote(ctx: &Ctx, children: &[Block], width: usize) -> Vec<Row> {

@@ -21,10 +21,7 @@ pub(crate) enum Block {
         level: u8,
         spans: Vec<Span>,
     },
-    Code {
-        lang: Option<String>,
-        text: String,
-    },
+    Code(CodeBlock),
     List {
         start: Option<u64>,
         tight: bool,
@@ -33,6 +30,22 @@ pub(crate) enum Block {
     Quote(Vec<Block>),
     Rule,
     Table(Table),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CodeBlock {
+    pub lang: Option<String>,
+    pub lines: Vec<CodeLine>,
+    /// The whole block, fences included.
+    pub src: Range<usize>,
+}
+
+/// One source line of code, tabs expanded and without its newline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CodeLine {
+    pub text: String,
+    /// The line in the source, newline included when present.
+    pub src: Range<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,7 +226,8 @@ struct Builder<'t> {
     top_src: Range<usize>,
     frames: Vec<Frame>,
     inline: Option<Inline>,
-    code: Option<(Option<String>, String)>,
+    /// Language and source-mapped text of the open code block.
+    code: Option<(Option<String>, CodePieces)>,
     html: Option<String>,
     table: Option<Table>,
     /// Cells of the table row being built.
@@ -257,8 +271,8 @@ impl<'t> Builder<'t> {
         }
         match event {
             Event::Start(tag) => self.start(tag, range.start),
-            Event::End(tag) => self.end(tag),
-            Event::Text(text) => self.text(&text),
+            Event::End(tag) => self.end(tag, range),
+            Event::Text(text) => self.text(&text, range),
             Event::Code(code) => {
                 let style = self.inline_mut().style().patch(&self.theme.inline_code);
                 self.inline_mut().text(&code, style);
@@ -322,7 +336,7 @@ impl<'t> Builder<'t> {
                         .filter(|lang| !lang.is_empty()),
                     CodeBlockKind::Indented => None,
                 };
-                self.code = Some((lang, String::new()));
+                self.code = Some((lang, Vec::new()));
             }
             Tag::HtmlBlock => self.html = Some(String::new()),
             Tag::List(start) => self.frames.push(Frame::List {
@@ -372,7 +386,7 @@ impl<'t> Builder<'t> {
         }
     }
 
-    fn end(&mut self, tag: TagEnd) {
+    fn end(&mut self, tag: TagEnd, range: Range<usize>) {
         match tag {
             TagEnd::Paragraph | TagEnd::Heading(_) => self.close_inline(),
             TagEnd::BlockQuote(_) => {
@@ -382,8 +396,12 @@ impl<'t> Builder<'t> {
                 }
             }
             TagEnd::CodeBlock => {
-                if let Some((lang, text)) = self.code.take() {
-                    self.push_block(Block::Code { lang, text });
+                if let Some((lang, pieces)) = self.code.take() {
+                    self.push_block(Block::Code(CodeBlock {
+                        lang,
+                        lines: code_lines(&pieces),
+                        src: range,
+                    }));
                 }
             }
             TagEnd::HtmlBlock => {
@@ -453,9 +471,9 @@ impl<'t> Builder<'t> {
         }
     }
 
-    fn text(&mut self, text: &str) {
-        if let Some((_, code)) = &mut self.code {
-            code.push_str(text);
+    fn text(&mut self, text: &str, range: Range<usize>) {
+        if let Some((_, pieces)) = &mut self.code {
+            pieces.push((text.to_string(), range));
         } else if let Some(html) = &mut self.html {
             html.push_str(text);
         } else {
@@ -503,13 +521,6 @@ impl<'t> Builder<'t> {
     }
 
     fn push_block(&mut self, block: Block) {
-        let block = match block {
-            Block::Code { lang, text } => Block::Code {
-                lang,
-                text: clean_block(&text),
-            },
-            other => other,
-        };
         match self.frames.last_mut() {
             Some(Frame::Quote(blocks)) => blocks.push(block),
             Some(Frame::Item(item)) => item.blocks.push(block),
@@ -552,6 +563,51 @@ fn items_separated_by_blank_line(md: &str, item_starts: &[usize]) -> bool {
             .chars()
             .all(|c| matches!(c, ' ' | '\t' | '\r' | '>'))
     })
+}
+
+/// Code text pieces with the source range each came from.
+type CodePieces = Vec<(String, Range<usize>)>;
+
+/// Splits code text into lines, each with its source range. pulldown-cmark
+/// sends code as text pieces, usually one per line; a piece whose length
+/// matches its range maps byte for byte, otherwise (container prefixes
+/// were stripped) its lines share the piece's range.
+fn code_lines(pieces: &[(String, Range<usize>)]) -> Vec<CodeLine> {
+    let mut lines = Vec::new();
+    let mut text = String::new();
+    let mut src: Option<Range<usize>> = None;
+    for (piece, range) in pieces {
+        let exact = piece.len() == range.len();
+        let mut offset = 0;
+        for segment in piece.split_inclusive('\n') {
+            let seg_src = if exact {
+                range.start + offset..range.start + offset + segment.len()
+            } else {
+                range.clone()
+            };
+            offset += segment.len();
+            text.push_str(segment);
+            src = Some(match src {
+                Some(open) => open.start.min(seg_src.start)..open.end.max(seg_src.end),
+                None => seg_src,
+            });
+            if segment.ends_with('\n') {
+                lines.push(finish_code_line(&mut text, &mut src));
+            }
+        }
+    }
+    if !text.is_empty() {
+        lines.push(finish_code_line(&mut text, &mut src));
+    }
+    lines
+}
+
+fn finish_code_line(text: &mut String, src: &mut Option<Range<usize>>) -> CodeLine {
+    let line = std::mem::take(text);
+    CodeLine {
+        text: clean_block(line.strip_suffix('\n').unwrap_or(&line)),
+        src: src.take().unwrap_or(0..0),
+    }
 }
 
 /// Placeholder text for an image with alt text `alt`.
