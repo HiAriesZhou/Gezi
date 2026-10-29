@@ -1,0 +1,31 @@
+---
+source: crates/tmd-cli/src/snapshots.rs
+assertion_line: 34
+expression: plain(&lines)
+---
+引用
+
+│ 单层引用，里面有 粗体 和 链接。这一行
+│ 是同一段的软换行。
+
+│ 引用里有两段。
+│
+│ 这是第二段，文字比较长，用来测试引用里
+│ 的段落按宽度换行之后，每一行左边都有竖
+│ 线 and the bar stays on every wrapped
+│ line.
+
+│ 第一层
+│
+│ │ 第二层
+│ │
+│ │ │ 第三层
+
+│ 引用里的列表：
+│
+│ • 一
+│ • 二
+│
+│ 引用里的代码：
+│
+│ let x = 1;
