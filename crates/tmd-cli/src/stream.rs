@@ -42,8 +42,14 @@ pub fn run(input: Box<dyn Read + Send>, theme: Theme, fixed_width: Option<u16>) 
     let mut last_frame = Instant::now() - FRAME_INTERVAL;
 
     loop {
-        let wait = FRAME_INTERVAL.saturating_sub(last_frame.elapsed());
-        match chunks.recv_timeout(wait) {
+        // With nothing to draw, sleep until input arrives; otherwise wait at
+        // most until the next frame is due.
+        let received = if pending.is_empty() {
+            chunks.recv().map_err(|_| RecvTimeoutError::Disconnected)
+        } else {
+            chunks.recv_timeout(FRAME_INTERVAL.saturating_sub(last_frame.elapsed()))
+        };
+        match received {
             Ok(Ok(bytes)) => pending.push_str(&decoder.feed(&bytes)),
             Ok(Err(err)) => return Err(err),
             Err(RecvTimeoutError::Timeout) => {}
