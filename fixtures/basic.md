@@ -28,7 +28,7 @@ A long English paragraph that should wrap at the terminal width without breaking
 
 <details>
 <summary>HTML 块</summary>
-原样灰色显示。
+HTML 块里的文字按正文显示。
 </details>
 
 ***

@@ -11,7 +11,15 @@ use crate::ansi::to_ansi;
 
 const WIDTHS: [u16; 3] = [40, 80, 120];
 const ANSI_WIDTH: u16 = 80;
-const FIXTURES: [&str; 6] = ["basic", "lists", "quotes", "code", "cjk-table", "wrap"];
+const FIXTURES: [&str; 7] = [
+    "basic",
+    "lists",
+    "quotes",
+    "code",
+    "cjk-table",
+    "wrap",
+    "html",
+];
 
 fn fixture(name: &str) -> String {
     let path: PathBuf = [env!("CARGO_MANIFEST_DIR"), "..", "..", "fixtures"]
@@ -60,5 +68,27 @@ fn cjk_table_rows_have_equal_width() {
                 assert_eq!(row.width(), first, "width {width}: {:?}", row.plain_text());
             }
         }
+    }
+}
+
+#[test]
+fn html_tags_never_reach_the_output() {
+    // Tags the fixtures use; `<tag>` decoded from `&lt;tag&gt;` and a stray
+    // `<unclosed` are text and may appear.
+    const TAGS: [&str; 13] = [
+        "kbd", "b", "span", "img", "details", "summary", "div", "p", "h1", "a", "br", "script",
+        "!--",
+    ];
+    for name in ["basic", "html"] {
+        let text = plain(&render(&fixture(name), 80, &Theme::default()));
+        for tag in TAGS {
+            for marker in [format!("<{tag}>"), format!("<{tag} "), format!("</{tag}>")] {
+                assert!(!text.contains(&marker), "{name}: {marker} in output");
+            }
+        }
+        assert!(
+            !text.contains("不应该显示") && !text.contains("alert"),
+            "{name}"
+        );
     }
 }
