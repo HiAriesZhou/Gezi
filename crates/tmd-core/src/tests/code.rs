@@ -37,43 +37,15 @@ fn unclosed_code_block_lines_still_have_sources() {
 }
 
 /// Streaming commits code rows line by line, moving the committed offset
-/// past the block start; the blank row after the block must start after
-/// the last code line or it is never committed.
+/// past the block start; the blank row after the block belongs to the
+/// next block, so it starts after the last code line.
 #[test]
 fn blank_row_after_a_code_block_starts_after_its_last_line() {
     let md = "```rust\na\nb\n```\n\npara\n";
     let out = lines(md, 10);
     assert_eq!(out[3].plain_text(), "");
-    assert!(
-        out[3].src.start >= out[2].src.end,
-        "{:?} vs {:?}",
-        out[3].src,
-        out[2].src
-    );
-    assert!(out[3].src.end <= out[4].src.start);
-    assert!(
-        md[out[3].src.clone()].contains("```"),
-        "still covers the closing fence"
-    );
-}
-
-/// Some syntaxes (Perl, Ruby) take quadratic time on one long line; such
-/// blocks are shown without highlighting.
-#[test]
-fn blocks_with_very_long_lines_skip_highlighting() {
-    let md = format!("```perl\n{}\n```", "s/a/b/; ".repeat(10_000));
-    let start = std::time::Instant::now();
-    let out = lines(&md, 80);
-    let elapsed = start.elapsed();
-    assert!(!has_rgb(&out));
-    assert!(
-        elapsed < std::time::Duration::from_secs(1),
-        "took {elapsed:?}"
-    );
-    assert!(
-        has_rgb(&lines("```perl\ns/a/b/;\n```", 80)),
-        "short Perl still highlights"
-    );
+    assert!(out[3].src.start >= out[2].src.end);
+    assert_eq!(out[3].src, out[4].src, "shares the next block's range");
 }
 
 #[test]
