@@ -154,9 +154,17 @@ impl Restore {
         queue!(out, Hide)?;
         out.flush()?;
         // Ctrl-C ends the whole pipeline; put the terminal back first. The
-        // handler writes to stderr because the main thread may hold stdout.
+        // main thread holds stdout, so write to the controlling terminal,
+        // or to stderr when there is none.
         let _ = ctrlc::set_handler(|| {
-            let _ = io::stderr().write_all(restore_sequence().as_bytes());
+            let sequence = restore_sequence();
+            let wrote = std::fs::OpenOptions::new()
+                .write(true)
+                .open("/dev/tty")
+                .and_then(|mut tty| tty.write_all(sequence.as_bytes()));
+            if wrote.is_err() {
+                let _ = io::stderr().write_all(sequence.as_bytes());
+            }
             std::process::exit(130);
         });
         Ok(Restore)
