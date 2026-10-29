@@ -24,6 +24,16 @@ fn cjk_wraps_between_any_two_characters() {
 }
 
 #[test]
+fn soft_breaks_between_full_width_characters_add_no_space() {
+    assert_eq!(plain("中文\n中文", 80), ["中文中文"]);
+    assert_eq!(plain("出现。\n第三行", 80), ["出现。第三行"]);
+    assert_eq!(plain("中文\nEnglish", 80), ["中文 English"]);
+    assert_eq!(plain("English\n中文", 80), ["English 中文"]);
+    assert_eq!(plain("a\nb", 80), ["a b"]);
+    assert_eq!(plain("**中文**\n中文", 80), ["中文中文"]);
+}
+
+#[test]
 fn code_blocks_pad_to_display_width() {
     for line in lines("```\n你好 tmd\n```", 12) {
         assert_eq!(line.width(), 12, "{:?}", line.plain_text());

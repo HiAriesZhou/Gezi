@@ -7,6 +7,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use crate::line::Span;
 use crate::style::Style;
 use crate::theme::Theme;
+use crate::width::is_wide;
 
 /// Spaces a tab expands to in code and HTML blocks.
 const TAB_WIDTH: usize = 4;
@@ -80,6 +81,9 @@ struct Inline {
     image_alt: Option<String>,
     /// Images nested inside the alt text being collected.
     nested_images: usize,
+    /// A soft break waiting for the next character, with its style; it
+    /// becomes a space unless both neighbors are wide characters.
+    pending_soft_break: Option<Style>,
 }
 
 impl Inline {
@@ -90,6 +94,7 @@ impl Inline {
             styles: vec![base],
             image_alt: None,
             nested_images: 0,
+            pending_soft_break: None,
         }
     }
 
@@ -110,15 +115,35 @@ impl Inline {
 
     fn text(&mut self, text: &str, style: Style) {
         let text = clean_inline(text);
-        if text.is_empty() {
+        let Some(first) = text.chars().next() else {
             return;
+        };
+        self.resolve_soft_break(first);
+        self.append(&text, style);
+    }
+
+    /// Turns a pending soft break into a space, except between two wide
+    /// characters, where Chinese text joins without one.
+    fn resolve_soft_break(&mut self, next: char) {
+        let Some(style) = self.pending_soft_break.take() else {
+            return;
+        };
+        let prev = match &self.image_alt {
+            Some(alt) => alt.chars().last(),
+            None => self.spans.last().and_then(|span| span.text.chars().last()),
+        };
+        if !(prev.is_some_and(is_wide) && is_wide(next)) {
+            self.append(" ", style);
         }
+    }
+
+    fn append(&mut self, text: &str, style: Style) {
         if let Some(alt) = &mut self.image_alt {
-            alt.push_str(&text);
+            alt.push_str(text);
             return;
         }
         match self.spans.last_mut() {
-            Some(last) if last.style == style && last.text != "\n" => last.text.push_str(&text),
+            Some(last) if last.style == style && last.text != "\n" => last.text.push_str(text),
             _ => self.spans.push(Span::new(text, style)),
         }
     }
@@ -188,8 +213,8 @@ impl<'t> Builder<'t> {
             }
             Event::Html(html) | Event::InlineHtml(html) => self.html_text(&html),
             Event::SoftBreak => {
-                let style = self.inline_mut().style();
-                self.inline_mut().text(" ", style);
+                let inline = self.inline_mut();
+                inline.pending_soft_break = Some(inline.style());
             }
             Event::HardBreak => {
                 let inline = self.inline_mut();
@@ -275,6 +300,8 @@ impl<'t> Builder<'t> {
                 if inline.image_alt.is_some() {
                     inline.nested_images += 1;
                 } else {
+                    // The placeholder starts with a narrow `[`.
+                    inline.resolve_soft_break('[');
                     inline.image_alt = Some(String::new());
                 }
             }
