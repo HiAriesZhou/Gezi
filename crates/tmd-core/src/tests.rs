@@ -100,15 +100,18 @@ fn blocks_are_separated_by_one_blank_line() {
 }
 
 #[test]
-fn wrapped_rows_share_src_and_blank_row_belongs_to_block_above() {
+fn wrapped_rows_share_src_and_blank_row_belongs_to_block_below() {
     let md = "aaa bbb\n\nccc";
     let out = lines(md, 3);
     assert_eq!(out.len(), 4);
     let first = out[0].src.clone();
     assert_eq!(&md[first.clone()], "aaa bbb\n");
     assert_eq!(out[1].src, first);
-    assert_eq!(out[2].src, first, "blank row belongs to the block above");
     assert_eq!(&md[out[3].src.clone()], "ccc");
+    assert_eq!(
+        out[2].src, out[3].src,
+        "blank row belongs to the block below"
+    );
 }
 
 #[test]
