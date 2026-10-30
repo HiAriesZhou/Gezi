@@ -67,6 +67,9 @@ fn main() -> ExitCode {
             let mut source = make_source(cli.from, width, theme, cli.debug);
             let mut lines = source.push(&md).committed;
             lines.extend(source.finish().committed);
+            for diagnostic in source.take_diagnostics() {
+                eprintln!("{diagnostic}");
+            }
             lines
         }
     };

@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-T7 已实现 Claude JSONL 事件适配、终端流式和非终端批量输出，并补齐样本回放及异常输入测试。本地格式、Clippy、140 个 Rust 测试、两种格式的 PTY 场景和三个 Python 回归通过；本阶段 PR 审查与 CI 结果以最终交付回执为准。此前纯文本修复和 T6 协议检查分别通过 PR #9、#10 合并。Kaku 已完成 T6 交互检查。用户已确认将 Ghostty/kitty 补测移至 MVP 最终验收，不再阻塞 T7。
+T7 已实现 Claude JSONL 事件适配、终端流式和非终端批量输出，并补齐样本回放及异常输入测试。本地格式、Clippy、140 个 Rust 测试、两种格式的 PTY 场景和四个 Python 回归通过；本阶段 PR 审查与 CI 结果以最终交付回执为准。此前纯文本修复和 T6 协议检查分别通过 PR #9、#10 合并。Kaku 已完成 T6 交互检查。用户已确认将 Ghostty/kitty 补测移至 MVP 最终验收，不再阻塞 T7。
 
 T7 交付包含两份已脱敏的真实样本、`claude.rs` 适配器、`--debug` 和两份确定性快照。原 `t7-claude` 工作区的五个未提交文件保留；阶段交付使用从 main 创建的独立分支，不覆盖原工作。
 
@@ -60,7 +60,7 @@ T7 交付包含两份已脱敏的真实样本、`claude.rs` 适配器、`--debug
 
 近期提交修复了流式空行和定稿边界、上游空闲时忙等、Ctrl-C 恢复终端、一行高终端的活动区问题，并将高亮缓存上限改为按行数计算。
 
-CI 定义在 `.github/workflows/ci.yml`，Linux/macOS 均执行 fmt、Clippy、Rust 测试、CLI 构建、PTY 检查和三个 Python 回归。PR #9 和 #10 的最终 CI 均成功；历史会话回执不替代当前版本的验证。
+CI 定义在 `.github/workflows/ci.yml`，Linux/macOS 均执行 fmt、Clippy、Rust 测试、CLI 构建、PTY 检查和四个 Python 回归。PR #9 和 #10 的最终 CI 均成功；历史会话回执不替代当前版本的验证。
 
 ## 当前未完成任务和阻塞
 
@@ -138,7 +138,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-T7 回放随 `cargo test` 执行，覆盖 `fixtures/claude/*.jsonl`；CLI 集成测试覆盖重定向输出、`--ansi` 及 `--debug` 的 stderr 隔离。
+T7 回放随 `cargo test` 执行，覆盖 `fixtures/claude/*.jsonl`；CLI 集成测试覆盖重定向输出、`--ansi` 及 `--debug` 的 stderr 隔离；PTY 回归覆盖共享终端中的诊断先清除活动区再输出。
 
 ### 人工验收命令
 
