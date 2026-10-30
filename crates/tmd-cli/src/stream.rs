@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use crossterm::cursor::{Hide, MoveToColumn, MoveToPreviousLine};
 use crossterm::queue;
 use crossterm::terminal::{BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate};
-use tmd_core::{Frame, Line, Streamer, Theme};
+use tmd_core::{Frame, Line, Streamer};
 
 use crate::ansi::to_ansi;
 
@@ -24,9 +24,36 @@ const READ_BUFFER: usize = 8 * 1024;
 /// Whether the Unicode version was pushed and must be popped on exit.
 static UNICODE_PUSHED: AtomicBool = AtomicBool::new(false);
 
-/// Streams `input` to stdout until it ends. `fixed_width` disables
-/// following the terminal's width.
-pub fn run(input: Box<dyn Read + Send>, theme: Theme, fixed_width: Option<u16>) -> io::Result<()> {
+/// Turns input text into frames: plain markdown (`Streamer`) or Claude
+/// Code events (`ClaudeStream`).
+pub trait Source {
+    fn push(&mut self, chunk: &str) -> Frame;
+    fn finish(&mut self) -> Frame;
+    fn set_width(&mut self, width: u16);
+}
+
+impl Source for Streamer {
+    fn push(&mut self, chunk: &str) -> Frame {
+        Streamer::push(self, chunk)
+    }
+
+    fn finish(&mut self) -> Frame {
+        Streamer::finish(self)
+    }
+
+    fn set_width(&mut self, width: u16) {
+        Streamer::set_width(self, width);
+    }
+}
+
+/// Streams `input` to stdout until it ends. `make_source` builds the
+/// source for the starting width; `fixed_width` disables following the
+/// terminal's width.
+pub fn run(
+    input: Box<dyn Read + Send>,
+    make_source: impl FnOnce(u16) -> Box<dyn Source>,
+    fixed_width: Option<u16>,
+) -> io::Result<()> {
     let chunks = spawn_reader(input);
     let mut out = io::stdout().lock();
     let _restore = Restore::start(&mut out)?;
@@ -35,7 +62,7 @@ pub fn run(input: Box<dyn Read + Send>, theme: Theme, fixed_width: Option<u16>) 
     if let Some(fixed) = fixed_width {
         width = fixed;
     }
-    let mut streamer = Streamer::new(width, theme);
+    let mut streamer = make_source(width);
     let mut decoder = Utf8Decoder::default();
     let mut screen = ActiveArea::default();
     let mut pending = String::new();
