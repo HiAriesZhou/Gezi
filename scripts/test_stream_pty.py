@@ -5,6 +5,7 @@ import argparse
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -18,6 +19,10 @@ BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
 
 
 class StartupOrdering(unittest.TestCase):
+    def test_c_locale_does_not_reinterpret_the_utf8_producer_command(self):
+        with patch.dict(os.environ, {"LANG": "C", "LC_ALL": "C"}):
+            probe.check_case(BINARY, interrupt=False)
+
     def test_shell_cannot_change_the_baseline_before_it_is_saved(self):
         original = probe.pty.fork
 
