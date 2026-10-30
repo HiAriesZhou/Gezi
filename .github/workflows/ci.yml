@@ -8,6 +8,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
   check:
     name: check (${{ matrix.os }})
@@ -28,3 +31,23 @@ jobs:
       - run: cargo build --locked
       - run: python3 scripts/check_stream_pty.py --binary target/debug/tmd
       - run: python3 scripts/test_stream_pty.py --binary target/debug/tmd
+      - run: python3 -B -m unittest discover -s scripts -p 'test_release.py'
+
+  release:
+    name: Publish version
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: tmd-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: python3 scripts/release.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
