@@ -27,6 +27,10 @@ pub struct Cli {
     /// Input format
     #[arg(long, value_enum, default_value_t = InputFormat::Text)]
     pub from: InputFormat,
+
+    /// Report malformed JSONL records to stderr (without their contents)
+    #[arg(long)]
+    pub debug: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
