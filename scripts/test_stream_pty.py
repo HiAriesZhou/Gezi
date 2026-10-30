@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import shlex
+import tempfile
 import time
 import unittest
 from unittest.mock import patch
@@ -19,6 +21,13 @@ BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
 
 
 class StartupOrdering(unittest.TestCase):
+    def test_producer_waits_for_resize_even_when_renderer_starts_late(self):
+        with tempfile.TemporaryDirectory(prefix="tmd-pty-delayed-") as directory:
+            wrapper = Path(directory) / "tmd-delayed"
+            wrapper.write_text("#!/bin/sh\nsleep 1\nexec " + shlex.quote(str(BINARY)) + ' "$@"\n')
+            wrapper.chmod(0o700)
+            probe.check_case(wrapper, interrupt=False)
+
     def test_c_locale_does_not_reinterpret_the_utf8_producer_command(self):
         with patch.dict(os.environ, {"LANG": "C", "LC_ALL": "C"}):
             probe.check_case(BINARY, interrupt=False)
