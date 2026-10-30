@@ -30,6 +30,9 @@ pub trait Source {
     fn push(&mut self, chunk: &str) -> Frame;
     fn finish(&mut self) -> Frame;
     fn set_width(&mut self, width: u16);
+    fn take_diagnostics(&mut self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl Source for Streamer {
@@ -88,7 +91,7 @@ pub fn run(
                 streamer.set_width(width);
             }
             let frame = streamer.push(&std::mem::take(&mut pending));
-            screen.draw(&mut out, &frame, height)?;
+            draw_source_frame(&mut screen, &mut out, &mut *streamer, &frame, height)?;
             last_frame = Instant::now();
         }
     }
@@ -96,10 +99,31 @@ pub fn run(
     pending.push_str(&decoder.finish());
     if !pending.is_empty() {
         let frame = streamer.push(&pending);
-        screen.draw(&mut out, &frame, height)?;
+        draw_source_frame(&mut screen, &mut out, &mut *streamer, &frame, height)?;
     }
     let last = streamer.finish();
-    screen.draw(&mut out, &last, height)
+    draw_source_frame(&mut screen, &mut out, &mut *streamer, &last, height)
+}
+
+/// stderr may share stdout's terminal. Clear the active rows before a
+/// diagnostic moves its cursor, then redraw below the diagnostic.
+fn draw_source_frame(
+    screen: &mut ActiveArea,
+    out: &mut impl Write,
+    source: &mut dyn Source,
+    frame: &Frame,
+    height: u16,
+) -> io::Result<()> {
+    let diagnostics = source.take_diagnostics();
+    if !diagnostics.is_empty() {
+        screen.draw(out, &Frame::default(), height)?;
+        let mut errors = io::stderr().lock();
+        for diagnostic in diagnostics {
+            writeln!(errors, "{diagnostic}")?;
+        }
+        errors.flush()?;
+    }
+    screen.draw(out, frame, height)
 }
 
 fn terminal_size() -> (u16, u16) {
