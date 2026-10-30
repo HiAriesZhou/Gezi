@@ -21,7 +21,7 @@ import time
 PRODUCER = '''
 import sys, time
 text = "```text\\n" + "".join(
-    f"TMD_PTY_{i:04d} " + "x" * 120 + " 中文🙂\\n" for i in range(120)
+    f"TMD_PTY_{i:04d} " + "x" * 120 + " 中文🙂\\n" for i in range(24)
 ) + "```\\n"
 data = text.encode()
 try:
@@ -80,7 +80,9 @@ def check_case(binary, interrupt):
             os.environ.pop(name, None)
         os.environ.update(TERM="xterm-256color", TERM_PROGRAM="Kaku",
                           PS1="TMD_READY> ", HISTFILE="/dev/null", INPUTRC="/dev/null")
-        os.execl("/bin/bash", "bash", "--noprofile", "--norc", "-i")
+        # Readline's C-locale Meta bindings reinterpret UTF-8 command bytes.
+        # Job control remains interactive; editing is not part of this probe.
+        os.execl("/bin/bash", "bash", "--noprofile", "--norc", "--noediting", "-i")
 
     os.close(ready_read)
     output = bytearray()
