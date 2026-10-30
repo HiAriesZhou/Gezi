@@ -14,7 +14,7 @@ T7 的两份真实样本和既有准备工作保留在本地 `t7-claude`，尚�
 - 接手时 T6 的真实终端验收尚未完成；后续已完成 Kaku 检查，其余终端仍须补做。
 - T7 采用回答作废提示：保留已经进入终端历史的内容，结束当前活动文本，另起一行显示「▸ 回答中断，重新生成」，再显示后续回答。
 - 交接审计阶段未构建、运行测试或联网核对远端状态。
-- 后续执行已授权：先恢复纯文本路径、补 T6 验收，再推进 T7；按逻辑变化分步提交，各阶段开 PR，经 Waza:check 审查，问题按 Waza:hunt 分析修复，CI 通过后合并。T8–T10、打 tag、包发布和部署不在范围内。
+- 后续执行已授权：先恢复纯文本路径、补 T6 验收，再推进 T7；按逻辑变化分步提交，各阶段开 PR，经 Waza:check 审查，问题按 Waza:hunt 分析修复，CI 通过后合并。T8 至 T10、打 tag、包发布和部署不在范围内。
 
 ## 项目目标和架构
 
@@ -27,7 +27,7 @@ T7 的两份真实样本和既有准备工作保留在本地 `t7-claude`，尚�
 
 `CLAUDE.md` 的「只输出 `Vec<Line>`」是旧入口的简写：当前 `render` 返回 `Vec<Line>`，`Streamer` 返回由已定稿行和活动行组成的 `Frame`；两者都不依赖终端。保留这些已有接口。
 
-`docs/TASKS.md` 决定当前实现范围；`docs/architecture.md` 包含四 crate、ratatui、raw 模式、查看器和截图等旧方案或未来设计，不应直接照搬。T8–T10 暂不开展。
+`docs/TASKS.md` 决定当前实现范围；`docs/architecture.md` 包含四 crate、ratatui、raw 模式、查看器和截图等旧方案或未来设计，不应直接照搬。T8 至 T10 暂不开展。
 
 ## 接手时的 Git 基线
 
@@ -49,8 +49,8 @@ T7 的两份真实样本和既有准备工作保留在本地 `t7-claude`，尚�
 
 | 阶段 | 当前证据 |
 |---|---|
-| T1–T3b | 文件/stdin 入口；标题、段落、列表、引用、表格、中文宽度、HTML 去标签及行为测试 |
-| T4–T5 | 高亮、三套主题、用户主题覆盖、auto 回退、主题校验及测试 |
+| T1 至 T3b | 文件/stdin 入口；标题、段落、列表、引用、表格、中文宽度、HTML 去标签及行为测试 |
+| T4 至 T5 | 高亮、三套主题、用户主题覆盖、auto 回退、主题校验及测试 |
 | T6 | 字节偏移定稿、代码块按行定稿、活动区限高重绘、16 ms 刷新间隔、UTF-8 分段解码、退出恢复 |
 | 渲染回归 | 8 个 Markdown fixture；40/80/120 宽度纯文本快照加 80 宽度 ANSI 快照，共 32 份 |
 | 流式回归 | proptest 比较分段输出和全文渲染；另有不重复定稿、代码行、空行、边界回归及保留的失败种子 |
@@ -159,4 +159,4 @@ cargo run --release -- --from claude-json < fixtures/claude/tools.jsonl
 claude -p "用中文介绍一下 Rust 的所有权，带一个表格" --output-format stream-json --verbose --include-partial-messages | cargo run --release -- --from claude-json
 ```
 
-T7 验收通过前不宣称 MVP 完成；不提前进入 T8–T10。
+T7 验收通过前不宣称 MVP 完成；不提前进入 T8 至 T10。
