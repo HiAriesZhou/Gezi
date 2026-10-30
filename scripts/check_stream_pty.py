@@ -118,7 +118,13 @@ def check_case(binary, interrupt):
                     sent = True
                     started = time.monotonic()
         else:
-            raise RuntimeError("PTY probe timed out")
+            receipt = {
+                "command_sent": sent, "resized": resized, "interrupted": interrupted,
+                "bytes": len(output), "frames": output.count(b"\x1b[?2026h"),
+                "widths": row_widths(output),
+                "tail": bytes(output[-500:]).decode("utf-8", errors="replace"),
+            }
+            raise RuntimeError("PTY probe timed out: " + json.dumps(receipt))
 
         _, status = os.waitpid(pid, 0)
         after = termios.tcgetattr(master)
