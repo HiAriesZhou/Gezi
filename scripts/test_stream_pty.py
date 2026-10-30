@@ -21,6 +21,54 @@ BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
 
 
 class StartupOrdering(unittest.TestCase):
+    def test_debug_diagnostic_clears_active_area_before_writing(self):
+        import pty
+        import select
+        import subprocess
+        import termios
+        import fcntl
+        import struct
+        master, slave = pty.openpty()
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        child = subprocess.Popen([str(BINARY), "--from", "claude-json", "--debug",
+                                  "--theme", "default-dark", "--width", "80"],
+                                 stdin=subprocess.PIPE, stdout=slave, stderr=slave)
+        os.close(slave)
+
+        def frame(record):
+            child.stdin.write(record)
+            child.stdin.flush()
+            received = bytearray()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if select.select([master], [], [], .05)[0]:
+                    received.extend(os.read(master, 65536))
+                    if b"\x1b[?2026l" in received:
+                        # The debug case has two frames around stderr output.
+                        if record.startswith(b"broken") and b"tmd: JSONL" not in received:
+                            continue
+                        return bytes(received)
+            self.fail("no diagnostic/draw frame received")
+
+        try:
+            first = frame(b'{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"Hello"}}}\n')
+            self.assertIn(b"Hello\r\n", first)
+            bad = frame(b"broken\n")
+            self.assertIn(b"tmd: JSONL line 2", bad)
+            self.assertIn(b"\x1b[1F", bad)
+            self.assertLess(bad.index(b"\x1b[1F"), bad.index(b"tmd: JSONL"))
+            frame(b'{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}}\n')
+            child.stdin.close()
+            child.wait(timeout=5)
+            self.assertEqual(child.returncode, 0)
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+            if not child.stdin.closed:
+                child.stdin.close()
+            os.close(master)
+
     def test_producer_waits_for_resize_even_when_renderer_starts_late(self):
         with tempfile.TemporaryDirectory(prefix="tmd-pty-delayed-") as directory:
             wrapper = Path(directory) / "tmd-delayed"
