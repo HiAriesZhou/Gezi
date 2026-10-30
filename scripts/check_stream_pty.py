@@ -57,8 +57,24 @@ def stop_child(pid, master):
 
 
 def check_case(binary, interrupt):
-    pid, master = pty.fork()
+    command = (
+        f"{shlex.quote(sys.executable)} -c {shlex.quote(PRODUCER)} | "
+        f"{shlex.quote(str(binary))} --theme default-dark; "
+        "result=$?; printf 'TMD_PROCESS_EXIT:%s\\n' \"$result\"; exit \"$result\"\n"
+    ).encode()
+    ready_read, ready_write = os.pipe()
+    try:
+        pid, master = pty.fork()
+    except BaseException:
+        os.close(ready_read)
+        os.close(ready_write)
+        raise
     if pid == 0:
+        os.close(ready_write)
+        ready = os.read(ready_read, 1)
+        os.close(ready_read)
+        if not ready:
+            os._exit(1)
         # No user shell configuration or persistent history is needed.
         for name in ("BASH_ENV", "ENV", "PROMPT_COMMAND"):
             os.environ.pop(name, None)
@@ -66,18 +82,18 @@ def check_case(binary, interrupt):
                           PS1="TMD_READY> ", HISTFILE="/dev/null", INPUTRC="/dev/null")
         os.execl("/bin/bash", "bash", "--noprofile", "--norc", "-i")
 
+    os.close(ready_read)
     output = bytearray()
     status = None
     sent = resized = interrupted = False
     started = time.monotonic()
-    fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
-    before = termios.tcgetattr(master)
-    command = (
-        f"{shlex.quote(sys.executable)} -c {shlex.quote(PRODUCER)} | "
-        f"{shlex.quote(str(binary))} --theme default-dark; "
-        "result=$?; printf 'TMD_PROCESS_EXIT:%s\\n' \"$result\"; exit \"$result\"\n"
-    ).encode()
     try:
+        fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        # The shell cannot enter readline and alter these attributes yet.
+        before = termios.tcgetattr(master)
+        os.write(ready_write, b"1")
+        os.close(ready_write)
+        ready_write = None
         while time.monotonic() - started < 20:
             # Synchronize on observed output, not runner speed or startup timing.
             widths = row_widths(output)
@@ -107,6 +123,8 @@ def check_case(binary, interrupt):
         _, status = os.waitpid(pid, 0)
         after = termios.tcgetattr(master)
     finally:
+        if ready_write is not None:
+            os.close(ready_write)
         if status is None:
             stop_child(pid, master)
         os.close(master)

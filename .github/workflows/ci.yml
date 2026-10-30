@@ -27,3 +27,4 @@ jobs:
       - run: cargo test
       - run: cargo build --locked
       - run: python3 scripts/check_stream_pty.py --binary target/debug/tmd
+      - run: python3 scripts/test_stream_pty.py --binary target/debug/tmd
