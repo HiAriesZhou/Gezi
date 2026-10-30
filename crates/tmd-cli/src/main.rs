@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use clap::Parser;
-use tmd_core::{Theme, render};
+use tmd_core::{Streamer, Theme, render};
 
 use crate::cli::{Cli, InputFormat, resolve_width};
 
@@ -28,7 +28,11 @@ fn main() -> ExitCode {
     };
 
     if should_stream(&cli) {
-        return match stream::run(Box::new(io::stdin()), theme, cli.width) {
+        return match stream::run(
+            Box::new(io::stdin()),
+            move |width| Box::new(Streamer::new(width, theme)),
+            cli.width,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("tmd: {err}");
