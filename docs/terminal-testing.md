@@ -10,6 +10,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 cargo build --release --locked
 python3 scripts/check_stream_pty.py
+python3 scripts/test_stream_pty.py --binary target/release/tmd
 ```
 
 PTY 检查只使用 Python 标准库和 `/bin/bash`，适用于当前 MVP 的 macOS/Linux；不安装依赖，不读取用户 shell 配置，不保存 shell 历史。可用 `--binary <路径>` 指定构建产物。
@@ -23,7 +24,7 @@ PTY 检查只使用 Python 标准库和 `/bin/bash`，适用于当前 MVP 的 ma
 
 输出每个场景的 JSON 检查结果；失败返回非零。探测用 `TERM_PROGRAM=Kaku` 覆盖协议分支，不表示运行在真实 Kaku 中。
 
-CI 在 Linux/macOS 上构建 debug 二进制并执行同一探测。缩放和中断以已经观察到的输出为触发条件，避免依赖机器启动速度。
+CI 在 Linux/macOS 上构建 debug 二进制并执行同一探测。缩放和中断以已经观察到的输出为触发条件，避免依赖机器启动速度。启动回归测试故意让父进程晚运行，验证脚本仍在 shell 改变输入模式前保存终端属性基线。
 
 ## 真实终端检查
 
