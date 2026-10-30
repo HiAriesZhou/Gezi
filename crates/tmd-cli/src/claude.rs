@@ -34,6 +34,7 @@ pub struct ClaudeStream {
     width: u16,
     theme: Theme,
     debug: bool,
+    diagnostics: Vec<String>,
     now: Box<dyn Fn() -> Duration>,
 }
 
@@ -58,6 +59,7 @@ impl ClaudeStream {
             width: width.max(1),
             theme,
             debug,
+            diagnostics: Vec::new(),
             now: Box::new(now),
         }
     }
@@ -122,12 +124,12 @@ impl ClaudeStream {
             Ok(value) => self.event(&value, out),
             Err(err) if self.debug => {
                 // Never log the original record (it can contain private text).
-                eprintln!(
+                self.diagnostics.push(format!(
                     "tmd: JSONL line {}: invalid JSON ({:?}, column {})",
                     self.line,
                     err.classify(),
                     err.column()
-                );
+                ));
             }
             Err(_) => {}
         }
@@ -151,8 +153,14 @@ impl ClaudeStream {
                         let Some(index) = event["index"].as_u64() else {
                             return;
                         };
-                        self.close_block(out);
                         let content = &event["content_block"];
+                        if !matches!(
+                            content["type"].as_str(),
+                            Some("text" | "thinking" | "tool_use")
+                        ) {
+                            return;
+                        }
+                        self.close_block(out);
                         let block = match content["type"].as_str() {
                             Some("text") => {
                                 let mut text = Streamer::new(self.width, self.theme.clone());
@@ -275,6 +283,10 @@ impl ClaudeStream {
 }
 
 impl Source for ClaudeStream {
+    fn take_diagnostics(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.diagnostics)
+    }
+
     fn push(&mut self, chunk: &str) -> Frame {
         self.pending.push_str(chunk);
         let mut out = Vec::new();

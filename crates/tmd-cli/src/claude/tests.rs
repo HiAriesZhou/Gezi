@@ -119,6 +119,7 @@ fn bad_unknown_and_child_events_do_not_corrupt_parent() {
     ] {
         assert!(s.push(line).committed.is_empty());
     }
+    send(&mut s, start(7, json!({"type":"future-block"})));
     let mut child = start(0, json!({"type":"text", "text":"child"}));
     child["parent_tool_use_id"] = json!("parent-tool");
     send(&mut s, child);
