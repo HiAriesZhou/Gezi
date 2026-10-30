@@ -22,6 +22,7 @@ pub use streamer::{Frame, Streamer};
 pub use style::{Color, Style};
 pub use theme::{Symbols, TableSymbols, Theme};
 pub use theme_file::ThemeError;
+pub use width::{text_width, truncate};
 
 /// Renders `md` into rows at most `width` columns wide.
 ///
