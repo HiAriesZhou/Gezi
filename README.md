@@ -50,6 +50,8 @@ python3 scripts/slowcat.py fixtures/acceptance.md --rate 600 | tmd
 
 版本变化见 [CHANGELOG](CHANGELOG.md)，验收步骤见 [终端验收](docs/terminal-testing.md)。
 
+维护者合并版本更新后，主分支 CI 全部通过会自动创建 tag 和 GitHub Release，具体流程见 [自动发布](docs/release.md)。
+
 ## 开发
 
 ```sh
