@@ -2,11 +2,11 @@
 
 按顺序做，一个任务一次提交。每个任务做完跑"完成标准"，全部通过再停下来等确认。
 
-T1–T7（含 T3b）是 MVP：做完就能日常用（看文件、接管道、接 Claude Code）。T8 以后是 MVP 之后。
+T1 至 T7（含 T3b）是 MVP：做完就能日常用（看文件、接管道、接 Claude Code）。T8 以后是 MVP 之后。
 
 | 任务 | 内容 | 依赖 | 属于 |
 |---|---|---|---|
-| T1 | 仓库骨架、命令行参数、CI | — | MVP |
+| T1 | 仓库骨架、命令行参数、CI | 无 | MVP |
 | T2 | 核心渲染（除表格、高亮） | T1 | MVP |
 | T3 | 宽度计算与表格 | T2 | MVP |
 | T3b | HTML 去标签显示 | T2 | MVP |
@@ -43,7 +43,7 @@ T1–T7（含 T3b）是 MVP：做完就能日常用（看文件、接管道、�
   - `Span { text: String, style: Style }`，`Line { spans: Vec<Span>, src: Range<usize> }`。`src` 是这一行所属块的源码字节区间（一个段落换行成多行时，这几行的 `src` 相同），T6 要用。块之间的空行归属前一个块。
   - `fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line>`
 - 支持：
-  - 标题 1–6 级，不显示 `#`。一级粗体加色；二级粗体加色，下面一行细线；三级以下只变色。
+  - 标题 1 至 6 级，不显示 `#`。一级粗体加色；二级粗体加色，下面一行细线；三级以下只变色。
   - 段落按宽度换行（这一步先按字符数，T3 换成显示宽度）。
   - 粗体、斜体、删除线、行内代码（背景色）。
   - 链接：显示文字，样式带下划线；`style.link` 存 URL。
@@ -88,7 +88,7 @@ T2 审查后加入，取代 T2 里"HTML 原样灰色显示"。原因：HTML 块�
 做：
 - 行内 HTML 和 HTML 块都去掉标签，标签里的文字按所在位置的正文样式显示。
 - `<img alt="…">` 显示为 `[图片: …]`，没有 alt 时 `[图片]`，样式同 markdown 图片（`muted`）。
-- `<br>` 换行。HTML 块里，块级标签（`p`、`div`、`details`、`summary`、`h1`–`h6`、`li`、`tr`）的开始和结束处换行，连续空行合并，首尾空行去掉。
+- `<br>` 换行。HTML 块里，块级标签（`p`、`div`、`details`、`summary`、`h1` 至 `h6`、`li`、`tr`）的开始和结束处换行，连续空行合并，首尾空行去掉。
 - `<!-- … -->` 注释不显示；其他认不出的标签直接隐藏。
 - 常见实体解码：`&amp;` `&lt;` `&gt;` `&quot;` `&#39;` `&nbsp;`。
 - `<details>` 直接展开显示，不做折叠。
@@ -154,7 +154,7 @@ T2 审查后加入，取代 T2 里"HTML 原样灰色显示"。原因：HTML 块�
 - 新 fixture：`long.md`（300 行以上，含长代码块、长表格、嵌套列表）。
 
 完成标准：
-- 流式一致性测试（proptest）：对每个 fixture，随机切成 1–50 字节的片段逐个 push，最后 finish；所有 `committed` 拼起来等于对全文一次性 `render` 的结果。fixture 里不要放"引用定义在引用之后"的写法。
+- 流式一致性测试（proptest）：对每个 fixture，随机切成 1 至 50 字节的片段逐个 push，最后 finish；所有 `committed` 拼起来等于对全文一次性 `render` 的结果。fixture 里不要放"引用定义在引用之后"的写法。
 - 单元测试：定稿后的行在之后的 push 里不会再出现在 `committed` 里（不重复输出）。
 - 手动：`python3 scripts/slowcat.py fixtures/long.md | cargo run --release` 在 Kaku 里看：不闪、表格不错位、长代码块边出边显示、结束后光标正常。Ghostty 再跑一次。
 
@@ -187,6 +187,8 @@ T2 审查后加入，取代 T2 里"HTML 原样灰色显示"。原因：HTML 块�
 完成标准：
 - 回放测试：读 `fixtures/claude/*.jsonl` 逐行喂入，输出（去掉颜色码）和快照一致。
 - 手动：真实跑一次 `claude -p "…" --output-format stream-json --verbose --include-partial-messages | cargo run --release -- --from claude-json`，回答逐字出现，思考和工具调用各一行。
+
+2026-10-30 接续补充：空思考正文显示“▸ 思考 · 内容不可见”；回答作废时先定稿当前文本，再显示“▸ 回答中断，重新生成”。result 的 `is_error: true` 显示“失败”。Ghostty/kitty 补测移至 MVP 最终验收，不阻塞 T7。Claude 账户验证未解除前，真实环境检查按用户指定使用 Codex 文本管道；Claude JSONL 特有行为用已录真实样本回放验证，真实 Claude 管道仍标为待补测。
 
 ---
 
