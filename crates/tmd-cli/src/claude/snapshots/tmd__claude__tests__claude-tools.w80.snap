@@ -1,0 +1,12 @@
+---
+source: crates/tmd-cli/src/claude/tests.rs
+assertion_line: 83
+expression: text
+---
+▸ 工具 · Read · {"file_path": "/home/user/tmd/README.md"}
+✓ Read · 用时 0.0 s
+▸ 思考 · 内容不可见
+tmd 是一个在终端里显示 markdown 的只读渲染器，可以读取文件或标准输入，重点是流式
+输出时画面不闪烁、中英文混排能对齐，并支持主题。README 里写着项目还在开发中、暂
+时不能使用；它用 Rust 编写，采用 MIT 许可证。
+完成 · 总用时 6.1 s · $0.2316

@@ -1,4 +1,5 @@
 mod ansi;
+mod claude;
 mod cli;
 #[cfg(test)]
 mod snapshots;
@@ -14,6 +15,7 @@ use clap::Parser;
 use tmd_core::{Streamer, Theme, render};
 
 use crate::cli::{Cli, InputFormat, resolve_width};
+use crate::stream::Source;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -30,7 +32,7 @@ fn main() -> ExitCode {
     if should_stream(&cli) {
         return match stream::run(
             Box::new(io::stdin()),
-            move |width| Box::new(Streamer::new(width, theme)),
+            move |width| make_source(cli.from, width, theme, cli.debug),
             cli.width,
         ) {
             Ok(()) => ExitCode::SUCCESS,
@@ -59,7 +61,15 @@ fn main() -> ExitCode {
         }
     };
 
-    let lines = render(&md, width, &theme);
+    let lines = match cli.from {
+        InputFormat::Text => render(&md, width, &theme),
+        InputFormat::ClaudeJson => {
+            let mut source = make_source(cli.from, width, theme, cli.debug);
+            let mut lines = source.push(&md).committed;
+            lines.extend(source.finish().committed);
+            lines
+        }
+    };
     let hyperlinks = io::stdout().is_terminal();
     match write_out(io::stdout().lock(), &ansi::to_ansi(&lines, hyperlinks)) {
         Ok(()) => ExitCode::SUCCESS,
@@ -76,11 +86,14 @@ fn main() -> ExitCode {
 /// input may be an AI tool still writing. Otherwise the input is read to
 /// the end and printed once (`--ansi` asks for that explicitly).
 fn should_stream(cli: &Cli) -> bool {
-    cli.file.is_none()
-        && cli.from == InputFormat::Text
-        && !cli.ansi
-        && !io::stdin().is_terminal()
-        && io::stdout().is_terminal()
+    cli.file.is_none() && !cli.ansi && !io::stdin().is_terminal() && io::stdout().is_terminal()
+}
+
+fn make_source(format: InputFormat, width: u16, theme: Theme, debug: bool) -> Box<dyn Source> {
+    match format {
+        InputFormat::Text => Box::new(Streamer::new(width, theme)),
+        InputFormat::ClaudeJson => Box::new(claude::ClaudeStream::new(width, theme, debug)),
+    }
 }
 
 /// The theme `--theme` names; `auto` picks default-dark or default-light
