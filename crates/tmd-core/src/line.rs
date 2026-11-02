@@ -22,7 +22,16 @@ impl Span {
     }
 }
 
-/// One rendered terminal row.
+/// Size of a logical line, independent of the output protocol.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LineSize {
+    #[default]
+    Normal,
+    /// Twice the normal width and height.
+    Double,
+}
+
+/// One rendered logical line (one or two physical rows).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
     pub spans: Vec<Span>,
@@ -30,6 +39,7 @@ pub struct Line {
     /// wrapped from the same block share it; the blank row after a block
     /// belongs to that block.
     pub src: Range<usize>,
+    pub size: LineSize,
 }
 
 impl Line {
@@ -39,6 +49,13 @@ impl Line {
     }
 
     pub fn width(&self) -> usize {
-        self.spans.iter().map(Span::width).sum()
+        self.spans.iter().map(Span::width).sum::<usize>() * self.physical_height()
+    }
+
+    pub fn physical_height(&self) -> usize {
+        match self.size {
+            LineSize::Normal => 1,
+            LineSize::Double => 2,
+        }
     }
 }

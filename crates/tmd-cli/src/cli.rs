@@ -16,6 +16,10 @@ pub struct Cli {
     #[arg(long)]
     pub ansi: bool,
 
+    /// Experimental double-size H1 in static Markdown files on Kaku
+    #[arg(long)]
+    pub large_headings: bool,
+
     /// Theme name
     #[arg(long, value_name = "NAME", default_value = "auto")]
     pub theme: String,
@@ -63,6 +67,7 @@ mod tests {
         let cli = Cli::try_parse_from([
             "tmd",
             "--ansi",
+            "--large-headings",
             "--theme",
             "neon-tokyo",
             "--width",
@@ -73,6 +78,7 @@ mod tests {
         ])
         .unwrap();
         assert!(cli.ansi);
+        assert!(cli.large_headings);
         assert_eq!(cli.theme, "neon-tokyo");
         assert_eq!(cli.width, Some(40));
         assert_eq!(cli.from, InputFormat::ClaudeJson);
@@ -83,6 +89,7 @@ mod tests {
     fn defaults() {
         let cli = Cli::try_parse_from(["tmd"]).unwrap();
         assert!(!cli.ansi);
+        assert!(!cli.large_headings);
         assert_eq!(cli.theme, "auto");
         assert_eq!(cli.width, None);
         assert_eq!(cli.from, InputFormat::Text);
