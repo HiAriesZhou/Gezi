@@ -40,3 +40,24 @@ target/release/tmd --width 80 fixtures/cjk-table.md
 记录实际使用的终端、执行版本和结果；未运行的终端明确标为待验收。自动检查、视觉验收和作者接受分别报告。
 
 用户已确认 Ghostty、kitty 补测移至 MVP 最终验收，不阻塞 T7 编码和自动检查。具体未验收项目见 `docs/HANDOFF.md`。
+
+## 静态大标题（0.0.2）
+
+在 Kaku 直接运行，先保持至少 40 列、10 行：
+
+```sh
+target/release/tmd --large-headings fixtures/large-headings.md
+target/release/tmd fixtures/large-headings.md
+target/release/tmd --large-headings --width 20 fixtures/large-headings.md
+```
+
+逐项记录结果，截图保留在验收记录中：
+
+1. 对比开启和关闭：顶层 ATX、Setext H1 宽高各两倍，H2 至 H6、引用/列表中的 H1、正文、代码和表格维持常规字号；H1 分隔线全宽且普通高度。
+2. 检查中文、组合字符、emoji、带样式和链接的标题，20 列换行不截断字符、不重叠；文档超出窗口高度并滚入历史时上下半行仍配对。
+3. 输出结束后输入 `printf 'normal prompt test\n'`，确认提示符和后续文字大小正常；缩放窗口后再次检查后续输出。静态历史不承诺重新排版。
+4. 选中并复制放大标题到纯文本编辑区，记录是否出现两份文字。标准上下半行写有相同内容，复制重复是已披露限制，不能声称已无损复制。
+5. 将样本重复成较长临时文件，执行大标题输出并在输出期间按 Ctrl-C；检查退出码为 130，后续提示符普通大小，没有孤立的半个标题。不要向仓库写入临时长文件。
+6. `--ansi`、输出重定向、管道输入及 tmux/screen 中均应为普通标题；不能手动伪造 Kaku 环境变量来声称完成真实显示验收。
+
+`scripts/test_stream_pty.py` 包含静态正常结束、收到实际大标题输出后 Ctrl-C、过窄/过矮窗口及能力回退检查；Rust 测试在每个输出字节边界注入一次写入错误或取消，检查恢复序列。真实 VINTR 回归向控制终端写入 `0x03`，检查临时 `NOFLSH`、关闭回显、保留 canonical/ISIG，以及退出后恢复原 termios；另测 HUP、QUIT、TERM 的恢复与退出码。这些只证明输出协议与生命周期，真实 Kaku 显示和剪贴板结果须单独记录。
