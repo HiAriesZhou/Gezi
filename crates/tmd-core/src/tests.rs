@@ -3,6 +3,7 @@
 mod cjk;
 mod code;
 mod html;
+mod large_headings;
 mod stream;
 mod tables;
 mod theme;

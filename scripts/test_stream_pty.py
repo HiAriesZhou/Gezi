@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regress the probe's startup race with the child deliberately scheduled first."""
+"""Check terminal output, signal cleanup and the streaming probe's startup races."""
 
 import argparse
 import contextlib
@@ -18,6 +18,195 @@ sys.dont_write_bytecode = True
 import check_stream_pty as probe
 
 BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
+
+
+class StaticLargeHeadings(unittest.TestCase):
+    def test_keyboard_ctrl_c_preserves_output_queue_and_restores_tty(self):
+        import errno
+        import fcntl
+        import pty
+        import select
+        import signal
+        import struct
+        import termios
+
+        with tempfile.TemporaryDirectory(prefix="tmd-heading-vintr-") as directory:
+            path = Path(directory) / "long.md"
+            path.write_text("# Heading\n\n" * 10000)
+            ready_read, ready_write = os.pipe()
+            pid, master = pty.fork()
+            if pid == 0:
+                os.close(ready_write)
+                os.read(ready_read, 1)
+                os.close(ready_read)
+                env = dict(os.environ, TERM_PROGRAM="Kaku", TERM="kaku")
+                for key in ("TMUX", "STY"):
+                    env.pop(key, None)
+                os.execve(str(BINARY), [str(BINARY), "--large-headings", "--theme",
+                                      "default-dark", str(path)], env)
+            os.close(ready_read)
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+            before = termios.tcgetattr(master)
+            os.write(ready_write, b"1")
+            os.close(ready_write)
+            received = bytearray()
+            during = None
+            sent = False
+            waited = False
+            try:
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    if not select.select([master], [], [], .05)[0]:
+                        continue
+                    try:
+                        chunk = os.read(master, 32 if not sent else 65536)
+                    except OSError as error:
+                        if error.errno == errno.EIO:
+                            break
+                        raise
+                    if not chunk:
+                        break
+                    received.extend(chunk)
+                    if not sent and b"\x1b#3" in received:
+                        during = termios.tcgetattr(master)
+                        # Unlike send_signal, VINTR exercises the driver's
+                        # queue flush and echo behaviour as an actual key does.
+                        os.write(master, b"\x03")
+                        sent = True
+                else:
+                    self.fail("keyboard Ctrl-C did not stop the renderer")
+                _, status = os.waitpid(pid, 0)
+                waited = True
+                self.assertTrue(sent)
+                self.assertEqual(os.waitstatus_to_exitcode(status), 130)
+                self.assertTrue(during[3] & termios.NOFLSH, "VINTR must not discard half a heading")
+                self.assertFalse(during[3] & (termios.ECHO | termios.ECHONL))
+                self.assertEqual(during[3] & (termios.ICANON | termios.ISIG),
+                                 before[3] & (termios.ICANON | termios.ISIG))
+                self.assertNotIn(b"^C", received)
+                self.assertTrue(received.endswith(b"\x1b#5"))
+                self.assertEqual(termios.tcgetattr(master), before)
+            finally:
+                if not waited:
+                    os.kill(pid, signal.SIGKILL)
+                    os.waitpid(pid, 0)
+                os.close(master)
+
+    def render(self, text, options=(), *, cols=80, rows=24, env=None, interrupt=False,
+               file_input=True, interrupt_signal=None):
+        import errno
+        import fcntl
+        import pty
+        import select
+        import signal
+        import struct
+        import subprocess
+        import termios
+
+        with tempfile.TemporaryDirectory(prefix="tmd-heading-") as directory:
+            path = Path(directory) / "heading.md"
+            path.write_text(text)
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+            original_attributes = termios.tcgetattr(master)
+            child_env = dict(os.environ, TERM_PROGRAM="Kaku", TERM="kaku")
+            for name in ("TMUX", "STY"):
+                child_env.pop(name, None)
+            child_env.update(env or {})
+            child = subprocess.Popen([str(BINARY), "--theme", "default-dark",
+                                      "--large-headings", *options,
+                                      *([str(path)] if file_input else [])],
+                                     stdin=subprocess.DEVNULL if file_input else subprocess.PIPE,
+                                     stdout=slave, stderr=slave,
+                                     env=child_env)
+            os.close(slave)
+            if not file_input:
+                child.stdin.write(text.encode())
+                child.stdin.close()
+            received = bytearray()
+            sent = False
+            deadline = time.monotonic() + 15
+            try:
+                while time.monotonic() < deadline:
+                    if not select.select([master], [], [], .05)[0]:
+                        continue
+                    try:
+                        chunk = os.read(master, 65536)
+                    except OSError as error:
+                        if error.errno == errno.EIO:
+                            break
+                        raise
+                    if not chunk:
+                        break
+                    received.extend(chunk)
+                    if interrupt and not sent and b"\x1b#3" in received:
+                        child.send_signal(interrupt_signal or signal.SIGINT)
+                        sent = True
+                else:
+                    self.fail("static renderer did not exit")
+                child.wait(timeout=5)
+                self.assertEqual(child.returncode,
+                                 128 + (interrupt_signal or signal.SIGINT) if interrupt else 0)
+                if interrupt:
+                    self.assertTrue(sent, "signal must follow actual double-height output")
+                self.assertTrue(received, "must exercise real CLI output")
+                self.assertEqual(termios.tcgetattr(master), original_attributes)
+                return bytes(received)
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.wait()
+                os.close(master)
+
+    def test_native_output_and_ctrl_c_cleanup(self):
+        out = self.render("# H1\n\n## H2\n\nbody")
+        self.assertEqual(out.count(b"\x1b#3"), 1)
+        self.assertEqual(out.count(b"\x1b#4"), 1)
+        self.assertTrue(out.endswith(b"\x1b#5"))
+        interrupted = self.render(("# Heading\n\n" * 10000), interrupt=True)
+        self.assertTrue(interrupted.endswith(b"\x1b#5"))
+
+    def test_other_handled_signals_restore_terminal_settings(self):
+        import signal
+        for signum in (signal.SIGHUP, signal.SIGQUIT, signal.SIGTERM):
+            with self.subTest(signal=signum):
+                out = self.render("# Heading\n\n" * 10000, interrupt=True,
+                                  interrupt_signal=signum)
+                self.assertTrue(out.endswith(b"\x1b#5"))
+
+    def test_fallbacks_do_not_duplicate_h1_or_emit_size_controls(self):
+        for settings in [
+            {"options": ["--ansi"]},
+            {"env": {"TERM_PROGRAM": "unknown"}},
+            {"env": {"TMUX": "session"}},
+            {"env": {"STY": "session"}},
+            {"env": {"TERM": "screen-256color"}},
+            {"cols": 3},
+            {"rows": 2},
+            {"options": ["--width", "81"]},
+            {"file_input": False},
+        ]:
+            with self.subTest(settings=settings):
+                out = self.render("# X", **settings)
+                self.assertNotIn(b"\x1b#", out)
+                if settings.get("file_input", True):
+                    self.assertEqual(out.count(b"X"), 1)
+                else:
+                    # Streamed active rows may be redrawn before commit.
+                    self.assertIn(b"X", out)
+
+    def test_redirected_output_matches_the_normal_renderer(self):
+        import subprocess
+        with tempfile.TemporaryDirectory(prefix="tmd-heading-redirect-") as directory:
+            path = Path(directory) / "heading.md"
+            path.write_text("# 中文 title\n\nbody")
+            command = [str(BINARY), "--theme", "default-dark", "--width", "20", str(path)]
+            normal = subprocess.run(command, check=True, capture_output=True).stdout
+            large = subprocess.run([*command, "--large-headings"], check=True,
+                                   capture_output=True, env=dict(os.environ, TERM_PROGRAM="Kaku")).stdout
+            self.assertTrue(normal)
+            self.assertEqual(large, normal)
+            self.assertNotIn(b"\x1b#", large)
 
 
 class StartupOrdering(unittest.TestCase):

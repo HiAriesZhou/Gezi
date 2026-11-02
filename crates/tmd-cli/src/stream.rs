@@ -295,6 +295,7 @@ mod tests {
 
     fn line(text: &str) -> Line {
         Line {
+            size: Default::default(),
             spans: vec![Span::new(text, Style::default())],
             src: 0..0,
         }

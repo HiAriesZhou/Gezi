@@ -991,7 +991,9 @@ dependencies = [
  "crossterm",
  "ctrlc",
  "insta",
+ "nix",
  "serde_json",
+ "signal-hook",
  "terminal-colorsaurus",
  "tmd-core",
 ]

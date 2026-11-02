@@ -64,7 +64,7 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
 }
 
 /// `symbol` repeated across the row, at least once, cut to fit.
-fn rule_row(symbol: &str, style: &Style, width: usize) -> Row {
+pub(crate) fn rule_row(symbol: &str, style: &Style, width: usize) -> Row {
     let repeated = symbol.repeat((width / text_width(symbol).max(1)).max(1));
     vec![Span::new(truncate(&repeated, width), style.clone())]
 }
