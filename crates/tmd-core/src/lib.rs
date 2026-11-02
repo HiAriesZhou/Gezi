@@ -17,7 +17,7 @@ mod theme_file;
 mod width;
 mod wrap;
 
-pub use line::{Line, Span};
+pub use line::{Line, LineSize, Span};
 pub use streamer::{Frame, Streamer};
 pub use style::{Color, Style};
 pub use theme::{Symbols, TableSymbols, Theme};
@@ -32,6 +32,24 @@ pub use width::{clusters, text_width, truncate};
 /// (an HTML block of bare tags renders nothing), so streaming commits it
 /// together with that block.
 pub fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line> {
+    render_with_options(md, width, theme, RenderOptions::default())
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RenderOptions {
+    /// Double the size of top-level H1 text. Underlines remain normal.
+    /// Callers must check output support before enabling this.
+    pub large_headings: bool,
+}
+
+/// Like [`render`], with explicit layout options. Widths below four columns
+/// fall back to normal layout, allowing one wide character at double size.
+pub fn render_with_options(
+    md: &str,
+    width: u16,
+    theme: &Theme,
+    options: RenderOptions,
+) -> Vec<Line> {
     let width = usize::from(width.max(1));
     let ctx = layout::Ctx {
         theme,
@@ -39,12 +57,36 @@ pub fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line> {
     };
     let mut lines = Vec::new();
     for top_block in parse::parse(md, theme) {
-        let rows: Vec<Line> = if let parse::Block::Code(code) = &top_block.block {
+        let rows: Vec<Line> = if options.large_headings
+            && width >= 4
+            && let parse::Block::Heading { level: 1, spans } = &top_block.block
+        {
+            let mut rows: Vec<Line> = wrap::wrap(spans, width / 2)
+                .into_iter()
+                .map(|spans| Line {
+                    spans,
+                    src: top_block.src.clone(),
+                    size: LineSize::Double,
+                })
+                .collect();
+            if !theme.symbols.h1_rule.is_empty() {
+                rows.push(Line {
+                    spans: layout::rule_row(&theme.symbols.h1_rule, &theme.h1, width),
+                    src: top_block.src.clone(),
+                    size: LineSize::Normal,
+                });
+            }
+            rows
+        } else if let parse::Block::Code(code) = &top_block.block {
             // Code lines keep their own source ranges so streaming can
             // commit a long block line by line.
             code::rows(theme, code, width)
                 .into_iter()
-                .map(|(spans, src)| Line { spans, src })
+                .map(|(spans, src)| Line {
+                    spans,
+                    src,
+                    size: LineSize::Normal,
+                })
                 .collect()
         } else {
             layout::block(&ctx, &top_block.block, width)
@@ -52,6 +94,7 @@ pub fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line> {
                 .map(|spans| Line {
                     spans,
                     src: top_block.src.clone(),
+                    size: LineSize::Normal,
                 })
                 .collect()
         };
@@ -59,6 +102,7 @@ pub fn render(md: &str, width: u16, theme: &Theme) -> Vec<Line> {
             lines.push(Line {
                 spans: Vec::new(),
                 src: first.src.clone(),
+                size: LineSize::Normal,
             });
         }
         lines.extend(rows);

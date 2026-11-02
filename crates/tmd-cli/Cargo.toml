@@ -18,5 +18,9 @@ serde_json = "1"
 terminal-colorsaurus = "1"
 tmd-core = { path = "../tmd-core" }
 
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["term"] }
+signal-hook = "0.3"
+
 [dev-dependencies]
 insta = "1.49"

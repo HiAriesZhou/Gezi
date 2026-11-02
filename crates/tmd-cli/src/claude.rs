@@ -78,6 +78,7 @@ impl ClaudeStream {
         Line {
             spans: vec![Span::new(text, self.theme.fold.clone())],
             src: 0..0,
+            size: Default::default(),
         }
     }
 

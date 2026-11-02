@@ -18,7 +18,7 @@ pub fn to_ansi(lines: &[Line], hyperlinks: bool) -> String {
     out
 }
 
-fn write_line(out: &mut String, line: &Line, hyperlinks: bool) {
+pub(crate) fn write_line(out: &mut String, line: &Line, hyperlinks: bool) {
     let mut open_link: Option<&str> = None;
     for span in &line.spans {
         let link = span.style.link.as_deref().filter(|_| hyperlinks);
@@ -82,7 +82,11 @@ mod tests {
     use super::*;
 
     fn line(spans: Vec<Span>) -> Line {
-        Line { spans, src: 0..0 }
+        Line {
+            spans,
+            src: 0..0,
+            size: Default::default(),
+        }
     }
 
     #[test]

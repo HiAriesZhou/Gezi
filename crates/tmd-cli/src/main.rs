@@ -1,6 +1,7 @@
 mod ansi;
 mod claude;
 mod cli;
+mod large_headings;
 #[cfg(test)]
 mod snapshots;
 mod stream;
@@ -12,7 +13,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use clap::Parser;
-use tmd_core::{Streamer, Theme, render};
+use tmd_core::{RenderOptions, Streamer, Theme, render_with_options};
 
 use crate::cli::{Cli, InputFormat, resolve_width};
 use crate::stream::Source;
@@ -61,8 +62,21 @@ fn main() -> ExitCode {
         }
     };
 
+    let large = large_headings::enabled(
+        &cli,
+        io::stdout().is_terminal(),
+        crossterm::terminal::size().ok(),
+        width,
+    );
     let lines = match cli.from {
-        InputFormat::Text => render(&md, width, &theme),
+        InputFormat::Text => render_with_options(
+            &md,
+            width,
+            &theme,
+            RenderOptions {
+                large_headings: large,
+            },
+        ),
         InputFormat::ClaudeJson => {
             let mut source = make_source(cli.from, width, theme, cli.debug);
             let mut lines = source.push(&md).committed;
@@ -74,8 +88,16 @@ fn main() -> ExitCode {
         }
     };
     let hyperlinks = io::stdout().is_terminal();
-    match write_out(io::stdout().lock(), &ansi::to_ansi(&lines, hyperlinks)) {
+    let result = if large {
+        large_headings::write(&lines)
+    } else {
+        write_out(io::stdout().lock(), &ansi::to_ansi(&lines, hyperlinks))
+    };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
+        Err(err) if large && err.kind() == io::ErrorKind::Interrupted => {
+            ExitCode::from(large_headings::interrupted_exit_code())
+        }
         // The reader went away (e.g. `tmd file | head`); nothing left to do.
         Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         Err(err) => {
