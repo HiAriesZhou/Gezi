@@ -985,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "tmd-cli"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "clap",
  "crossterm",
@@ -1000,7 +1000,7 @@ dependencies = [
 
 [[package]]
 name = "tmd-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "proptest",
  "pulldown-cmark",
