@@ -31,7 +31,15 @@ cat notes.md | tmd     # 从 stdin 读
 tmd --help             # 全部参数
 ```
 
-支持标题、文字强调、列表、引用、链接、代码高亮和中英文表格。标题使用颜色、粗细和分隔线区分层级，字号由终端设置决定。
+支持标题、文字强调、列表、引用、链接、代码高亮和中英文表格。默认用颜色、粗细和分隔线区分标题层级。
+
+在 Kaku 中阅读静态 Markdown 文件时，可试用两档字号：顶层 H1 宽高各放大两倍，H2 至 H6 和正文维持常规字号。
+
+```sh
+tmd --large-headings fixtures/large-headings.md
+```
+
+该选项默认关闭，仅在直接连接 Kaku 的终端输出中生效；管道输入、重定向、`--ansi`、Claude JSONL、tmux/screen 和其他终端保留普通标题。窗口须至少 4 列、3 行，`--width` 须在 4 列至当前窗口宽度之间。放大的标题占两行，终端复制时可能得到重复文字；需要复制或保存时可去掉该选项。
 
 ```sh
 tmd --theme neon-tokyo README.md
@@ -45,7 +53,7 @@ python3 scripts/slowcat.py fixtures/acceptance.md --rate 600 | tmd
 
 - 主要在 Kaku 中试用；Ghostty、kitty 的显示效果仍待补测。
 - `--from claude-json` 已有真实样本回放测试，真实 Claude 增量管道仍待补测。
-- 暂无全屏查看器、搜索、图片显示和 Markdown 标题字号变化。
+- 暂无全屏查看器、搜索和图片显示；大标题尚不支持流式输出，也不提供逐级字号。
 - 流式缩放只重排活动区，已进入终端历史的内容不重绘。
 
 版本变化见 [CHANGELOG](CHANGELOG.md)，验收步骤见 [终端验收](docs/terminal-testing.md)。

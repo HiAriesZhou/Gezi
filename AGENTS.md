@@ -20,7 +20,9 @@
 ## 架构和行为
 
 - MVP 保持两个 crate：`tmd-core` 负责解析、布局、主题、高亮和定稿，`tmd-cli` 负责输入适配、ANSI 输出和终端控制。
-- `tmd-core` 不依赖终端库，输出结构化的 `Line` / `Frame`。
+- `tmd-core` 不依赖终端库，输出结构化的 `Line` / `Frame`。`Line.size` 表示逻辑字号，`width()` 是实际列数，`physical_height()` 是占用行数。
+- 大标题是 MVP 之后的静态文件选项；先检查终端能力和窗口尺寸再布局，只放大顶层 H1。默认 `render` 和 `Streamer::new` 始终输出普通行。DEC 行属性须显式恢复，SGR 重置不能代替。
+- 原生大标题输出期间，临时设置 `NOFLSH` 并关闭 `ECHO`/`ECHONL`，避免控制键丢弃半行或插入转义序列；保留 canonical/ISIG，退出恢复原 termios。Ctrl-C 回归须使用真实 VINTR，不能只向进程发送 SIGINT。
 - 显示宽度通过现有宽度模块计算，使用 `width()`，不用 `width_cjk()`；截断和换行不能拆开现有模块识别的字符簇。
 - 流式按源码字节边界定稿，只让完整行决定边界；已定稿内容不重绘，缩放只重排活动区。块间空行归属后一个块。
 - MVP 流式使用 crossterm，不进入 raw 模式；退出时恢复光标及设置过的 Unicode 版本。
