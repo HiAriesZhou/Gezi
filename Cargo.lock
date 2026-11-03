@@ -996,6 +996,7 @@ dependencies = [
  "signal-hook",
  "terminal-colorsaurus",
  "tmd-core",
+ "toml",
 ]
 
 [[package]]

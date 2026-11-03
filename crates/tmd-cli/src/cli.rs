@@ -20,6 +20,10 @@ pub struct Cli {
     #[arg(long)]
     pub large_headings: bool,
 
+    /// Static file reader: current-screen scrolling or configured Kaku integration
+    #[arg(long, value_enum)]
+    pub reader: Option<ReaderMode>,
+
     /// Theme name
     #[arg(long, value_name = "NAME", default_value = "auto")]
     pub theme: String,
@@ -35,6 +39,12 @@ pub struct Cli {
     /// Report malformed JSONL records to stderr (without their contents)
     #[arg(long)]
     pub debug: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ReaderMode {
+    Inline,
+    Native,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -68,6 +78,8 @@ mod tests {
             "tmd",
             "--ansi",
             "--large-headings",
+            "--reader",
+            "native",
             "--theme",
             "neon-tokyo",
             "--width",
@@ -79,6 +91,7 @@ mod tests {
         .unwrap();
         assert!(cli.ansi);
         assert!(cli.large_headings);
+        assert_eq!(cli.reader, Some(ReaderMode::Native));
         assert_eq!(cli.theme, "neon-tokyo");
         assert_eq!(cli.width, Some(40));
         assert_eq!(cli.from, InputFormat::ClaudeJson);
@@ -90,6 +103,7 @@ mod tests {
         let cli = Cli::try_parse_from(["tmd"]).unwrap();
         assert!(!cli.ansi);
         assert!(!cli.large_headings);
+        assert_eq!(cli.reader, None);
         assert_eq!(cli.theme, "auto");
         assert_eq!(cli.width, None);
         assert_eq!(cli.from, InputFormat::Text);

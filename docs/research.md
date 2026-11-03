@@ -68,3 +68,5 @@
 - Claude Code 流式输出：https://code.claude.com/docs/en/headless ；https://code.claude.com/docs/en/agent-sdk/streaming-output
 - 宽度：https://docs.rs/unicode-width ；https://wezterm.org/config/lua/config/unicode_version.html
 - 完整架构：docs/architecture.md（v3）
+
+2026-11-03 后续范围：T8 单独实现静态文件主屏滚动阅读，默认零配置 inline，可选配置 Kaku native 定位；原全屏查看器后移为 T9，截图导出及发布素材顺延为 T10/T11。T8 不包含全屏查看器功能。

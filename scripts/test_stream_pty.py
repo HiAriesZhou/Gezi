@@ -42,6 +42,12 @@ class StaticLargeHeadings(unittest.TestCase):
                 env = dict(os.environ, TERM_PROGRAM="Kaku", TERM="kaku")
                 for key in ("TMUX", "STY"):
                     env.pop(key, None)
+                # Exercise the direct-output large-heading path. Interactive
+                # stdin now selects the static reader, which has its own VINTR
+                # and termios regression tests in test_reader_pty.py.
+                null_input = os.open(os.devnull, os.O_RDONLY)
+                os.dup2(null_input, 0)
+                os.close(null_input)
                 os.execve(str(BINARY), [str(BINARY), "--large-headings", "--theme",
                                       "default-dark", str(path)], env)
             os.close(ready_read)
