@@ -43,6 +43,8 @@ target/release/tmd --width 80 fixtures/cjk-table.md
 
 ## 静态大标题（0.0.2）
 
+T8 后交互文件默认进入阅读器。下列一次性输出的大标题协议回归可用非交互 stdin（命令末尾加 `< /dev/null`）运行；阅读器本身另按下节验收。
+
 在 Kaku 直接运行，先保持至少 40 列、10 行：
 
 ```sh
@@ -61,3 +63,18 @@ target/release/tmd --large-headings --width 20 fixtures/large-headings.md
 6. `--ansi`、输出重定向、管道输入及 tmux/screen 中均应为普通标题；不能手动伪造 Kaku 环境变量来声称完成真实显示验收。
 
 `scripts/test_stream_pty.py` 包含静态正常结束、收到实际大标题输出后 Ctrl-C、过窄/过矮窗口及能力回退检查；Rust 测试在每个输出字节边界注入一次写入错误或取消，检查恢复序列。真实 VINTR 回归向控制终端写入 `0x03`，检查临时 `NOFLSH`、关闭回显、保留 canonical/ISIG，以及退出后恢复原 termios；另测 HUP、QUIT、TERM 的恢复与退出码。这些只证明输出协议与生命周期，真实 Kaku 显示和剪贴板结果须单独记录。
+
+## T8 主屏滚动阅读
+
+自动检查：`python3 -B scripts/test_reader_pty.py --binary target/debug/tmd`，与已有流式/大标题回归同时运行。
+
+Kaku 手动检查：
+
+1. 从窗口顶部、中间、底部运行 `target/debug/tmd fixtures/acceptance.md`，确认顶部有调用信息，下面是文章开头，没有切备用屏。
+2. 用滚轮连续上下阅读，Home/End 到首尾；不需要按空格才能加载后文。按 Shift 拖选并复制普通文字。
+3. 用 `--large-headings fixtures/large-headings.md` 检查大标题跨视口边界不会留下半行，滚动及缩放后正文不变大。
+4. 缩放至窄窗口及仅一行高，再恢复；检查段落定位与退出仍可用。q/Esc 后提示符正常，Ctrl-C 返回 130；输入后续命令确认回显正常。向上查看原会话历史仍在。
+5. 配置文件、CLI 覆盖、错误配置分别检查。`--ansi`、文件重定向、纯文本和 Claude JSONL 管道维持原行为。
+6. 原生增强用仓库外临时 Kaku 配置先验收，不能覆盖个人配置：探测成功后全文输出并定位开头；未装适配器或历史容量不足时在全文输出前回退。复制和滚动由终端处理，结束后没有多余输入落入 shell。
+
+记录自动检查、Kaku 视觉验收及作者接受三个独立结论。连接失败或未安装适配器时不得将模拟握手记为原生增强通过。
