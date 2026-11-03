@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""Exercise the real static-reader process, terminal events and restoration.
+
+This is protocol evidence; Kaku visual acceptance is recorded separately.
+"""
+import argparse
+import base64
+import errno
+import fcntl
+import os
+from pathlib import Path
+import pty
+import re
+import select
+import signal
+import struct
+import sys
+import tempfile
+import termios
+import time
+import unittest
+
+BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
+END = b"\x1b[?2026l"
+
+
+class Terminal:
+    def __init__(self, options=(), *, row=12, config=None, native=False, capacity=10000,
+                 wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False):
+        self.temp = tempfile.TemporaryDirectory(prefix="tmd-reader-")
+        root = Path(self.temp.name)
+        path = root / "article.md"
+        path.write_text(text if text is not None else
+                        "# Heading 中 é 👩‍💻\n\n" +
+                        "\n\n".join(f"Row {i:03} 中文" for i in range(1, 81)))
+        if config is not None:
+            (root / "tmd").mkdir()
+            (root / "tmd/config.toml").write_text(config)
+        ready_read, ready_write = os.pipe()
+        self.pid, self.master = pty.fork()
+        if self.pid == 0:
+            os.close(ready_write)
+            os.read(ready_read, 1)
+            os.close(ready_read)
+            env = dict(os.environ, TERM="xterm-256color", TERM_PROGRAM="Kaku",
+                       XDG_CONFIG_HOME=str(root))
+            for key in ("TMUX", "STY"):
+                env.pop(key, None)
+            args = [str(BINARY), "--theme", "default-dark", *options, str(path)]
+            os.execve(str(BINARY), args, env)
+        os.close(ready_read)
+        self.resize(80, 24)
+        self.before = termios.tcgetattr(self.master)
+        self.data = bytearray()
+        self.cursor = row
+        self.native = native
+        self.capacity = capacity
+        self.wrong_token = wrong_token
+        self.interrupt_probe = interrupt_probe
+        self.answer_cursor = answer_cursor
+        self.replied = False
+        self.waited = False
+        os.write(ready_write, b"1")
+        os.close(ready_write)
+
+    def resize(self, cols, rows):
+        fcntl.ioctl(self.master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+    def read(self):
+        if not select.select([self.master], [], [], .05)[0]:
+            return True
+        try:
+            chunk = os.read(self.master, 65536)
+        except OSError as error:
+            if error.errno == errno.EIO:
+                return False
+            raise
+        if not chunk:
+            return False
+        self.data.extend(chunk)
+        if self.interrupt_probe and b"SetUserVar=TMD_READER=" in self.data:
+            os.write(self.master, b"\x03")
+            self.interrupt_probe = False
+        if self.answer_cursor and b"\x1b[6n" in self.data and not self.replied:
+            os.write(self.master, f"\x1b[{self.cursor};1R".encode())
+            self.replied = True
+        if self.native:
+            match = re.search(rb"SetUserVar=TMD_READER=([A-Za-z0-9+/=]+)\x07", self.data)
+            if match:
+                _, action, token, path = base64.b64decode(match[1]).decode().split(":", 3)
+                if action == "probe":
+                    reply = Path(path)
+                    try:
+                        assert reply.read_text() == f"tmd-reader-v1:{token}\n"
+                        assert reply.parent.stat().st_mode & 0o777 == 0o700
+                        if self.wrong_token:
+                            reply.write_text("tmd-reader-v1:other\n")
+                        with reply.open("a") as output:
+                            output.write(f"{self.capacity}\n")
+                    except FileNotFoundError:
+                        # Cancellation can remove the request before this
+                        # simulated callback runs, just as in the Lua adapter.
+                        pass
+                    self.native = False
+        return True
+
+    def until(self, marker, offset=0):
+        deadline = time.monotonic() + 8
+        while marker not in self.data[offset:]:
+            if time.monotonic() > deadline or not self.read():
+                raise AssertionError(f"Missing {marker!r}; tail={bytes(self.data[-400:])!r}")
+        return bytes(self.data[offset:])
+
+    def frame(self, key=None):
+        offset = len(self.data)
+        if key:
+            os.write(self.master, key)
+        return self.until(END, offset)
+
+    def finish(self, key=None):
+        if key:
+            os.write(self.master, key)
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            if not self.read():
+                break
+        else:
+            raise AssertionError("reader failed to exit")
+        _, status = os.waitpid(self.pid, 0)
+        self.waited = True
+        return os.waitstatus_to_exitcode(status)
+
+    def close(self):
+        if not self.waited:
+            # Release a child blocked in terminal output before waiting for it.
+            os.close(self.master)
+            self.master = None
+            try:
+                os.kill(self.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                pid, _ = os.waitpid(self.pid, os.WNOHANG)
+                if pid:
+                    self.waited = True
+                    break
+                time.sleep(.01)
+            if not self.waited:
+                raise RuntimeError(f"test child {self.pid} did not reap after SIGKILL")
+        if self.master is not None:
+            os.close(self.master)
+        self.temp.cleanup()
+
+
+class ReaderTests(unittest.TestCase):
+    def terminal(self, *args, **kwargs):
+        terminal = Terminal(*args, **kwargs)
+        self.addCleanup(terminal.close)
+        return terminal
+
+    def assert_restored(self, terminal):
+        self.assertEqual(termios.tcgetattr(terminal.master), terminal.before)
+        self.assertNotIn(b"?1049", terminal.data)
+        self.assertNotIn(b"\x1b[3J", terminal.data)
+
+    def test_open_at_top_then_wheel_and_end_reach_pre_rendered_tail(self):
+        for row in (1, 12, 24):
+            with self.subTest(row=row):
+                t = self.terminal(("--large-headings",), row=row)
+                first = t.until(END)
+                self.assertIn(b"Row 001", first)
+                self.assertNotIn(b"Row 080", first)
+                self.assertIn(b"\x1b[1;1H", first)
+                self.assertEqual(first.count(b"\x1b#3"), first.count(b"\x1b#4"))
+                wheel = t.frame(b"\x1b[<65;5;5M")
+                self.assertNotEqual(first, wheel)
+                last = t.frame(b"\x1b[F")
+                self.assertIn(b"Row 080", last)
+                top = t.frame(b"\x1b[H")
+                self.assertIn(b"Row 001", top)
+                self.assertEqual(t.finish(b"q"), 0)
+                self.assert_restored(t)
+
+    def test_resize_including_tiny_window_keeps_exit_available(self):
+        t = self.terminal(("--large-headings",))
+        t.until(END)
+        offset = len(t.data)
+        t.resize(20, 8)
+        t.until(END, offset)
+        offset = len(t.data)
+        t.resize(4, 1)
+        frame = t.until(END, offset)
+        self.assertNotIn(b"\x1b#3", frame)
+        self.assertEqual(t.finish(b"\x1b"), 0)
+        self.assert_restored(t)
+
+    def test_keyboard_ctrl_c_and_external_signals_restore_termios(self):
+        for signum in (None, signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
+            with self.subTest(signal=signum):
+                t = self.terminal()
+                t.until(END)
+                if signum:
+                    os.kill(t.pid, signum)
+                self.assertEqual(t.finish(None if signum else b"\x03"), 128 + (signum or signal.SIGINT))
+                self.assert_restored(t)
+
+    def test_native_probe_precedes_full_output_and_emits_show_once(self):
+        t = self.terminal(config="[reader]\nmode='native'", native=True)
+        self.assertEqual(t.finish(), 0)
+        self.assertIn(b"Row 080", t.data)
+        self.assertNotIn(b"?1000h", t.data)
+        messages = re.findall(rb"SetUserVar=TMD_READER=([A-Za-z0-9+/=]+)\x07", t.data)
+        actions = [base64.b64decode(value).decode().split(":")[1] for value in messages]
+        self.assertEqual(actions, ["probe", "show"])
+        self.assert_restored(t)
+
+    def test_missing_wrong_or_small_native_adapter_falls_back_before_tail(self):
+        for kwargs in ({}, {"native": True, "wrong_token": True}, {"native": True, "capacity": 1}):
+            with self.subTest(kwargs=kwargs):
+                t = self.terminal(("--reader", "native"), **kwargs)
+                first = t.until(END)
+                self.assertIn(b"Row 001", first)
+                self.assertNotIn(b"Row 080", first)
+                self.assertEqual(t.finish(b"q"), 0)
+                self.assert_restored(t)
+
+    def test_short_empty_and_cursor_query_failure_restore_terminal(self):
+        for text in ("", "# Short\n\nBody"):
+            t = self.terminal(text=text)
+            self.assertEqual(t.finish(), 0)
+            self.assert_restored(t)
+        t = self.terminal(answer_cursor=False)
+        self.assertEqual(t.finish(), 1)
+        self.assert_restored(t)
+
+    def test_cli_override_and_invalid_config(self):
+        t = self.terminal(("--reader", "inline"), config="[reader]\nmode='native'")
+        first = t.until(END)
+        self.assertNotIn(b"SetUserVar", first)
+        self.assertEqual(t.finish(b"q"), 0)
+        t = self.terminal(config="[reader]\nmode='typo'")
+        self.assertEqual(t.finish(), 1)
+        self.assertIn(b"reader.mode", t.data)
+        self.assert_restored(t)
+
+    def test_ctrl_c_during_native_probe_wins_over_short_document_exit(self):
+        for native in (False, True):
+            t = self.terminal(("--reader", "native"), text="# Short", interrupt_probe=True, native=native)
+            self.assertEqual(t.finish(), 130)
+            self.assert_restored(t)
+
+    def test_timed_out_probe_removes_reply_channel_before_returning_to_shell(self):
+        t = self.terminal(("--reader", "native"), text="# Short")
+        self.assertEqual(t.finish(), 0)
+        match = re.search(rb"SetUserVar=TMD_READER=([A-Za-z0-9+/=]+)\x07", t.data)
+        version, action, token, path = base64.b64decode(match[1]).decode().split(":", 3)
+        self.assertEqual((version, action), ("v1", "probe"))
+        reply = Path(path)
+        self.assertFalse(reply.parent.exists())
+        # The adapter requires an existing marker and parent. A delayed
+        # callback cannot write a reply or inject anything into terminal input.
+        with self.assertRaises(FileNotFoundError):
+            reply.open("a")
+        self.assertNotIn(b"\x1b[200~", t.data)
+        self.assert_restored(t)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--binary", type=Path, default=BINARY)
+    args = parser.parse_args()
+    BINARY = args.binary.resolve()
+    unittest.main(argv=[sys.argv[0]])

@@ -2,6 +2,9 @@ mod ansi;
 mod claude;
 mod cli;
 mod large_headings;
+mod reader;
+mod reader_config;
+mod reader_native;
 #[cfg(test)]
 mod snapshots;
 mod stream;
@@ -61,6 +64,23 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    if reader::eligible(&cli) {
+        let mode = match reader_config::load(cli.reader, theme_select::config_dir().as_deref()) {
+            Ok(mode) => mode,
+            Err(err) => {
+                eprintln!("tmd: {err}");
+                return ExitCode::FAILURE;
+            }
+        };
+        return match reader::run(&cli, &md, &theme, mode) {
+            Ok(code) => ExitCode::from(code),
+            Err(err) => {
+                eprintln!("tmd: {err}");
+                ExitCode::FAILURE
+            }
+        };
+    }
 
     let large = large_headings::enabled(
         &cli,
