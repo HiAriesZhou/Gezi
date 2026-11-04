@@ -13,9 +13,10 @@ use std::time::{Duration, Instant};
 use crossterm::cursor::{Hide, MoveToColumn, MoveToPreviousLine};
 use crossterm::queue;
 use crossterm::terminal::{BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate};
-use tmd_core::{Frame, Line, Streamer};
+use tmd_core::{Frame, Line};
 
 use crate::ansi::to_ansi;
+use crate::source::Source;
 
 /// At most one frame per this interval; input arriving meanwhile is held.
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
@@ -23,31 +24,6 @@ const READ_BUFFER: usize = 8 * 1024;
 
 /// Whether the Unicode version was pushed and must be popped on exit.
 static UNICODE_PUSHED: AtomicBool = AtomicBool::new(false);
-
-/// Turns input text into frames: plain markdown (`Streamer`) or Claude
-/// Code events (`ClaudeStream`).
-pub trait Source {
-    fn push(&mut self, chunk: &str) -> Frame;
-    fn finish(&mut self) -> Frame;
-    fn set_width(&mut self, width: u16);
-    fn take_diagnostics(&mut self) -> Vec<String> {
-        Vec::new()
-    }
-}
-
-impl Source for Streamer {
-    fn push(&mut self, chunk: &str) -> Frame {
-        Streamer::push(self, chunk)
-    }
-
-    fn finish(&mut self) -> Frame {
-        Streamer::finish(self)
-    }
-
-    fn set_width(&mut self, width: u16) {
-        Streamer::set_width(self, width);
-    }
-}
 
 /// Streams `input` to stdout until it ends. `make_source` builds the
 /// source for the starting width; `fixed_width` disables following the

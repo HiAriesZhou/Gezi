@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use tmd_core::{Frame, Line, Span, Streamer, Theme, clusters, text_width, truncate};
 
-use crate::stream::Source;
+use crate::source::Source;
 
 enum Block {
     Text(Box<Streamer>),
