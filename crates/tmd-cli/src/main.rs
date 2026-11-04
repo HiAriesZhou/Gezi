@@ -42,7 +42,7 @@ fn main() -> ExitCode {
             move |width| make_source(cli.from, width, theme, cli.debug),
             cli.width,
         ) {
-            Ok(()) => ExitCode::SUCCESS,
+            Ok(code) => ExitCode::from(code),
             Err(err) => {
                 eprintln!("tmd: {err}");
                 ExitCode::FAILURE
