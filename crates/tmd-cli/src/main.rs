@@ -1,13 +1,16 @@
 mod ansi;
 mod claude;
 mod cli;
+mod config;
 mod large_headings;
 mod reader;
 mod reader_config;
 mod reader_native;
 #[cfg(test)]
 mod snapshots;
+mod source;
 mod stream;
+mod terminal_io;
 mod theme_select;
 
 use std::fs::File;
@@ -19,7 +22,7 @@ use clap::Parser;
 use tmd_core::{RenderOptions, Streamer, Theme, render_with_options};
 
 use crate::cli::{Cli, InputFormat, resolve_width};
-use crate::stream::Source;
+use crate::source::Source;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -66,7 +69,7 @@ fn main() -> ExitCode {
     };
 
     if reader::eligible(&cli) {
-        let mode = match reader_config::load(cli.reader, theme_select::config_dir().as_deref()) {
+        let mode = match reader_config::load(cli.reader, config::config_dir().as_deref()) {
             Ok(mode) => mode,
             Err(err) => {
                 eprintln!("tmd: {err}");
@@ -158,7 +161,7 @@ fn pick_theme(name: &str) -> Result<Theme, String> {
     } else {
         name
     };
-    theme_select::load(name, theme_select::config_dir().as_deref())
+    theme_select::load(name, config::config_dir().as_deref())
 }
 
 /// Asks the terminal whether its background is dark, waiting at most

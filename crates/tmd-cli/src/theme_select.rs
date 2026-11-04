@@ -2,7 +2,7 @@
 //! and `auto`, which matches the terminal's background.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tmd_core::Theme;
 
@@ -33,15 +33,6 @@ fn colorfgbg_is_dark(value: &str) -> Option<bool> {
         7 | 9..=15 => Some(false),
         _ => None,
     }
-}
-
-/// The directory holding `tmd/themes`: `$XDG_CONFIG_HOME`, else
-/// `~/.config`.
-pub fn config_dir() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME")
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
 }
 
 /// Loads `name` from `<config>/tmd/themes/<name>.toml` when that file
@@ -77,6 +68,7 @@ pub fn load(name: &str, config_dir: Option<&Path>) -> Result<Theme, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn auto_does_not_query_when_stdout_is_not_a_terminal() {
