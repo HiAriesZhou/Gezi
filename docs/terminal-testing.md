@@ -9,11 +9,13 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo build --release --locked
-python3 scripts/check_stream_pty.py
+python3 scripts/check_stream_pty.py --binary target/release/tmd
 python3 scripts/test_stream_pty.py --binary target/release/tmd
+python3 -B scripts/test_reader_pty.py --binary target/release/tmd
+python3 -B -m unittest discover -s scripts -p 'test_release.py'
 ```
 
-PTY 检查只使用 Python 标准库和 `/bin/bash`，适用于当前 MVP 的 macOS/Linux；不安装依赖，不读取用户 shell 配置，不保存 shell 历史。可用 `--binary <路径>` 指定构建产物。
+PTY 检查只使用 Python 标准库和 `/bin/bash`，适用于 macOS/Linux；不安装依赖，不读取用户 shell 配置，不保存 shell 历史。可用 `--binary <路径>` 指定构建产物。
 
 它发送带中文和 emoji 的分段 UTF-8 代码块，检查：
 
@@ -22,13 +24,15 @@ PTY 检查只使用 Python 标准库和 `/bin/bash`，适用于当前 MVP 的 ma
 - 正常结束返回 0；Ctrl-C 结束返回 130，shell 能继续执行命令。
 - 光标、设置过的 Unicode 版本和终端属性恢复。
 
+`test_stream_pty.py` 另覆盖 stdin 保持打开时的 INT、TERM、HUP、QUIT，分别检查纯文本和 Claude 流式退出码及恢复序列。
+
 输出每个场景的 JSON 检查结果；失败返回非零。探测用 `TERM_PROGRAM=Kaku` 覆盖协议分支，不表示运行在真实 Kaku 中。
 
 CI 在 Linux/macOS 上构建 debug 二进制并执行同一探测，包含纯文本和 Claude JSONL 各自的正常结束、缩放和中断。缩放和中断以已经观察到的输出为触发条件，避免依赖机器启动速度。探针使用足够超出活动区的 24 行代码，不把数千次短 sleep 的总耗时当成产品性能要求；长文档仍由 Rust 流式测试和下方真实终端检查覆盖。shell 关闭行编辑，避免 C locale 将 UTF-8 命令当成 Meta 快捷键。生产器通过脚本入口启动，避免内联代码超过 macOS 的终端输入行长度限制。首行显示后，父进程先缩放再通过管道放行剩余输出，避免渲染器启动较慢时全部样本提前输出。回归测试覆盖 C locale、父进程晚运行、渲染器延迟启动，以及 `--debug` 在共享终端输出诊断时的活动区清理。
 
 ## 真实终端检查
 
-PTY 通过不能证明无闪烁、字体宽度和终端兼容性。在 Kaku 主测，并按 `docs/TASKS.md` 和 `docs/research.md` 在 Ghostty、kitty 补测：
+PTY 通过不能证明无闪烁、字体宽度和终端兼容性。在 Kaku 主测，并在 Ghostty、kitty 补测：
 
 ```sh
 python3 scripts/slowcat.py fixtures/long.md | target/release/tmd
@@ -39,32 +43,30 @@ target/release/tmd --width 80 fixtures/cjk-table.md
 
 记录实际使用的终端、执行版本和结果；未运行的终端明确标为待验收。自动检查、视觉验收和作者接受分别报告。
 
-用户已确认 Ghostty、kitty 补测移至 MVP 最终验收，不阻塞 T7 编码和自动检查。具体未验收项目见 `docs/HANDOFF.md`。
+## 静态大标题
 
-## 静态大标题（0.0.2）
-
-T8 后交互文件默认进入阅读器。下列一次性输出的大标题协议回归可用非交互 stdin（命令末尾加 `< /dev/null`）运行；阅读器本身另按下节验收。
+以下命令使用非交互 stdin 测试一次性输出；交互阅读器另按下节验收。
 
 在 Kaku 直接运行，先保持至少 40 列、10 行：
 
 ```sh
-target/release/tmd --large-headings fixtures/large-headings.md
-target/release/tmd fixtures/large-headings.md
-target/release/tmd --large-headings --width 20 fixtures/large-headings.md
+target/release/tmd --large-headings fixtures/large-headings.md < /dev/null
+target/release/tmd fixtures/large-headings.md < /dev/null
+target/release/tmd --large-headings --width 20 fixtures/large-headings.md < /dev/null
 ```
 
-逐项记录结果，截图保留在验收记录中：
+逐项记录结果，截图和验收记录保存于仓库外：
 
 1. 对比开启和关闭：顶层 ATX、Setext H1 宽高各两倍，H2 至 H6、引用/列表中的 H1、正文、代码和表格维持常规字号；H1 分隔线全宽且普通高度。
 2. 检查中文、组合字符、emoji、带样式和链接的标题，20 列换行不截断字符、不重叠；文档超出窗口高度并滚入历史时上下半行仍配对。
 3. 输出结束后输入 `printf 'normal prompt test\n'`，确认提示符和后续文字大小正常；缩放窗口后再次检查后续输出。静态历史不承诺重新排版。
 4. 选中并复制放大标题到纯文本编辑区，记录是否出现两份文字。标准上下半行写有相同内容，复制重复是已披露限制，不能声称已无损复制。
-5. 将样本重复成较长临时文件，执行大标题输出并在输出期间按 Ctrl-C；检查退出码为 130，后续提示符普通大小，没有孤立的半个标题。不要向仓库写入临时长文件。
+5. 将样本重复成较长临时文件，使用 `< /dev/null` 执行大标题输出并在输出期间按 Ctrl-C；检查退出码为 130，后续提示符普通大小，没有孤立的半个标题。不要向仓库写入临时长文件。
 6. `--ansi`、输出重定向、管道输入及 tmux/screen 中均应为普通标题；不能手动伪造 Kaku 环境变量来声称完成真实显示验收。
 
 `scripts/test_stream_pty.py` 包含静态正常结束、收到实际大标题输出后 Ctrl-C、过窄/过矮窗口及能力回退检查；Rust 测试在每个输出字节边界注入一次写入错误或取消，检查恢复序列。真实 VINTR 回归向控制终端写入 `0x03`，检查临时 `NOFLSH`、关闭回显、保留 canonical/ISIG，以及退出后恢复原 termios；另测 HUP、QUIT、TERM 的恢复与退出码。这些只证明输出协议与生命周期，真实 Kaku 显示和剪贴板结果须单独记录。
 
-## T8 主屏滚动阅读
+## 主屏滚动阅读
 
 自动检查：`python3 -B scripts/test_reader_pty.py --binary target/debug/tmd`，与已有流式/大标题回归同时运行。
 
