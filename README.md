@@ -1,6 +1,6 @@
 # tmd
 
-终端里的 markdown 渲染器，命令 `tmd`。只读，主打流式不闪、中英文对齐、主题。
+终端里的 Markdown 渲染器，命令 `tmd`。只读，主打流式不闪、中英文对齐、主题。
 
 面向日常试用的早期版本，优先在 Kaku 中检查阅读和流式输出效果。
 
@@ -57,7 +57,7 @@ python3 scripts/slowcat.py fixtures/acceptance.md --rate 600 | tmd
 
 - 主要在 Kaku 中试用；Ghostty、kitty 的显示效果仍待补测。
 - `--from claude-json` 已有真实样本回放测试，真实 Claude 增量管道仍待补测。
-- 暂无全屏查看器、搜索和图片显示；大标题尚不支持流式输出，也不提供逐级字号。
+- 暂不支持搜索和图片显示；大标题尚不支持流式输出，也不提供逐级字号。
 - 流式缩放只重排活动区，已进入终端历史的内容不重绘。
 
 版本变化见 [CHANGELOG](CHANGELOG.md)，验收步骤见 [终端验收](docs/terminal-testing.md)。
@@ -67,10 +67,14 @@ python3 scripts/slowcat.py fixtures/acceptance.md --rate 600 | tmd
 ## 开发
 
 ```sh
-cargo fmt --all
+cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
+
+项目保持 `tmd-core`（解析与布局）和 `tmd-cli`（输入与终端）两个 crate，详见[架构说明](docs/architecture.md)。验证命令和真实终端检查见[终端验收](docs/terminal-testing.md)，协作规则见 [AGENTS.md](AGENTS.md)。
+
+仓库保留公开的产品、使用、架构和维护文档；计划、交接和讨论记录在仓库外管理。
 
 ## 许可证
 

@@ -36,8 +36,8 @@ pub enum LineSize {
 pub struct Line {
     pub spans: Vec<Span>,
     /// Source byte range of the top-level block this row belongs to. Rows
-    /// wrapped from the same block share it; the blank row after a block
-    /// belongs to that block.
+    /// wrapped from the same block share it; a separating blank row belongs
+    /// to the following block. Top-level code rows use their own line ranges.
     pub src: Range<usize>,
     pub size: LineSize,
 }

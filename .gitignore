@@ -1,1 +1,7 @@
 /target
+
+# Local plans, handoffs and discussion records belong outside this repository.
+/docs/HANDOFF.md
+/docs/TASKS.md
+/docs/research.md
+/docs/plans/
