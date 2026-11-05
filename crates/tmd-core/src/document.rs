@@ -10,20 +10,31 @@ pub struct Document {
     blocks: Vec<TopBlock>,
     text: String,
     theme: Theme,
+    code_blocks: Vec<CodeSnippet>,
 }
 
 impl Document {
     pub fn new(markdown: &str, theme: Theme) -> Self {
-        let mut blocks = parse::parse(markdown, &theme);
+        let mut blocks = parse::parse_for_reader(markdown, &theme);
         let mut text = String::new();
         for block in &mut blocks {
             index_block(&mut block.block, &mut text);
         }
+        let newline_offsets: Vec<usize> = markdown.match_indices('\n').map(|(i, _)| i).collect();
+        let mut code_blocks = Vec::new();
+        for block in &mut blocks {
+            collect_codes(&mut block.block, &newline_offsets, &mut code_blocks);
+        }
         Self {
+            code_blocks,
             blocks,
             text,
             theme,
         }
+    }
+
+    pub fn code_blocks(&self) -> &[CodeSnippet] {
+        &self.code_blocks
     }
 
     pub fn layout(&self, width: u16, options: RenderOptions) -> Vec<Line> {
@@ -51,6 +62,43 @@ impl Document {
                     .any(|r| r.start < range.end && r.end > range.start)
             })
         })
+    }
+}
+
+/// A parser-recognized code block, independent of terminal display wrapping.
+#[derive(Debug)]
+pub struct CodeSnippet {
+    pub language: Option<String>,
+    pub source_line: usize,
+    pub source: Range<usize>,
+    /// Code content: no Markdown fences/container markers; CRLF becomes LF.
+    pub text: String,
+}
+
+fn collect_codes(block: &mut Block, newlines: &[usize], out: &mut Vec<CodeSnippet>) {
+    match block {
+        Block::Code(code) => {
+            code.index = Some(out.len());
+            out.push(CodeSnippet {
+                language: code.lang.clone(),
+                source_line: newlines.partition_point(|&offset| offset < code.src.start) + 1,
+                source: code.src.clone(),
+                text: code.copy_text.take().unwrap_or_default(),
+            });
+        }
+        Block::List { items, .. } => {
+            for item in items {
+                for block in &mut item.blocks {
+                    collect_codes(block, newlines, out);
+                }
+            }
+        }
+        Block::Quote(blocks) => {
+            for block in blocks {
+                collect_codes(block, newlines, out);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -104,6 +152,39 @@ fn index_block(block: &mut Block, text: &mut String) {
 mod tests {
     use super::*;
     #[test]
+    fn code_content_preserves_tabs_spaces_newlines_and_normalizes_crlf() {
+        let md = "```text\r\n\t中文  \r\n\r\nlast\r\n```\r\n\n    indented\n      extra  \n\n> ```sh\n> echo 中文\n> ```\n\n- item\n\n  ```rs\n  let x = 1;\n  ```\n\n```\nunclosed";
+        let doc = Document::new(md, Theme::default());
+        let codes = doc.code_blocks();
+        assert_eq!(codes.len(), 5);
+        assert_eq!(codes[0].text, "\t中文  \n\nlast\n");
+        assert_eq!(codes[1].text, "indented\n  extra  \n");
+        assert_eq!(codes[2].text, "echo 中文\n");
+        assert_eq!(codes[3].text, "let x = 1;\n");
+        assert_eq!(codes[4].text, "unclosed");
+        assert_eq!(codes[0].source_line, 1);
+        assert_eq!(codes[2].source_line, 10);
+        for code in codes {
+            assert!(md.is_char_boundary(code.source.start));
+        }
+    }
+
+    #[test]
+    fn empty_and_control_code_is_retained_only_in_static_reader_metadata() {
+        let md = "```\n```\n\n```\n{\\rtf1}\n%!PS-Adobe-3.0\n\x1b]52;payload\x07\n```";
+        let doc = Document::new(md, Theme::default());
+        assert_eq!(doc.code_blocks()[0].text, "");
+        assert!(doc.code_blocks()[1].text.contains("\x1b]52;payload\x07"));
+        let lines = doc.layout(80, RenderOptions::default());
+        assert!(!lines.iter().any(|line| line.plain_text().contains('\x1b')));
+        for top in parse::parse(md, &Theme::default()) {
+            if let Block::Code(code) = top.block {
+                assert!(code.copy_text.is_none());
+            }
+        }
+    }
+
+    #[test]
     fn searches_semantics_across_styles_and_wraps_without_decorations() {
         let doc = Document::new(
             "# Title\n\n中**文** English abcdefghij [label](hidden-url)\n",
@@ -150,7 +231,11 @@ mod tests {
                         (a.plain_text(), a.src.clone(), a.size),
                         (b.plain_text(), b.src, b.size)
                     );
-                    assert!(a.spans.iter().all(|span| span.text_ranges.is_empty()));
+                    assert!(
+                        a.spans
+                            .iter()
+                            .all(|span| span.text_ranges.is_empty() && span.code_block.is_none())
+                    );
                 }
             }
         }
