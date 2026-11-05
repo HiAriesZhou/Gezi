@@ -215,6 +215,73 @@ class StaticLargeHeadings(unittest.TestCase):
             self.assertNotIn(b"\x1b#", large)
 
 
+class StreamingSignals(unittest.TestCase):
+    def test_external_signals_restore_output_while_input_remains_open(self):
+        import errno
+        import fcntl
+        import pty
+        import select
+        import signal
+        import struct
+        import subprocess
+        import termios
+
+        for input_format in ("text", "claude-json"):
+            for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
+                with self.subTest(input_format=input_format, signal=signum):
+                    master, slave = pty.openpty()
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+                    before = termios.tcgetattr(master)
+                    child = subprocess.Popen(
+                        [str(BINARY), "--theme", "default-dark", "--from", input_format],
+                        stdin=subprocess.PIPE, stdout=slave, stderr=slave,
+                        env=dict(os.environ, TERM_PROGRAM="Kaku", TERM="kaku"))
+                    os.close(slave)
+                    received = bytearray()
+
+                    def read_output():
+                        if not select.select([master], [], [], .05)[0]:
+                            return True
+                        try:
+                            chunk = os.read(master, 65536)
+                        except OSError as error:
+                            if error.errno == errno.EIO:
+                                return False
+                            raise
+                        received.extend(chunk)
+                        return bool(chunk)
+
+                    try:
+                        payload = b"# Signal test\n\nbody"
+                        if input_format == "claude-json":
+                            payload = (b'{"type":"stream_event","event":{"type":'
+                                       b'"content_block_start","index":0,"content_block":'
+                                       b'{"type":"text","text":"Signal test"}}}\n')
+                        child.stdin.write(payload)
+                        child.stdin.flush()
+                        deadline = time.monotonic() + 5
+                        while b"\x1b[?2026l" not in received:
+                            self.assertLess(time.monotonic(), deadline, "no initial stream frame")
+                            self.assertTrue(read_output(), "renderer exited before receiving a signal")
+                        self.assertIn(b"\x1b[?25l", received)
+                        self.assertIn(b"UnicodeVersion=push", received)
+                        child.send_signal(signum)
+                        deadline = time.monotonic() + 5
+                        while read_output():
+                            self.assertLess(time.monotonic(), deadline, "signal did not interrupt input wait")
+                        child.wait(timeout=2)
+                        self.assertEqual(child.returncode, 128 + signum)
+                        self.assertGreater(received.rfind(b"\x1b[?25h"), received.rfind(b"\x1b[?25l"))
+                        self.assertIn(b"UnicodeVersion=pop", received)
+                        self.assertEqual(termios.tcgetattr(master), before)
+                    finally:
+                        if child.poll() is None:
+                            child.kill()
+                            child.wait()
+                        child.stdin.close()
+                        os.close(master)
+
+
 class StartupOrdering(unittest.TestCase):
     def test_debug_diagnostic_clears_active_area_before_writing(self):
         import pty

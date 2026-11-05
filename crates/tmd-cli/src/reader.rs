@@ -11,9 +11,8 @@ use event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use tmd_core::{Line, LineSize, RenderOptions, Theme, render_with_options, truncate};
 
 use crate::cli::{Cli, InputFormat, ReaderMode};
+use crate::terminal_io::{RESET, direct_kaku, write_all_cancelled};
 use crate::{ansi, large_headings, reader_native};
-
-const RESET: &str = "\x18\x1b\\\x1b]8;;\x1b\\\x1b[0m\x1b#5";
 
 pub fn eligible(cli: &Cli) -> bool {
     cfg!(unix)
@@ -150,22 +149,8 @@ fn paint(
     (out, end)
 }
 
-fn checked_write(
-    out: &mut impl Write,
-    mut bytes: &[u8],
-    cancelled: &AtomicUsize,
-) -> io::Result<()> {
-    while !bytes.is_empty() {
-        if cancelled.load(Ordering::SeqCst) != 0 {
-            return Err(io::ErrorKind::Interrupted.into());
-        }
-        match out.write(bytes) {
-            Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
-            Ok(n) => bytes = &bytes[n..],
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-            Err(err) => return Err(err),
-        }
-    }
+fn checked_write(out: &mut impl Write, bytes: &[u8], cancelled: &AtomicUsize) -> io::Result<()> {
+    write_all_cancelled(out, bytes, cancelled)?;
     out.flush()
 }
 
@@ -254,6 +239,7 @@ impl Drop for Session {
 pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u8> {
     let mut size = terminal::size()?;
     let mut lines = layout(cli, md, theme, size);
+    let mut content_height: usize = lines.iter().map(Line::physical_height).sum();
     let title = header();
     let mut session = Session::start(size.1)?;
     // This is screen scrolling, not an alternate buffer or a history purge.
@@ -267,16 +253,12 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
     let token = reader_native::token();
     let mut notice = String::new();
     if mode == ReaderMode::Native {
-        let capacity = if reader_native::direct_kaku() {
+        let capacity = if direct_kaku() {
             reader_native::probe(&mut io::stdout().lock(), &token, &mut queued)?
         } else {
             None
         };
-        let required: usize = lines
-            .iter()
-            .map(Line::physical_height)
-            .sum::<usize>()
-            .saturating_add(2);
+        let required = content_height.saturating_add(2);
         if capacity.is_some_and(|capacity| capacity >= required) && queued.is_empty() {
             session.restore_input()?;
             let mut out = io::stdout().lock();
@@ -329,15 +311,13 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                 &session.cancelled,
             )?;
             session.incomplete = false;
-            let short = lines.iter().map(Line::physical_height).sum::<usize>()
-                <= size.1.saturating_sub(2) as usize;
+            let short = content_height <= size.1.saturating_sub(2) as usize;
             if short && queued.is_empty() && event::poll(Duration::ZERO)? {
                 queued.push_back(event::read()?);
             }
             if short && queued.is_empty() {
-                session.exit_row = (1 + lines.iter().map(Line::physical_height).sum::<usize>())
-                    .min(size.1.saturating_sub(1) as usize)
-                    as u16;
+                session.exit_row =
+                    (1 + content_height).min(size.1.saturating_sub(1) as usize) as u16;
                 break;
             }
             let input = loop {
@@ -380,6 +360,7 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                     let anchor = lines.get(start).map_or(0, |line| line.src.start);
                     size = (cols, rows);
                     lines = layout(cli, md, theme, size);
+                    content_height = lines.iter().map(Line::physical_height).sum();
                     start = lines
                         .iter()
                         .position(|line| line.src.start >= anchor)
