@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crossterm::{cursor, event, terminal};
-use event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
+use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind};
 use tmd_core::{Line, LineSize, RenderOptions, Theme, render_with_options, truncate};
 
 use crate::cli::{Cli, InputFormat, ReaderMode};
@@ -137,7 +137,7 @@ fn paint(
         } else {
             "阅读中"
         };
-        format!("q/Esc 返回 · {position}{notice} · 滚轮/↑↓ · Home/End")
+        format!("q/Esc 返回 · ? 帮助 · {position}{notice} · 滚轮/↑↓ · Home/End")
     };
     if rows > 0 {
         out.push_str(&format!(
@@ -147,6 +147,74 @@ fn paint(
     }
     out.push_str("\x1b[?2026l");
     (out, end)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Action {
+    Exit,
+    Interrupt,
+    Help,
+    Up,
+    Down,
+    Top,
+    Bottom,
+    PageUp,
+    PageDown,
+}
+
+fn key_action(key: KeyEvent) -> Option<Action> {
+    if key.kind == KeyEventKind::Release {
+        return None;
+    }
+    if key.code == KeyCode::Char('c') && key.modifiers == KeyModifiers::CONTROL {
+        return Some(Action::Interrupt);
+    }
+    if key.modifiers.intersects(
+        KeyModifiers::CONTROL
+            | KeyModifiers::ALT
+            | KeyModifiers::SUPER
+            | KeyModifiers::HYPER
+            | KeyModifiers::META,
+    ) {
+        return None;
+    }
+    Some(match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => Action::Exit,
+        KeyCode::Char('?') => Action::Help,
+        KeyCode::Up | KeyCode::Char('k') => Action::Up,
+        KeyCode::Down | KeyCode::Char('j') => Action::Down,
+        KeyCode::Home => Action::Top,
+        KeyCode::End => Action::Bottom,
+        KeyCode::PageDown | KeyCode::Char(' ') => Action::PageDown,
+        KeyCode::PageUp | KeyCode::Char('b') => Action::PageUp,
+        _ => return None,
+    })
+}
+
+fn help_lines(width: u16) -> Vec<Line> {
+    use tmd_core::{Span, Style};
+    [
+        "阅读帮助",
+        "",
+        "滚轮 / ↑↓ / j k：上下阅读",
+        "空格 / PageDown：下一页",
+        "b / PageUp：上一页",
+        "Home / End：文章首尾",
+        "Shift + 拖选：终端原生选择（Kaku）",
+        "?：打开或关闭帮助",
+        "q / Esc：关闭帮助；阅读时返回命令行",
+        "Ctrl-C：中断并返回命令行",
+    ]
+    .into_iter()
+    .map(|text| Line {
+        spans: vec![Span::new(
+            truncate(text, width.saturating_sub(1) as usize),
+            Style::default(),
+        )],
+        src: 0..0,
+        size: LineSize::Normal,
+    })
+    .collect()
 }
 
 fn checked_write(out: &mut impl Write, bytes: &[u8], cancelled: &AtomicUsize) -> io::Result<()> {
@@ -224,7 +292,12 @@ impl Drop for Session {
             }
             let _ = write!(out, "\x1b[{};1H\x1b#5\x1b[2K", self.rows.max(1));
             let _ = write!(out, "\x1b[{};1H\x1b#5\r", self.exit_row.saturating_add(1));
-            let _ = crossterm::execute!(out, event::DisableMouseCapture, cursor::Show);
+            let _ = crossterm::execute!(
+                out,
+                event::DisableMouseCapture,
+                event::DisableBracketedPaste,
+                cursor::Show
+            );
         }
         let _ = out.flush();
         drop(out);
@@ -239,7 +312,7 @@ impl Drop for Session {
 pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u8> {
     let mut size = terminal::size()?;
     let mut lines = layout(cli, md, theme, size);
-    let mut content_height: usize = lines.iter().map(Line::physical_height).sum();
+    let content_height: usize = lines.iter().map(Line::physical_height).sum();
     let title = header();
     let mut session = Session::start(size.1)?;
     // This is screen scrolling, not an alternate buffer or a history purge.
@@ -294,9 +367,12 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
             io::stdout(),
             cursor::MoveTo(0, 0),
             cursor::Hide,
-            event::EnableMouseCapture
+            event::EnableMouseCapture,
+            event::EnableBracketedPaste
         )?;
         let mut start = 0;
+        let mut help = false;
+        let mut help_start = 0;
         loop {
             if session.cancelled.load(Ordering::SeqCst) != 0 {
                 break;
@@ -304,20 +380,26 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
             session.rows = size.1;
             session.exit_row = size.1.saturating_sub(1);
             session.incomplete = true;
-            let (frame, end) = paint(&lines, start, size, &title, &notice);
+            let help_rows = help_lines(size.0);
+            let (view, position, heading) = if help {
+                (&help_rows, help_start, "tmd · 帮助（q/Esc 返回阅读）")
+            } else {
+                (&lines, start, title.as_str())
+            };
+            let (frame, end) = paint(view, position, size, heading, &notice);
             checked_write(
                 &mut io::stdout().lock(),
                 frame.as_bytes(),
                 &session.cancelled,
             )?;
             session.incomplete = false;
-            let short = content_height <= size.1.saturating_sub(2) as usize;
-            if short && queued.is_empty() && event::poll(Duration::ZERO)? {
+            // Empty files retain the quick-return behavior. Any rendered content
+            // stays interactive even when a resize makes the whole file fit.
+            if lines.is_empty() && queued.is_empty() && event::poll(Duration::ZERO)? {
                 queued.push_back(event::read()?);
             }
-            if short && queued.is_empty() {
-                session.exit_row =
-                    (1 + content_height).min(size.1.saturating_sub(1) as usize) as u16;
+            if lines.is_empty() && queued.is_empty() {
+                session.exit_row = 1.min(size.1.saturating_sub(1));
                 break;
             }
             let input = loop {
@@ -331,36 +413,45 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                     break event::read()?;
                 }
             };
-            let max = last_start(&lines, size.1.saturating_sub(2) as usize);
+            let max = last_start(view, size.1.saturating_sub(2) as usize);
+            let position = if help { &mut help_start } else { &mut start };
             match input {
-                Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                Event::Key(key) => match key_action(key) {
+                    Some(Action::Interrupt) => {
                         session.cancelled.store(2, Ordering::SeqCst);
                         break;
                     }
-                    KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Up | KeyCode::Char('k') => start = start.saturating_sub(1),
-                    KeyCode::Down | KeyCode::Char('j') => start = start.saturating_add(1).min(max),
-                    KeyCode::Home => start = 0,
-                    KeyCode::End => start = max,
-                    KeyCode::PageDown | KeyCode::Char(' ') => {
-                        start = end.saturating_sub(1).max(start + 1).min(max)
+                    Some(Action::Exit) if help => help = false,
+                    Some(Action::Exit) => break,
+                    Some(Action::Help) => {
+                        help = !help;
+                        help_start = 0;
                     }
-                    KeyCode::PageUp | KeyCode::Char('b') => {
-                        start = start.saturating_sub(size.1.saturating_sub(3) as usize)
+                    Some(Action::Up) => *position = position.saturating_sub(1),
+                    Some(Action::Down) => *position = position.saturating_add(1).min(max),
+                    Some(Action::Top) => *position = 0,
+                    Some(Action::Bottom) => *position = max,
+                    Some(Action::PageDown) => {
+                        *position = end.saturating_sub(1).max(*position + 1).min(max)
                     }
-                    _ => continue,
+                    Some(Action::PageUp) => {
+                        *position = position.saturating_sub(size.1.saturating_sub(3) as usize)
+                    }
+                    None => continue,
                 },
                 Event::Mouse(mouse) => match mouse.kind {
-                    MouseEventKind::ScrollUp => start = start.saturating_sub(3),
-                    MouseEventKind::ScrollDown => start = start.saturating_add(3).min(max),
+                    MouseEventKind::ScrollUp => *position = position.saturating_sub(3),
+                    MouseEventKind::ScrollDown => *position = position.saturating_add(3).min(max),
                     _ => continue,
                 },
                 Event::Resize(cols, rows) => {
                     let anchor = lines.get(start).map_or(0, |line| line.src.start);
                     size = (cols, rows);
+                    help_start = help_start.min(last_start(
+                        &help_lines(cols),
+                        rows.saturating_sub(2) as usize,
+                    ));
                     lines = layout(cli, md, theme, size);
-                    content_height = lines.iter().map(Line::physical_height).sum();
                     start = lines
                         .iter()
                         .position(|line| line.src.start >= anchor)
@@ -395,6 +486,26 @@ mod tests {
             src: 0..20,
             size,
         }
+    }
+    #[test]
+    fn modified_keys_cannot_trigger_reader_commands() {
+        for code in [KeyCode::Char('q'), KeyCode::Char('?'), KeyCode::Down] {
+            for modifiers in [
+                KeyModifiers::CONTROL,
+                KeyModifiers::ALT,
+                KeyModifiers::SUPER,
+            ] {
+                assert_eq!(key_action(KeyEvent::new(code, modifiers)), None);
+            }
+        }
+        assert_eq!(
+            key_action(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(Action::Interrupt)
+        );
+        assert_eq!(
+            key_action(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::SHIFT)),
+            Some(Action::Help)
+        );
     }
     #[test]
     fn double_rows_are_never_split_by_a_viewport() {

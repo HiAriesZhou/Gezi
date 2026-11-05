@@ -73,7 +73,7 @@ target/release/tmd --large-headings --width 20 fixtures/large-headings.md < /dev
 Kaku 手动检查：
 
 1. 从窗口顶部、中间、底部运行 `target/debug/tmd fixtures/acceptance.md`，确认顶部有调用信息，下面是文章开头，没有切备用屏。
-2. 用滚轮连续上下阅读，Home/End 到首尾；不需要按空格才能加载后文。按 Shift 拖选并复制普通文字。
+2. 用滚轮连续上下阅读，Home/End 到首尾；不需要按空格才能加载后文。按 Shift 拖选并复制普通文字。短文档也保持打开；放大窗口不会退出。按 `?` 查看帮助，在帮助中滚动后按 q/Esc 回到原阅读位置；粘贴含 q 的文本不退出。
 3. 用 `--large-headings fixtures/large-headings.md` 检查大标题跨视口边界不会留下半行，滚动及缩放后正文不变大。
 4. 缩放至窄窗口及仅一行高，再恢复；检查段落定位与退出仍可用。q/Esc 后提示符正常，Ctrl-C 返回 130；输入后续命令确认回显正常。向上查看原会话历史仍在。
 5. 配置文件、CLI 覆盖、错误配置分别检查。`--ansi`、文件重定向、纯文本和 Claude JSONL 管道维持原行为。
