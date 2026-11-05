@@ -11,6 +11,8 @@ use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind
 use tmd_core::{Document, Line, LineSize, RenderOptions, Theme, truncate};
 
 use crate::cli::{Cli, InputFormat, ReaderMode};
+use crate::clipboard::{self, CopyError};
+use crate::reader_copy::CodePicker;
 use crate::reader_search::Search;
 use crate::terminal_io::{RESET, direct_kaku, write_all_cancelled};
 use crate::{ansi, large_headings, reader_native};
@@ -146,7 +148,7 @@ fn paint(
         } else {
             "阅读中"
         };
-        format!("{position}{notice} · / 搜索 · ? 帮助 · q/Esc 返回 · 滚轮/↑↓ · Home/End")
+        format!("{position}{notice} · / 搜索 · c 复制 · ? 帮助 · q/Esc 返回 · 滚轮/↑↓ · Home/End")
     };
     if rows > 0 {
         out.push_str(&format!(
@@ -172,6 +174,8 @@ enum Action {
     Search,
     Next,
     Previous,
+    Copy,
+    Confirm,
 }
 
 fn key_action(key: KeyEvent) -> Option<Action> {
@@ -194,6 +198,8 @@ fn key_action(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('q') | KeyCode::Esc => Action::Exit,
         KeyCode::Char('?') => Action::Help,
         KeyCode::Char('/') => Action::Search,
+        KeyCode::Char('c') => Action::Copy,
+        KeyCode::Enter => Action::Confirm,
         KeyCode::Char('n') => Action::Next,
         KeyCode::Char('N') => Action::Previous,
         KeyCode::Up | KeyCode::Char('k') => Action::Up,
@@ -219,6 +225,7 @@ fn help_lines(width: u16) -> Vec<Line> {
         "?：打开或关闭帮助",
         "/：搜索正文（区分大小写，Enter 确认）",
         "n / N：下一处 / 上一处匹配",
+        "c：选择代码块，Enter 复制内容，Esc 取消",
         "搜索中 Esc：取消；Ctrl-U：清空查询",
         "q / Esc：关闭帮助；阅读时返回命令行",
         "Ctrl-C：中断并返回命令行",
@@ -328,6 +335,17 @@ impl Drop for Session {
 
 #[cfg(unix)]
 pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u8> {
+    run_with_copy(cli, md, theme, mode, clipboard::copy)
+}
+
+#[cfg(unix)]
+fn run_with_copy(
+    cli: &Cli,
+    md: &str,
+    theme: &Theme,
+    mode: ReaderMode,
+    mut copy: impl FnMut(&str) -> Result<(), CopyError>,
+) -> io::Result<u8> {
     let mut size = terminal::size()?;
     let document = Document::new(md, theme.clone());
     let mut lines = layout(cli, &document, size);
@@ -393,6 +411,7 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
         let mut help = false;
         let mut help_start = 0;
         let mut search = Search::default();
+        let mut picker = CodePicker::default();
         loop {
             if session.cancelled.load(Ordering::SeqCst) != 0 {
                 break;
@@ -401,17 +420,39 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
             session.exit_row = size.1.saturating_sub(1);
             session.incomplete = true;
             let help_rows = help_lines(size.0);
-            let (view, position, heading) = if help {
+            let code_rows = if picker.open {
+                picker.rows(size.0)
+            } else {
+                Vec::new()
+            };
+            let (view, position, heading) = if picker.open {
+                (
+                    &code_rows,
+                    picker.top(size.1.saturating_sub(2) as usize),
+                    "tmd · 代码块（Enter 复制，q/Esc 返回）",
+                )
+            } else if help {
                 (&help_rows, help_start, "tmd · 帮助（q/Esc 返回阅读）")
             } else {
                 (&lines, start, title.as_str())
             };
-            let highlight = if !help && search.input.is_none() {
+            let highlight = if picker.open {
+                Some(picker.selected)
+            } else if !help && search.input.is_none() {
                 search.current().and_then(|m| Document::match_line(view, m))
             } else {
                 None
             };
-            let combined_notice = format!("{notice}{}", search.notice());
+            let combined_notice = if picker.open {
+                format!(
+                    " · {}/{} · Enter 复制 · Esc 取消{}",
+                    picker.selected + 1,
+                    document.code_blocks().len(),
+                    picker.notice
+                )
+            } else {
+                format!("{}{notice}{}", picker.notice, search.notice())
+            };
             let (mut frame, end) =
                 paint(view, position, size, heading, &combined_notice, highlight);
             if let Some(query) = &search.input {
@@ -466,6 +507,34 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                 session.cancelled.store(2, Ordering::SeqCst);
                 break;
             }
+            if picker.open {
+                match &input {
+                    Event::Key(key) => match key_action(*key) {
+                        Some(Action::Exit) => picker.open = false,
+                        Some(Action::Confirm) => picker.confirm(document.code_blocks(), &mut copy),
+                        Some(Action::Up) => picker.move_by(-1),
+                        Some(Action::Down) => picker.move_by(1),
+                        Some(Action::Top) => picker.selected = 0,
+                        Some(Action::Bottom) => picker.move_by(isize::MAX),
+                        Some(Action::PageUp) => {
+                            picker.move_by(-(size.1.saturating_sub(2).max(1) as isize))
+                        }
+                        Some(Action::PageDown) => {
+                            picker.move_by(size.1.saturating_sub(2).max(1) as isize)
+                        }
+                        _ => {}
+                    },
+                    Event::Mouse(mouse) => match mouse.kind {
+                        MouseEventKind::ScrollUp => picker.move_by(-3),
+                        MouseEventKind::ScrollDown => picker.move_by(3),
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                if !matches!(input, Event::Resize(..)) {
+                    continue;
+                }
+            }
             if search.input.is_some() {
                 match &input {
                     Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
@@ -507,6 +576,10 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                     }
                     Some(Action::Exit) => break,
                     Some(Action::Search) if !help => search.open(start),
+                    Some(Action::Copy) if !help => {
+                        picker.show(document.code_blocks(), &lines[start..]);
+                    }
+                    Some(Action::Copy | Action::Confirm) => continue,
                     Some(Action::Next | Action::Previous) if !help => {
                         search.advance(key.code == KeyCode::Char('N'));
                         if let Some(row) = search
