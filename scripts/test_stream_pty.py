@@ -99,7 +99,7 @@ class StaticLargeHeadings(unittest.TestCase):
                 os.close(master)
 
     def render(self, text, options=(), *, cols=80, rows=24, env=None, interrupt=False,
-               file_input=True, interrupt_signal=None):
+               file_input=True, interrupt_signal=None, wait_before_read=False):
         import errno
         import fcntl
         import pty
@@ -125,7 +125,8 @@ class StaticLargeHeadings(unittest.TestCase):
                                      stdin=subprocess.DEVNULL if file_input else subprocess.PIPE,
                                      stdout=slave, stderr=slave,
                                      env=child_env)
-            os.close(slave)
+            # Keep the slave open until the parent drains the final bytes.
+            # macOS can discard unread PTY output at the last slave close.
             if not file_input:
                 child.stdin.write(text.encode())
                 child.stdin.close()
@@ -133,8 +134,12 @@ class StaticLargeHeadings(unittest.TestCase):
             sent = False
             deadline = time.monotonic() + 15
             try:
+                if wait_before_read:
+                    child.wait(timeout=5)
                 while time.monotonic() < deadline:
                     if not select.select([master], [], [], .05)[0]:
+                        if child.poll() is not None and not select.select([master], [], [], 0)[0]:
+                            break
                         continue
                     try:
                         chunk = os.read(master, 65536)
@@ -162,6 +167,7 @@ class StaticLargeHeadings(unittest.TestCase):
                 if child.poll() is None:
                     child.kill()
                     child.wait()
+                os.close(slave)
                 os.close(master)
 
     def test_native_output_and_ctrl_c_cleanup(self):
@@ -201,6 +207,10 @@ class StaticLargeHeadings(unittest.TestCase):
                     # Streamed active rows may be redrawn before commit.
                     self.assertIn(b"X", out)
 
+    def test_static_output_survives_renderer_exiting_before_parent_reads(self):
+        out = self.render("# X", options=["--ansi"], wait_before_read=True)
+        self.assertEqual(out.count(b"X"), 1)
+
     def test_redirected_output_matches_the_normal_renderer(self):
         import subprocess
         with tempfile.TemporaryDirectory(prefix="tmd-heading-redirect-") as directory:
@@ -236,12 +246,13 @@ class StreamingSignals(unittest.TestCase):
                         [str(BINARY), "--theme", "default-dark", "--from", input_format],
                         stdin=subprocess.PIPE, stdout=slave, stderr=slave,
                         env=dict(os.environ, TERM_PROGRAM="Kaku", TERM="kaku"))
-                    os.close(slave)
                     received = bytearray()
 
                     def read_output():
                         if not select.select([master], [], [], .05)[0]:
-                            return True
+                            if child.poll() is None or select.select([master], [], [], 0)[0]:
+                                return True
+                            return False
                         try:
                             chunk = os.read(master, 65536)
                         except OSError as error:
@@ -279,6 +290,7 @@ class StreamingSignals(unittest.TestCase):
                             child.kill()
                             child.wait()
                         child.stdin.close()
+                        os.close(slave)
                         os.close(master)
 
 
@@ -295,7 +307,6 @@ class StartupOrdering(unittest.TestCase):
         child = subprocess.Popen([str(BINARY), "--from", "claude-json", "--debug",
                                   "--theme", "default-dark", "--width", "80"],
                                  stdin=subprocess.PIPE, stdout=slave, stderr=slave)
-        os.close(slave)
 
         def frame(record):
             child.stdin.write(record)
@@ -329,6 +340,7 @@ class StartupOrdering(unittest.TestCase):
                 child.wait()
             if not child.stdin.closed:
                 child.stdin.close()
+            os.close(slave)
             os.close(master)
 
     def test_producer_waits_for_resize_even_when_renderer_starts_late(self):
