@@ -272,6 +272,41 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(), 130)
         self.assert_restored(t)
 
+    def test_visible_text_search_counts_navigation_and_cancel(self):
+        t = self.terminal(text="\n\n".join(f"Paragraph {i}: needle 中文" for i in range(40)))
+        t.until(END)
+        t.frame(b"/")
+        t.frame(b"\x1b[200~needle\x1b[201~")
+        result = t.frame(b"\r")
+        self.assertIn("匹配 1/40".encode(), result)
+        self.assertIn("匹配 2/40".encode(), t.frame(b"n"))
+        self.assertIn("匹配 1/40".encode(), t.frame(b"N"))
+        t.frame(b"/")
+        # Commands in a query are literal, and cancelling restores the query.
+        t.frame(b"\x1b[200~qjknc\x1b[201~")
+        self.assertIn("匹配 1/40".encode(), t.frame(b"\x1b"))
+        t.frame(b"/")
+        t.frame(b"\x15")  # Ctrl-U clears the edit buffer.
+        t.frame(b"\x1b[200~not found\x1b[201~")
+        self.assertIn("未找到匹配".encode(), t.frame(b"\r"))
+        t.frame(b"\x1b")  # Clear search, stay in reader.
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_search_input_resize_cancel_and_interrupt_restore_terminal(self):
+        t = self.terminal()
+        t.until(END)
+        t.frame(b"\x1b[F")
+        t.frame(b"/")
+        t.frame(b"\x1b[200~" + "中文 👩‍💻".encode() + b"\x1b[201~")
+        offset = len(t.data)
+        t.resize(120, 50)
+        t.until(END, offset)
+        self.assertIn(b"Row 080", t.frame(b"\x1b"))
+        t.frame(b"/")
+        self.assertEqual(t.finish(b"\x03"), 130)
+        self.assert_restored(t)
+
     def test_cli_override_and_invalid_config(self):
         t = self.terminal(("--reader", "inline"), config="[reader]\nmode='native'")
         first = t.until(END)

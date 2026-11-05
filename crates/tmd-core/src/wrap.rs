@@ -13,12 +13,31 @@ pub(crate) type Row = Vec<Span>;
 
 /// Appends `text` to `row`, merging into the last span when styles match.
 pub(crate) fn push_text(row: &mut Row, text: &str, style: &Style) {
-    if text.is_empty() {
+    push_span(row, Span::new(text, style.clone()));
+}
+
+pub(crate) fn push_span(row: &mut Row, span: Span) {
+    if span.text.is_empty() {
         return;
     }
-    match row.last_mut() {
-        Some(last) if last.style == *style => last.text.push_str(text),
-        _ => row.push(Span::new(text, style.clone())),
+    let merge = row.last().is_some_and(|last| {
+        last.style == span.style
+            && match (last.text_ranges.as_slice(), span.text_ranges.as_slice()) {
+                ([], []) => true,
+                ([a], [b]) => {
+                    a.end == b.start && a.len() == last.text.len() && b.len() == span.text.len()
+                }
+                _ => false,
+            }
+    });
+    if merge {
+        let last = row.last_mut().unwrap();
+        if let (Some(a), Some(b)) = (last.text_ranges.first_mut(), span.text_ranges.first()) {
+            a.end = b.end;
+        }
+        last.text.push_str(&span.text);
+    } else {
+        row.push(span);
     }
 }
 
@@ -30,7 +49,7 @@ enum Token {
     /// Unbreakable non-space pieces, possibly in several styles. Two words
     /// in a row may be broken between with no space, as around CJK.
     Word {
-        pieces: Vec<(String, Style)>,
+        pieces: Vec<Span>,
         /// Whether following narrow text continues this word; false after a
         /// wide character, which stands alone.
         open: bool,
@@ -38,7 +57,7 @@ enum Token {
         /// with whatever follows.
         glue: bool,
     },
-    Space(Vec<(String, Style)>),
+    Space(Vec<Span>),
     Break,
 }
 
@@ -56,15 +75,17 @@ fn tokenize(spans: &[Span]) -> Vec<Token> {
             tokens.push(Token::Break);
             continue;
         }
+        let mut offset = 0;
         for piece in split_spaces(&span.text) {
-            let entry = (piece.to_string(), span.style.clone());
+            let entry = span.slice(offset..offset + piece.len());
+            offset += piece.len();
             if piece.starts_with(' ') {
                 match tokens.last_mut() {
                     Some(Token::Space(pieces)) => pieces.push(entry),
                     _ => tokens.push(Token::Space(vec![entry])),
                 }
             } else {
-                push_word_segments(&mut tokens, piece, &span.style);
+                push_word_segments(&mut tokens, entry);
             }
         }
     }
@@ -74,12 +95,14 @@ fn tokenize(spans: &[Span]) -> Vec<Token> {
 /// Adds non-space text: each wide character becomes its own word so rows
 /// can break around it; narrow runs join the open word before them, and
 /// punctuation joins the side it belongs to.
-fn push_word_segments(tokens: &mut Vec<Token>, text: &str, style: &Style) {
-    for (segment, wide) in split_wide(text) {
+fn push_word_segments(tokens: &mut Vec<Token>, span: Span) {
+    let mut offset = 0;
+    for (segment, wide) in split_wide(&span.text) {
         let (Some(first), Some(last)) = (segment.chars().next(), segment.chars().last()) else {
             continue;
         };
-        let entry = (segment.to_string(), style.clone());
+        let entry = span.slice(offset..offset + segment.len());
+        offset += segment.len();
         let ends_open = NO_ROW_END.contains(last);
         match tokens.last_mut() {
             Some(Token::Word { pieces, open, glue })
@@ -140,8 +163,8 @@ fn split_spaces(text: &str) -> Vec<&str> {
     pieces
 }
 
-fn pieces_width(pieces: &[(String, Style)]) -> usize {
-    pieces.iter().map(|(text, _)| text_width(text)).sum()
+fn pieces_width(pieces: &[Span]) -> usize {
+    pieces.iter().map(Span::width).sum()
 }
 
 /// Wraps styled spans into rows at most `width` columns wide. Words wider
@@ -151,7 +174,7 @@ pub(crate) fn wrap(spans: &[Span], width: usize) -> Vec<Row> {
     let width = width.max(1);
     let mut rows = Vec::new();
     let mut row = Row::new();
-    let mut pending_space: Vec<(String, Style)> = Vec::new();
+    let mut pending_space: Vec<Span> = Vec::new();
 
     for token in tokenize(spans) {
         match token {
@@ -168,8 +191,8 @@ pub(crate) fn wrap(spans: &[Span], width: usize) -> Vec<Row> {
                 let word_width = pieces_width(&pieces);
                 let fits = row_width(&row) + pieces_width(&pending_space) + word_width <= width;
                 if fits {
-                    for (text, style) in pending_space.drain(..) {
-                        push_text(&mut row, &text, &style);
+                    for span in pending_space.drain(..) {
+                        push_span(&mut row, span);
                     }
                 } else {
                     pending_space.clear();
@@ -178,8 +201,8 @@ pub(crate) fn wrap(spans: &[Span], width: usize) -> Vec<Row> {
                     }
                 }
                 if word_width <= width - row_width(&row) {
-                    for (text, style) in &pieces {
-                        push_text(&mut row, text, style);
+                    for span in &pieces {
+                        push_span(&mut row, span.clone());
                     }
                 } else {
                     hard_break(&pieces, width, &mut row, &mut rows);
@@ -192,15 +215,19 @@ pub(crate) fn wrap(spans: &[Span], width: usize) -> Vec<Row> {
 }
 
 /// Fills rows cluster by cluster with a word too wide for one row.
-fn hard_break(pieces: &[(String, Style)], width: usize, row: &mut Row, rows: &mut Vec<Row>) {
-    for (text, style) in pieces {
-        for cluster in clusters(text) {
-            let (cluster, w) = fit_cluster(cluster, width);
+fn hard_break(pieces: &[Span], width: usize, row: &mut Row, rows: &mut Vec<Row>) {
+    for span in pieces {
+        let mut offset = 0;
+        for original in clusters(&span.text) {
+            let mut piece = span.slice(offset..offset + original.len());
+            offset += original.len();
+            let (cluster, w) = fit_cluster(original, width);
+            piece.text = cluster.to_owned();
             let used = row_width(row);
             if used > 0 && used + w > width {
                 rows.push(std::mem::take(row));
             }
-            push_text(row, cluster, style);
+            push_span(row, piece);
         }
     }
 }
@@ -225,13 +252,17 @@ pub(crate) fn hard_wrap_spans(spans: &[Span], width: usize) -> Vec<Row> {
     let mut row = Row::new();
     let mut used = 0;
     for span in spans {
-        for cluster in clusters(&span.text) {
-            let (cluster, w) = fit_cluster(cluster, width);
+        let mut offset = 0;
+        for original in clusters(&span.text) {
+            let mut piece = span.slice(offset..offset + original.len());
+            offset += original.len();
+            let (cluster, w) = fit_cluster(original, width);
+            piece.text = cluster.to_owned();
             if used > 0 && used + w > width {
                 rows.push(std::mem::take(&mut row));
                 used = 0;
             }
-            push_text(&mut row, cluster, &span.style);
+            push_span(&mut row, piece);
             used += w;
         }
     }
