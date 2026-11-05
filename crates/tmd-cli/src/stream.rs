@@ -5,7 +5,8 @@
 //! upstream program stops too, and tmd only has to restore the cursor.
 
 use std::io::{self, Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -13,41 +14,14 @@ use std::time::{Duration, Instant};
 use crossterm::cursor::{Hide, MoveToColumn, MoveToPreviousLine};
 use crossterm::queue;
 use crossterm::terminal::{BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate};
-use tmd_core::{Frame, Line, Streamer};
+use tmd_core::{Frame, Line};
 
 use crate::ansi::to_ansi;
+use crate::source::Source;
 
 /// At most one frame per this interval; input arriving meanwhile is held.
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const READ_BUFFER: usize = 8 * 1024;
-
-/// Whether the Unicode version was pushed and must be popped on exit.
-static UNICODE_PUSHED: AtomicBool = AtomicBool::new(false);
-
-/// Turns input text into frames: plain markdown (`Streamer`) or Claude
-/// Code events (`ClaudeStream`).
-pub trait Source {
-    fn push(&mut self, chunk: &str) -> Frame;
-    fn finish(&mut self) -> Frame;
-    fn set_width(&mut self, width: u16);
-    fn take_diagnostics(&mut self) -> Vec<String> {
-        Vec::new()
-    }
-}
-
-impl Source for Streamer {
-    fn push(&mut self, chunk: &str) -> Frame {
-        Streamer::push(self, chunk)
-    }
-
-    fn finish(&mut self) -> Frame {
-        Streamer::finish(self)
-    }
-
-    fn set_width(&mut self, width: u16) {
-        Streamer::set_width(self, width);
-    }
-}
 
 /// Streams `input` to stdout until it ends. `make_source` builds the
 /// source for the starting width; `fixed_width` disables following the
@@ -56,10 +30,10 @@ pub fn run(
     input: Box<dyn Read + Send>,
     make_source: impl FnOnce(u16) -> Box<dyn Source>,
     fixed_width: Option<u16>,
-) -> io::Result<()> {
+) -> io::Result<u8> {
     let chunks = spawn_reader(input);
     let mut out = io::stdout().lock();
-    let _restore = Restore::start(&mut out)?;
+    let restore = Restore::start(&mut out)?;
 
     let (mut width, mut height) = terminal_size();
     if let Some(fixed) = fixed_width {
@@ -72,13 +46,19 @@ pub fn run(
     let mut last_frame = Instant::now() - FRAME_INTERVAL;
 
     loop {
-        // With nothing to draw, sleep until input arrives; otherwise wait at
-        // most until the next frame is due.
+        if let Some(code) = restore.exit_code() {
+            return Ok(code);
+        }
+        // Bound even an idle input wait so cancellation does not depend on
+        // the producer closing stdin. The reader thread may stay blocked.
         let received = if pending.is_empty() {
-            chunks.recv().map_err(|_| RecvTimeoutError::Disconnected)
+            chunks.recv_timeout(FRAME_INTERVAL)
         } else {
             chunks.recv_timeout(FRAME_INTERVAL.saturating_sub(last_frame.elapsed()))
         };
+        if let Some(code) = restore.exit_code() {
+            return Ok(code);
+        }
         match received {
             Ok(Ok(bytes)) => pending.push_str(&decoder.feed(&bytes)),
             Ok(Err(err)) => return Err(err),
@@ -102,7 +82,8 @@ pub fn run(
         draw_source_frame(&mut screen, &mut out, &mut *streamer, &frame, height)?;
     }
     let last = streamer.finish();
-    draw_source_frame(&mut screen, &mut out, &mut *streamer, &last, height)
+    draw_source_frame(&mut screen, &mut out, &mut *streamer, &last, height)?;
+    Ok(restore.exit_code().unwrap_or(0))
 }
 
 /// stderr may share stdout's terminal. Clear the active rows before a
@@ -189,12 +170,18 @@ impl ActiveArea {
     }
 }
 
-/// Hides the cursor and sets the Unicode version while streaming; undoes
-/// both when dropped, on Ctrl-C and on panic.
-struct Restore;
+/// The output thread owns restoration; signal handlers only request exit.
+/// This keeps cleanup from interleaving with a frame or waiting on its lock.
+struct Restore {
+    signal: Arc<AtomicUsize>,
+    unicode_pushed: bool,
+    #[cfg(unix)]
+    hooks: Vec<signal_hook::SigId>,
+}
 
 impl Restore {
     fn start(out: &mut impl Write) -> io::Result<Self> {
+        let mut restore = Self::signals()?;
         if matches!(
             std::env::var("TERM_PROGRAM").as_deref(),
             Ok("WezTerm") | Ok("Kaku")
@@ -202,41 +189,71 @@ impl Restore {
             // Emoji with variation selectors are two columns in Unicode 14,
             // matching how tmd measures them.
             out.write_all(b"\x1b]1337;UnicodeVersion=push\x07\x1b]1337;UnicodeVersion=14\x07")?;
-            UNICODE_PUSHED.store(true, Ordering::SeqCst);
+            restore.unicode_pushed = true;
         }
         queue!(out, Hide)?;
         out.flush()?;
-        // Ctrl-C ends the whole pipeline; put the terminal back first. The
-        // main thread holds stdout, so write to the controlling terminal,
-        // or to stderr when there is none.
-        let _ = ctrlc::set_handler(|| {
-            let sequence = restore_sequence();
-            let wrote = std::fs::OpenOptions::new()
-                .write(true)
-                .open("/dev/tty")
-                .and_then(|mut tty| tty.write_all(sequence.as_bytes()));
-            if wrote.is_err() {
-                let _ = io::stderr().write_all(sequence.as_bytes());
+        Ok(restore)
+    }
+
+    fn signals() -> io::Result<Self> {
+        let signal = Arc::new(AtomicUsize::new(0));
+        #[cfg(unix)]
+        {
+            use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+            let mut restore = Self {
+                signal,
+                unicode_pushed: false,
+                hooks: Vec::new(),
+            };
+            // Register before changing terminal state. Partial registration
+            // failures also drop the guard and unregister earlier hooks.
+            for signum in [SIGINT, SIGTERM, SIGHUP, SIGQUIT] {
+                restore.hooks.push(signal_hook::flag::register_usize(
+                    signum,
+                    restore.signal.clone(),
+                    signum as usize,
+                )?);
             }
-            std::process::exit(130);
-        });
-        Ok(Restore)
+            Ok(restore)
+        }
+        #[cfg(not(unix))]
+        {
+            let cancelled = signal.clone();
+            ctrlc::set_handler(move || cancelled.store(2, Ordering::SeqCst))
+                .map_err(io::Error::other)?;
+            Ok(Self {
+                signal,
+                unicode_pushed: false,
+            })
+        }
+    }
+
+    fn exit_code(&self) -> Option<u8> {
+        let signal = self.signal.load(Ordering::SeqCst);
+        (signal != 0).then_some((128 + signal) as u8)
     }
 }
 
 impl Drop for Restore {
     fn drop(&mut self) {
         let mut out = io::stdout();
-        let _ = out.write_all(restore_sequence().as_bytes());
+        let _ = out.write_all(restore_sequence(self.unicode_pushed).as_bytes());
         let _ = out.flush();
+        #[cfg(unix)]
+        for hook in self.hooks.drain(..) {
+            signal_hook::low_level::unregister(hook);
+        }
     }
 }
 
 /// Ends a synchronized update that may have been cut off, shows the
 /// cursor and pops the Unicode version if it was pushed.
-fn restore_sequence() -> String {
-    let mut sequence = String::from("\x1b[?2026l\x1b[?25h");
-    if UNICODE_PUSHED.swap(false, Ordering::SeqCst) {
+fn restore_sequence(unicode_pushed: bool) -> String {
+    // Cancel an incomplete escape/OSC and close hyperlinks before emitting
+    // cursor controls, including when output failed halfway through a frame.
+    let mut sequence = String::from("\x18\x1b\\\x1b]8;;\x1b\\\x1b[0m\x1b[?2026l\x1b[?25h");
+    if unicode_pushed {
         sequence.push_str("\x1b]1337;UnicodeVersion=pop\x07");
     }
     sequence

@@ -8,11 +8,10 @@ use tmd_core::{Line, LineSize};
 
 use crate::ansi;
 use crate::cli::{Cli, InputFormat};
+use crate::terminal_io::{RESET, is_direct_kaku, write_all_cancelled};
 
 static INTERRUPTED: OnceLock<Arc<AtomicUsize>> = OnceLock::new();
 const NORMAL: &str = "\x1b#5";
-// CAN cancels a partially written escape; ST closes a partial OSC string.
-const RESET: &str = "\x18\x1b\\\x1b]8;;\x1b\\\x1b[0m\x1b#5";
 
 pub fn enabled(cli: &Cli, tty: bool, size: Option<(u16, u16)>, width: u16) -> bool {
     eligible(
@@ -41,11 +40,7 @@ fn eligible(
         && cli.from == InputFormat::Text
         && !cli.ansi
         && tty
-        && program == Some("Kaku")
-        && !multiplexed
-        && term.is_some_and(|term| {
-            term != "dumb" && !term.starts_with("screen") && !term.starts_with("tmux")
-        })
+        && is_direct_kaku(program, term, multiplexed)
         && size.is_some_and(|(cols, rows)| cols >= 4 && rows >= 3 && width <= cols)
         && width >= 4
 }
@@ -155,19 +150,8 @@ struct Output<'a, W: Write> {
 }
 
 impl<W: Write> Output<'_, W> {
-    fn bytes(&mut self, mut bytes: &[u8]) -> io::Result<()> {
-        while !bytes.is_empty() {
-            if self.cancelled.load(Ordering::SeqCst) != 0 {
-                return Err(io::ErrorKind::Interrupted.into());
-            }
-            match self.writer.write(bytes) {
-                Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
-                Ok(n) => bytes = &bytes[n..],
-                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-                Err(err) => return Err(err),
-            }
-        }
-        Ok(())
+    fn bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
+        write_all_cancelled(&mut self.writer, bytes, self.cancelled)
     }
 
     fn row(&mut self, text: &str, pending: Pending, next: Pending) -> io::Result<()> {

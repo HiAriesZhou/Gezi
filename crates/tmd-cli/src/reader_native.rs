@@ -6,14 +6,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::{self, Event};
 
-pub fn direct_kaku() -> bool {
-    std::env::var("TERM_PROGRAM").as_deref() == Ok("Kaku")
-        && std::env::var_os("TMUX").is_none()
-        && std::env::var_os("STY").is_none()
-        && std::env::var("TERM")
-            .is_ok_and(|term| !term.starts_with("screen") && !term.starts_with("tmux"))
-}
-
 pub fn token() -> String {
     format!(
         "{:x}{:x}",
