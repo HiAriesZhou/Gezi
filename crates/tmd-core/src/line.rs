@@ -11,6 +11,9 @@ pub struct Span {
     /// and on the ordinary render/streaming APIs. Elision can represent several
     /// disjoint ranges. These are not source ranges.
     pub text_ranges: Vec<Range<usize>>,
+    /// Index in Document::code_blocks(), including labels and empty code rows.
+    /// None on ordinary render/streaming spans and non-code decorations.
+    pub code_block: Option<usize>,
 }
 
 impl Span {
@@ -19,6 +22,7 @@ impl Span {
             text: text.into(),
             style,
             text_ranges: Vec::new(),
+            code_block: None,
         }
     }
 
@@ -33,6 +37,7 @@ impl Span {
             text: self.text[range].to_owned(),
             style: self.style.clone(),
             text_ranges,
+            code_block: self.code_block,
         }
     }
 

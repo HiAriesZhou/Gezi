@@ -39,6 +39,9 @@ pub(crate) enum Block {
 pub(crate) struct CodeBlock {
     pub lang: Option<String>,
     pub lines: Vec<CodeLine>,
+    /// Preserved only for static readers, before display cleaning.
+    pub copy_text: Option<String>,
+    pub index: Option<usize>,
     /// The whole block, fences included.
     pub src: Range<usize>,
 }
@@ -81,7 +84,16 @@ pub(crate) struct TopBlock {
 }
 
 pub(crate) fn parse(md: &str, theme: &Theme) -> Vec<TopBlock> {
+    parse_with_code_text(md, theme, false)
+}
+
+pub(crate) fn parse_for_reader(md: &str, theme: &Theme) -> Vec<TopBlock> {
+    parse_with_code_text(md, theme, true)
+}
+
+fn parse_with_code_text(md: &str, theme: &Theme, retain_code: bool) -> Vec<TopBlock> {
     let mut builder = Builder::new(md, theme);
+    builder.retain_code = retain_code;
     for (event, range) in events(md) {
         builder.event(event, range);
     }
@@ -235,6 +247,7 @@ impl Inline {
 }
 
 struct Builder<'t> {
+    retain_code: bool,
     md: &'t str,
     theme: &'t Theme,
     top: Vec<TopBlock>,
@@ -253,6 +266,7 @@ struct Builder<'t> {
 impl<'t> Builder<'t> {
     fn new(md: &'t str, theme: &'t Theme) -> Self {
         Self {
+            retain_code: false,
             md,
             theme,
             top: Vec::new(),
@@ -432,7 +446,11 @@ impl<'t> Builder<'t> {
                 if let Some((lang, pieces)) = self.code.take() {
                     self.push_block(Block::Code(CodeBlock {
                         lang,
+                        index: None,
                         lines: code_lines(&pieces),
+                        copy_text: self
+                            .retain_code
+                            .then(|| pieces.iter().map(|(text, _)| text.as_str()).collect()),
                         src: range,
                     }));
                 }
