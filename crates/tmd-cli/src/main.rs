@@ -6,6 +6,7 @@ mod large_headings;
 mod reader;
 mod reader_config;
 mod reader_native;
+mod reader_search;
 #[cfg(test)]
 mod snapshots;
 mod source;

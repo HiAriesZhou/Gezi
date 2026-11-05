@@ -55,7 +55,7 @@ fn styled_lines(theme: &Theme, code: &CodeBlock) -> Vec<Vec<Span>> {
         .lang
         .as_deref()
         .and_then(|lang| highlight(lang, &texts, theme.dark));
-    match highlighted {
+    let mut styled: Vec<Vec<Span>> = match highlighted {
         Some(lines) => lines
             .into_iter()
             .map(|pieces| {
@@ -69,7 +69,17 @@ fn styled_lines(theme: &Theme, code: &CodeBlock) -> Vec<Vec<Span>> {
             .iter()
             .map(|text| vec![Span::new(*text, style.clone())])
             .collect(),
+    };
+    for (line, spans) in code.lines.iter().zip(&mut styled) {
+        if let Some(range) = &line.text_range {
+            let mut offset = range.start;
+            for span in spans {
+                span.text_ranges = std::iter::once(offset..offset + span.text.len()).collect();
+                offset += span.text.len();
+            }
+        }
     }
+    styled
 }
 
 /// `row` filled to `width` with the block background.

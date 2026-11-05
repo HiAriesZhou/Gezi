@@ -8,9 +8,10 @@ use std::time::Duration;
 
 use crossterm::{cursor, event, terminal};
 use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind};
-use tmd_core::{Line, LineSize, RenderOptions, Theme, render_with_options, truncate};
+use tmd_core::{Document, Line, LineSize, RenderOptions, Theme, truncate};
 
 use crate::cli::{Cli, InputFormat, ReaderMode};
+use crate::reader_search::Search;
 use crate::terminal_io::{RESET, direct_kaku, write_all_cancelled};
 use crate::{ansi, large_headings, reader_native};
 
@@ -25,13 +26,11 @@ pub fn eligible(cli: &Cli) -> bool {
         && terminal::size().is_ok_and(|(cols, rows)| cols >= 4 && rows >= 4)
 }
 
-fn layout(cli: &Cli, md: &str, theme: &Theme, size: (u16, u16)) -> Vec<Line> {
+fn layout(cli: &Cli, document: &Document, size: (u16, u16)) -> Vec<Line> {
     let width = cli.width.unwrap_or(size.0).min(size.0).max(1);
     let large = size.1 >= 4 && large_headings::enabled(cli, true, Some(size), width);
-    render_with_options(
-        md,
+    document.layout(
         width,
-        theme,
         RenderOptions {
             large_headings: large,
         },
@@ -94,6 +93,7 @@ fn paint(
     size: (u16, u16),
     title: &str,
     notice: &str,
+    highlight: Option<usize>,
 ) -> (String, usize) {
     let (cols, rows) = size;
     let mut out = String::from("\x1b[?2026h");
@@ -107,9 +107,18 @@ fn paint(
         out.push_str("\x1b[1;1H");
         out.push_str(truncate(title, cols.saturating_sub(1) as usize));
         let mut row = 2;
-        for line in &lines[start..end] {
+        for (index, line) in lines[start..end].iter().enumerate() {
             let mut text = String::new();
-            ansi::write_line(&mut text, line, true);
+            if highlight == Some(start + index) {
+                let mut marked = line.clone();
+                for span in &mut marked.spans {
+                    span.style.bold = true;
+                    span.style.underline = true;
+                }
+                ansi::write_line(&mut text, &marked, true);
+            } else {
+                ansi::write_line(&mut text, line, true);
+            }
             match line.size {
                 LineSize::Normal => {
                     out.push_str(&format!("\x1b[{row};1H{text}"));
@@ -137,7 +146,7 @@ fn paint(
         } else {
             "阅读中"
         };
-        format!("q/Esc 返回 · ? 帮助 · {position}{notice} · 滚轮/↑↓ · Home/End")
+        format!("{position}{notice} · / 搜索 · ? 帮助 · q/Esc 返回 · 滚轮/↑↓ · Home/End")
     };
     if rows > 0 {
         out.push_str(&format!(
@@ -160,6 +169,9 @@ enum Action {
     Bottom,
     PageUp,
     PageDown,
+    Search,
+    Next,
+    Previous,
 }
 
 fn key_action(key: KeyEvent) -> Option<Action> {
@@ -181,6 +193,9 @@ fn key_action(key: KeyEvent) -> Option<Action> {
     Some(match key.code {
         KeyCode::Char('q') | KeyCode::Esc => Action::Exit,
         KeyCode::Char('?') => Action::Help,
+        KeyCode::Char('/') => Action::Search,
+        KeyCode::Char('n') => Action::Next,
+        KeyCode::Char('N') => Action::Previous,
         KeyCode::Up | KeyCode::Char('k') => Action::Up,
         KeyCode::Down | KeyCode::Char('j') => Action::Down,
         KeyCode::Home => Action::Top,
@@ -202,6 +217,9 @@ fn help_lines(width: u16) -> Vec<Line> {
         "Home / End：文章首尾",
         "Shift + 拖选：终端原生选择（Kaku）",
         "?：打开或关闭帮助",
+        "/：搜索正文（区分大小写，Enter 确认）",
+        "n / N：下一处 / 上一处匹配",
+        "搜索中 Esc：取消；Ctrl-U：清空查询",
         "q / Esc：关闭帮助；阅读时返回命令行",
         "Ctrl-C：中断并返回命令行",
     ]
@@ -311,7 +329,8 @@ impl Drop for Session {
 #[cfg(unix)]
 pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u8> {
     let mut size = terminal::size()?;
-    let mut lines = layout(cli, md, theme, size);
+    let document = Document::new(md, theme.clone());
+    let mut lines = layout(cli, &document, size);
     let content_height: usize = lines.iter().map(Line::physical_height).sum();
     let title = header();
     let mut session = Session::start(size.1)?;
@@ -373,6 +392,7 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
         let mut start = 0;
         let mut help = false;
         let mut help_start = 0;
+        let mut search = Search::default();
         loop {
             if session.cancelled.load(Ordering::SeqCst) != 0 {
                 break;
@@ -386,7 +406,34 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
             } else {
                 (&lines, start, title.as_str())
             };
-            let (frame, end) = paint(view, position, size, heading, &notice);
+            let highlight = if !help && search.input.is_none() {
+                search.current().and_then(|m| Document::match_line(view, m))
+            } else {
+                None
+            };
+            let combined_notice = format!("{notice}{}", search.notice());
+            let (mut frame, end) =
+                paint(view, position, size, heading, &combined_notice, highlight);
+            if let Some(query) = &search.input {
+                // Place the actual cursor at the query so the system IME can
+                // anchor its candidate window. One final column stays free.
+                frame.truncate(frame.len() - "\x1b[?2026l".len());
+                if size.1 > 0 {
+                    let cols = size.0.saturating_sub(2) as usize;
+                    let (text, col) = query.visible(cols);
+                    frame.push_str(&format!(
+                        "\x1b[{};1H\x1b#5\x1b[0m\x1b[2K/{}\x1b[{};{}H\x1b[?25h",
+                        size.1,
+                        text,
+                        size.1,
+                        (col + 2).min(size.0.max(1) as usize)
+                    ));
+                }
+                frame.push_str("\x1b[?2026l");
+            } else {
+                frame.truncate(frame.len() - "\x1b[?2026l".len());
+                frame.push_str("\x1b[?25l\x1b[?2026l");
+            }
             checked_write(
                 &mut io::stdout().lock(),
                 frame.as_bytes(),
@@ -413,6 +460,39 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                     break event::read()?;
                 }
             };
+            if let Event::Key(key) = input
+                && key_action(key) == Some(Action::Interrupt)
+            {
+                session.cancelled.store(2, Ordering::SeqCst);
+                break;
+            }
+            if search.input.is_some() {
+                match &input {
+                    Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
+                        KeyCode::Esc => {
+                            search.input = None;
+                            start = search.saved_start;
+                        }
+                        KeyCode::Enter => {
+                            if search.confirm(&document)
+                                && let Some(row) = search
+                                    .current()
+                                    .and_then(|m| Document::match_line(&lines, m))
+                            {
+                                start =
+                                    row.min(last_start(&lines, size.1.saturating_sub(2) as usize));
+                            }
+                        }
+                        _ => search.input.as_mut().unwrap().key(*key),
+                    },
+                    Event::Paste(text) => search.input.as_mut().unwrap().insert(text),
+                    Event::Resize(..) => {}
+                    _ => continue,
+                }
+                if !matches!(input, Event::Resize(..)) {
+                    continue;
+                }
+            }
             let max = last_start(view, size.1.saturating_sub(2) as usize);
             let position = if help { &mut help_start } else { &mut start };
             match input {
@@ -422,7 +502,21 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                         break;
                     }
                     Some(Action::Exit) if help => help = false,
+                    Some(Action::Exit) if key.code == KeyCode::Esc && !search.query.is_empty() => {
+                        search.clear()
+                    }
                     Some(Action::Exit) => break,
+                    Some(Action::Search) if !help => search.open(start),
+                    Some(Action::Next | Action::Previous) if !help => {
+                        search.advance(key.code == KeyCode::Char('N'));
+                        if let Some(row) = search
+                            .current()
+                            .and_then(|m| Document::match_line(&lines, m))
+                        {
+                            start = row.min(max);
+                        }
+                    }
+                    Some(Action::Search | Action::Next | Action::Previous) => continue,
                     Some(Action::Help) => {
                         help = !help;
                         help_start = 0;
@@ -445,18 +539,43 @@ pub fn run(cli: &Cli, md: &str, theme: &Theme, mode: ReaderMode) -> io::Result<u
                     _ => continue,
                 },
                 Event::Resize(cols, rows) => {
-                    let anchor = lines.get(start).map_or(0, |line| line.src.start);
+                    let anchor = lines.get(start).and_then(|line| {
+                        line.spans
+                            .iter()
+                            .find_map(|s| s.text_ranges.first().cloned())
+                    });
+                    let source_anchor = lines.get(start).map_or(0, |line| line.src.start);
+                    let saved_anchor = lines.get(search.saved_start).and_then(|line| {
+                        line.spans
+                            .iter()
+                            .find_map(|s| s.text_ranges.first().cloned())
+                    });
                     size = (cols, rows);
                     help_start = help_start.min(last_start(
                         &help_lines(cols),
                         rows.saturating_sub(2) as usize,
                     ));
-                    lines = layout(cli, md, theme, size);
-                    start = lines
-                        .iter()
-                        .position(|line| line.src.start >= anchor)
+                    lines = layout(cli, &document, size);
+                    let max = last_start(&lines, rows.saturating_sub(2) as usize);
+                    start = anchor
+                        .as_ref()
+                        .and_then(|range| {
+                            Document::match_line(&lines, &(range.start..range.start + 1))
+                        })
+                        .or_else(|| {
+                            lines
+                                .iter()
+                                .position(|line| line.src.start >= source_anchor)
+                        })
                         .unwrap_or(0)
-                        .min(last_start(&lines, rows.saturating_sub(2) as usize));
+                        .min(max);
+                    search.saved_start = saved_anchor
+                        .as_ref()
+                        .and_then(|range| {
+                            Document::match_line(&lines, &(range.start..range.start + 1))
+                        })
+                        .unwrap_or(search.saved_start.min(max))
+                        .min(max);
                 }
                 _ => continue,
             }
@@ -517,10 +636,10 @@ mod tests {
         assert_eq!(visible_end(&lines, 0, 2), 1);
         assert_eq!(visible_end(&lines, 1, 2), 2);
         assert_eq!(last_start(&lines, 2), 2);
-        let (frame, end) = paint(&lines, 0, (40, 4), "tmd test.md", "");
+        let (frame, end) = paint(&lines, 0, (40, 4), "tmd test.md", "", None);
         assert_eq!(end, 1);
         assert!(!frame.contains("\x1b#3"));
-        let (frame, end) = paint(&lines, 1, (40, 4), "tmd test.md", "");
+        let (frame, end) = paint(&lines, 1, (40, 4), "tmd test.md", "", None);
         assert_eq!(end, 2);
         assert_eq!(frame.matches("\x1b#3").count(), 1);
         assert_eq!(frame.matches("\x1b#4").count(), 1);
@@ -529,7 +648,7 @@ mod tests {
     }
     #[test]
     fn resize_can_show_a_tiny_window_without_leaking_body_rows() {
-        let (frame, end) = paint(&[row(LineSize::Double)], 0, (4, 1), "header", "");
+        let (frame, end) = paint(&[row(LineSize::Double)], 0, (4, 1), "header", "", None);
         assert_eq!(end, 0);
         assert!(!frame.contains("\x1b#3"));
         assert!(!frame.contains("header"));

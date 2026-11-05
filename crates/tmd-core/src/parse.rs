@@ -47,6 +47,7 @@ pub(crate) struct CodeBlock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CodeLine {
     pub text: String,
+    pub text_range: Option<Range<usize>>,
     /// The line in the source, newline included when present.
     pub src: Range<usize>,
 }
@@ -645,6 +646,7 @@ fn code_lines(pieces: &[(String, Range<usize>)]) -> Vec<CodeLine> {
 fn finish_code_line(text: &mut String, src: &mut Option<Range<usize>>) -> CodeLine {
     let line = std::mem::take(text);
     CodeLine {
+        text_range: None,
         text: clean_block(line.strip_suffix('\n').unwrap_or(&line)),
         src: src.take().unwrap_or(0..0),
     }

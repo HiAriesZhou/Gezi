@@ -7,6 +7,10 @@ use crate::width::text_width;
 pub struct Span {
     pub text: String,
     pub style: Style,
+    /// Byte ranges in a Document's searchable text; empty on decorative spans
+    /// and on the ordinary render/streaming APIs. Elision can represent several
+    /// disjoint ranges. These are not source ranges.
+    pub text_ranges: Vec<Range<usize>>,
 }
 
 impl Span {
@@ -14,6 +18,21 @@ impl Span {
         Self {
             text: text.into(),
             style,
+            text_ranges: Vec::new(),
+        }
+    }
+
+    pub(crate) fn slice(&self, range: Range<usize>) -> Self {
+        let text_ranges = match self.text_ranges.as_slice() {
+            [origin] if origin.len() == self.text.len() => {
+                std::iter::once(origin.start + range.start..origin.start + range.end).collect()
+            }
+            ranges => ranges.to_vec(),
+        };
+        Self {
+            text: self.text[range].to_owned(),
+            style: self.style.clone(),
+            text_ranges,
         }
     }
 
