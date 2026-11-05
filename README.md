@@ -56,12 +56,17 @@ nonempty documents.
 | PageUp / PageDown, `b` / Space | Move by a page |
 | `/`, then Enter | Search visible text, including headings and code |
 | `n` / `N` | Jump to the next or previous match |
+| `c` | Choose a code block to copy |
 | `?` | Show reading help |
 | `q` | Return to the shell |
 
 Search is case-sensitive and supports Chinese and emoji. Esc cancels a query
 being edited; while reading, it clears active search marks before exiting on a
 second press. In the help view, Esc closes help. Empty documents exit immediately.
+
+In the built-in reader on local macOS, press `c` to choose a code block and
+Enter to copy its original contents. Esc cancels without copying. This copies
+code without rendered borders or wrapping; SSH sessions do not support it.
 
 No configuration is required. `--reader inline|native` and the optional
 `reader.mode` setting select the reading mode. Native Kaku positioning needs the
