@@ -5,7 +5,7 @@ use crate::parse::{Align, Table};
 use crate::style::Style;
 use crate::theme::Theme;
 use crate::width::{text_width, truncate};
-use crate::wrap::{Row, push_text, wrap};
+use crate::wrap::{Row, push_span, push_text, wrap};
 
 /// Columns are not narrowed below this many cells.
 const MIN_COLUMN: usize = 4;
@@ -23,7 +23,11 @@ pub(crate) fn layout(theme: &Theme, table: &Table, width: usize) -> Vec<Row> {
         .iter()
         .map(|cell| {
             cell.iter()
-                .map(|span| Span::new(span.text.clone(), span.style.patch(&theme.table_header)))
+                .map(|span| {
+                    let mut span = span.clone();
+                    span.style = span.style.patch(&theme.table_header);
+                    span
+                })
                 .collect()
         })
         .collect();
@@ -189,7 +193,7 @@ fn aligned(row: &mut Row, content: Row, width: usize, align: Align, pad_style: &
     };
     push_text(row, &" ".repeat(left), pad_style);
     for span in content {
-        push_text(row, &span.text, &span.style);
+        push_span(row, span);
     }
     push_text(row, &" ".repeat(right), pad_style);
 }
@@ -200,16 +204,34 @@ fn cut(row: Row, width: usize) -> Row {
     let room = width.saturating_sub(text_width(ELLIPSIS));
     let mut out = Row::new();
     let mut used = 0;
+    let mut hidden = Vec::new();
+    let mut clipped = false;
     for span in row {
-        let part = truncate(&span.text, room - used);
-        push_text(&mut out, part, &span.style);
+        let part = if clipped {
+            ""
+        } else {
+            truncate(&span.text, room.saturating_sub(used))
+        };
+        push_span(&mut out, span.slice(0..part.len()));
         used += text_width(part);
         if part.len() < span.text.len() {
-            break;
+            clipped = true;
+        }
+        if part.len() < span.text.len() {
+            for range in &span.text_ranges {
+                let start = if span.text_ranges.len() == 1 && range.len() == span.text.len() {
+                    range.start + part.len()
+                } else {
+                    range.start
+                };
+                hidden.push(start..range.end);
+            }
         }
     }
     push_text(&mut out, &" ".repeat(room - used), &Style::default());
-    push_text(&mut out, ELLIPSIS, &Style::default());
+    let mut ellipsis = Span::new(ELLIPSIS, Style::default());
+    ellipsis.text_ranges = hidden;
+    push_span(&mut out, ellipsis);
     out
 }
 

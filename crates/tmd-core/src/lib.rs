@@ -4,6 +4,7 @@
 //! terminal library; output backends live in `tmd-cli`.
 
 mod code;
+mod document;
 mod highlight;
 mod html;
 mod layout;
@@ -17,6 +18,7 @@ mod theme_file;
 mod width;
 mod wrap;
 
+pub use document::Document;
 pub use line::{Line, LineSize, Span};
 pub use streamer::{Frame, Streamer};
 pub use style::{Color, Style};
@@ -50,13 +52,22 @@ pub fn render_with_options(
     theme: &Theme,
     options: RenderOptions,
 ) -> Vec<Line> {
+    render_blocks(&parse::parse(md, theme), width, theme, options)
+}
+
+fn render_blocks(
+    blocks: &[parse::TopBlock],
+    width: u16,
+    theme: &Theme,
+    options: RenderOptions,
+) -> Vec<Line> {
     let width = usize::from(width.max(1));
     let ctx = layout::Ctx {
         theme,
         list_depth: 0,
     };
     let mut lines = Vec::new();
-    for top_block in parse::parse(md, theme) {
+    for top_block in blocks {
         let rows: Vec<Line> = if options.large_headings
             && width >= 4
             && let parse::Block::Heading { level: 1, spans } = &top_block.block
