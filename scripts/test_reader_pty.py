@@ -26,7 +26,8 @@ END = b"\x1b[?2026l"
 
 class Terminal:
     def __init__(self, options=(), *, row=12, config=None, native=False, capacity=10000,
-                 wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False):
+                 wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False,
+                 cursor_prefix=b""):
         self.temp = tempfile.TemporaryDirectory(prefix="tmd-reader-")
         root = Path(self.temp.name)
         path = root / "article.md"
@@ -53,6 +54,7 @@ class Terminal:
         self.before = termios.tcgetattr(self.master)
         self.data = bytearray()
         self.cursor = row
+        self.cursor_prefix = cursor_prefix
         self.native = native
         self.capacity = capacity
         self.wrong_token = wrong_token
@@ -82,7 +84,7 @@ class Terminal:
             os.write(self.master, b"\x03")
             self.interrupt_probe = False
         if self.answer_cursor and b"\x1b[6n" in self.data and not self.replied:
-            os.write(self.master, f"\x1b[{self.cursor};1R".encode())
+            os.write(self.master, self.cursor_prefix + f"\x1b[{self.cursor};1R".encode())
             self.replied = True
         if self.native:
             match = re.search(rb"SetUserVar=TMD_READER=([A-Za-z0-9+/=]+)\x07", self.data)
@@ -195,6 +197,32 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"\x1b"), 0)
         self.assert_restored(t)
 
+    def test_help_preserves_position_and_paste_does_not_execute_commands(self):
+        t = self.terminal()
+        t.until(END)
+        tail = t.frame(b"\x1b[F")
+        self.assertIn(b"Row 080", tail)
+        self.assertIn("阅读帮助".encode(), t.frame(b"?"))
+        self.assertIn(b"Row 080", t.frame(b"\x1b"))
+        # Bracketed paste is a single Paste event, never a sequence of keys.
+        self.assertIn(b"Row 080", t.frame(b"\x1b[200~q?jk\x1b[201~"))
+        self.assertIn("阅读帮助".encode(), t.frame(b"?"))
+        self.assertIn(b"Row 080", t.frame(b"q"))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assertIn(b"\x1b[?2004h", t.data)
+        self.assertIn(b"\x1b[?2004l", t.data)
+        self.assert_restored(t)
+
+    def test_growing_window_does_not_exit_short_document(self):
+        t = self.terminal(text="# Short\n\nBody")
+        t.until(END)
+        offset = len(t.data)
+        t.resize(120, 50)
+        self.assertIn(b"Body", t.until(END, offset))
+        self.assertIn("阅读帮助".encode(), t.frame(b"?"))
+        self.assertEqual(t.finish(b"\x03"), 130)
+        self.assert_restored(t)
+
     def test_keyboard_ctrl_c_and_external_signals_restore_termios(self):
         for signum in (None, signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
             with self.subTest(signal=signum):
@@ -226,12 +254,22 @@ class ReaderTests(unittest.TestCase):
                 self.assert_restored(t)
 
     def test_short_empty_and_cursor_query_failure_restore_terminal(self):
-        for text in ("", "# Short\n\nBody"):
-            t = self.terminal(text=text)
-            self.assertEqual(t.finish(), 0)
-            self.assert_restored(t)
+        t = self.terminal(text="")
+        self.assertEqual(t.finish(), 0)
+        self.assert_restored(t)
+        t = self.terminal(text="# Short\n\nBody")
+        t.until(END)
+        self.assertIn("阅读帮助".encode(), t.frame(b"?"))
+        self.assertIn(b"Body", t.frame(b"q"))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
         t = self.terminal(answer_cursor=False)
         self.assertEqual(t.finish(), 1)
+        self.assert_restored(t)
+
+    def test_empty_document_preserves_interrupt_during_cursor_query(self):
+        t = self.terminal(text="", cursor_prefix=b"\x03")
+        self.assertEqual(t.finish(), 130)
         self.assert_restored(t)
 
     def test_cli_override_and_invalid_config(self):
@@ -252,7 +290,8 @@ class ReaderTests(unittest.TestCase):
 
     def test_timed_out_probe_removes_reply_channel_before_returning_to_shell(self):
         t = self.terminal(("--reader", "native"), text="# Short")
-        self.assertEqual(t.finish(), 0)
+        t.until(END)
+        self.assertEqual(t.finish(b"q"), 0)
         match = re.search(rb"SetUserVar=TMD_READER=([A-Za-z0-9+/=]+)\x07", t.data)
         version, action, token, path = base64.b64decode(match[1]).decode().split(":", 3)
         self.assertEqual((version, action), ("v1", "probe"))
