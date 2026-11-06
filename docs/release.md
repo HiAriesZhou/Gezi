@@ -5,7 +5,7 @@
 1. 在任务分支更新 `Cargo.toml` 的 `[workspace.package].version`，同步 Cargo.lock 中的项目包版本。
 2. 在 CHANGELOG.md 中加入对应的 `## 版本号` 段落及正文。
 3. 提交 PR，审阅后合并到 `main`。
-4. 合并后的 `main` CI 在 Linux 和 macOS 上全部通过后，`Publish version` 自动创建 `v<版本>` tag 和 GitHub Release。
+4. 合并后的 `main` CI 在 macOS 上通过后，`Publish version` 自动创建 `v<版本>` tag 和 GitHub Release。
 
 Release 标题为 `tmd v<版本>`，正文只取对应版本的 CHANGELOG 段落。预发布版本如 `0.1.0-rc.1` 会标为 prerelease。普通文档或代码提交没有更新版本时，已发布版本会跳过。
 
@@ -13,7 +13,7 @@ Release 标题为 `tmd v<版本>`，正文只取对应版本的 CHANGELOG 段落
 
 ## 发布边界
 
-- 发布任务依赖整个 `check` 矩阵成功，只接受 `push` 到 `refs/heads/main`。PR、其他分支和 tag 事件不发布。
+- 检查和发布任务均使用 macOS runner。发布任务依赖 `check` 成功，只接受 `push` 到 `refs/heads/main`。PR、其他分支和 tag 事件不发布。
 - 检查任务只有 `contents: read`；独立发布任务临时申请 `contents: write`，checkout 固定到该次 CI 的提交且不持久化凭据。
 - 发布通过 GitHub API 将 tag 固定到通过 CI 的提交。创建前发现 `main` 已前进时跳过，等待新提交自己的 CI。
 - 发布任务串行运行。同版本已有非草稿 Release 时跳过，不修改现有 Release 或 tag。
@@ -26,7 +26,7 @@ Release 标题为 `tmd v<版本>`，正文只取对应版本的 CHANGELOG 段落
 python3 -B -m unittest discover -s scripts -p 'test_release.py'
 ```
 
-测试使用模拟 GitHub API，不会创建远端 tag 或 Release；CI 的两个系统都会执行。
+测试使用模拟 GitHub API，不会创建远端 tag 或 Release；macOS CI 会执行。
 
 失败时先查看 Actions 的 `Publish version` 日志及远端 Release、tag。确认目标提交和版本后，可重新运行该次 CI 的失败任务；已完成发布会跳过，未完成且没有冲突的发布会继续。不要删除或移动已经发布的 tag 来重复使用版本号。
 
