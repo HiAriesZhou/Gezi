@@ -5,7 +5,8 @@ and AI output. Read files, search their contents, or render a stream as it arriv
 
 tmd is an early, read-only tool written in Rust. It focuses on streaming without
 redrawing completed content, mixed Chinese and English text, and terminal themes.
-Kaku is the primary terminal for hands-on testing.
+Currently, only macOS is supported. Kaku is the primary terminal for hands-on
+testing.
 
 ## Install from source
 
@@ -128,7 +129,7 @@ The workspace has two crates: `tmd-core` handles parsing and layout; `tmd-cli`
 handles input and terminal control. See [architecture](docs/architecture.md),
 [terminal testing](docs/terminal-testing.md), and [contributor rules](AGENTS.md).
 
-Changes go through pull requests with Linux and macOS checks. Version updates
+Changes go through pull requests with macOS checks. Version updates
 publish automatically after main CI passes, so they require maintainer approval
 before merging. See [release maintenance](docs/release.md).
 

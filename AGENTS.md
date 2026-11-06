@@ -47,7 +47,8 @@ cargo test
 
 ## 发布
 
-- `main` 推送的 Linux/macOS CI 全部成功后自动发布；PR 不执行发布任务。
+- 当前仅支持 macOS；检查和发布任务均使用 macOS runner。
+- `main` 推送的 macOS CI 成功后自动发布；PR 不执行发布任务。
 - Cargo workspace 版本决定 `v<版本>` tag，两个 crate 和 lockfile 必须一致；CHANGELOG 须有唯一、非空的 `## <版本>` 段落。
 - 版本未变且已有正式发布时跳过；禁止移动已有 tag，禁止覆盖或自动发布已有草稿。
 - 发布使用通过 CI 的精确提交，出错先回读远端状态，不盲目重试写请求。维护和验证步骤见 `docs/release.md`。
