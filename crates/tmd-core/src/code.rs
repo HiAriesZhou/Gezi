@@ -31,11 +31,6 @@ pub(crate) fn rows(theme: &Theme, code: &CodeBlock, width: usize) -> Vec<(Row, R
     if code.lines.is_empty() {
         rows.push((padded(style, Row::new(), width), code.src.clone()));
     }
-    for (row, _) in &mut rows {
-        if let Some(span) = row.first_mut() {
-            span.code_block = code.index;
-        }
-    }
     rows
 }
 
