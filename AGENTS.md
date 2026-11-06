@@ -18,6 +18,7 @@
 - 阶段结束报告实现、验证结果和待人工验收项。提交、PR、合并和发布只在当前授权范围内执行。
 - 仓库只保留公开的产品介绍、使用、架构、验证和维护文档。计划、交接、进展、审查报告、思考及沟通记录放在仓库外，不改名留在 docs 中。
 - 不把原始会话、私人策略、账号信息或凭据写进仓库。
+- Use English for commit subjects and bodies, branch names, and pull request titles and descriptions.
 
 ## 架构和行为
 
