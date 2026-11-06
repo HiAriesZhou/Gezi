@@ -19,6 +19,7 @@ import tempfile
 import termios
 import time
 import unittest
+from unittest.mock import patch
 
 BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
 END = b"\x1b[?2026l"
@@ -93,11 +94,16 @@ class Terminal:
                 if action == "probe":
                     reply = Path(path)
                     try:
-                        assert reply.read_text() == f"tmd-reader-v1:{token}\n"
                         assert reply.parent.stat().st_mode & 0o777 == 0o700
-                        if self.wrong_token:
-                            reply.write_text("tmd-reader-v1:other\n")
-                        with reply.open("a") as output:
+                        # Never recreate a channel removed by cancellation.
+                        # An open descriptor remains usable if cleanup wins
+                        # after open; no later operation resolves the path.
+                        with reply.open("r+") as output:
+                            assert output.read() == f"tmd-reader-v1:{token}\n"
+                            if self.wrong_token:
+                                output.seek(0)
+                                output.truncate()
+                                output.write("tmd-reader-v1:other\n")
                             output.write(f"{self.capacity}\n")
                     except FileNotFoundError:
                         # Cancellation can remove the request before this
@@ -153,6 +159,100 @@ class Terminal:
         if self.master is not None:
             os.close(self.master)
         self.temp.cleanup()
+
+
+class NativeReplyTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="tmd-probe-test-")))
+        self.reply = self.root / "reply"
+        self.marker = "tmd-reader-v1:test\n"
+        self.reply.write_text(self.marker)
+
+    def respond(self, *, wrong_token=False):
+        # Exercise the simulator callback without a child process or timing.
+        terminal = object.__new__(Terminal)
+        terminal.master = -1
+        terminal.data = bytearray()
+        terminal.interrupt_probe = False
+        terminal.answer_cursor = False
+        terminal.native = True
+        terminal.wrong_token = wrong_token
+        terminal.capacity = 100
+        payload = base64.b64encode(f"v1:probe:test:{self.reply}".encode())
+        message = b"\x1b]1337;SetUserVar=TMD_READER=" + payload + b"\x07"
+        with patch.object(select, "select", return_value=([-1], [], [])), \
+                patch.object(os, "read", return_value=message):
+            self.assertTrue(terminal.read())
+        self.assertFalse(terminal.native)
+
+    def race_at_open(self, *, remove_parent=False, after_open=False):
+        original = Path.open
+        opened = []
+
+        def racing_open(path, mode="r", *args, **kwargs):
+            writable = path == self.reply and mode in ("a", "w", "r+")
+            stream = original(path, mode, *args, **kwargs) if after_open else None
+            if writable and not opened:
+                opened.append(mode)
+                self.reply.unlink()
+                if remove_parent:
+                    self.root.rmdir()
+            return stream if after_open else original(path, mode, *args, **kwargs)
+
+        return patch.object(Path, "open", racing_open), opened
+
+    def test_valid_and_wrong_token_replies_keep_the_protocol(self):
+        for wrong_token in (False, True):
+            with self.subTest(wrong_token=wrong_token):
+                self.reply.write_text(self.marker)
+                self.respond(wrong_token=wrong_token)
+                expected = "tmd-reader-v1:other\n" if wrong_token else self.marker
+                self.assertEqual(self.reply.read_text(), expected + "100\n")
+
+    def test_removed_reply_is_never_recreated(self):
+        for wrong_token in (False, True):
+            with self.subTest(wrong_token=wrong_token):
+                self.reply.write_text(self.marker)
+                race, opened = self.race_at_open()
+                with race:
+                    self.respond(wrong_token=wrong_token)
+                self.assertTrue(opened, "the deletion race must execute")
+                self.assertFalse(self.reply.exists())
+
+    def test_removed_directory_before_open_is_a_cancelled_reply(self):
+        race, opened = self.race_at_open(remove_parent=True)
+        with race:
+            self.respond()
+        self.assertTrue(opened)
+        self.assertFalse(self.root.exists())
+
+    def test_removal_after_open_does_not_require_the_path(self):
+        race, opened = self.race_at_open(remove_parent=True, after_open=True)
+        with race:
+            self.respond()
+        self.assertTrue(opened)
+        self.assertFalse(self.root.exists())
+
+    def test_unrelated_io_errors_are_not_hidden(self):
+        original = Path.open
+        for error in (errno.EINVAL, errno.EACCES, errno.EIO):
+            with self.subTest(errno=error):
+                def failing_open(path, mode="r", *args, **kwargs):
+                    if path == self.reply and mode in ("a", "w", "r+"):
+                        raise OSError(error, "injected IO failure")
+                    return original(path, mode, *args, **kwargs)
+
+                with patch.object(Path, "open", failing_open):
+                    with self.assertRaises(OSError) as caught:
+                        self.respond()
+                self.assertEqual(caught.exception.errno, error)
+                self.assertEqual(self.reply.read_text(), self.marker)
+
+    def test_invalid_marker_still_fails(self):
+        self.reply.write_text("invalid marker\n")
+        with self.assertRaises(AssertionError):
+            self.respond()
+        self.assertEqual(self.reply.read_text(), "invalid marker\n")
 
 
 class ReaderTests(unittest.TestCase):
