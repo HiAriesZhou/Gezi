@@ -22,7 +22,6 @@ pub(crate) fn push_span(row: &mut Row, span: Span) {
     }
     let merge = row.last().is_some_and(|last| {
         last.style == span.style
-            && last.code_block == span.code_block
             && match (last.text_ranges.as_slice(), span.text_ranges.as_slice()) {
                 ([], []) => true,
                 ([a], [b]) => {

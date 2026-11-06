@@ -1,12 +1,10 @@
 mod ansi;
 mod claude;
 mod cli;
-mod clipboard;
 mod config;
 mod large_headings;
 mod reader;
 mod reader_config;
-mod reader_copy;
 mod reader_native;
 mod reader_search;
 #[cfg(test)]
