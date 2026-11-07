@@ -28,7 +28,21 @@ jobs:
       - run: python3 scripts/check_stream_pty.py --binary target/debug/tmd
       - run: python3 scripts/test_stream_pty.py --binary target/debug/tmd
       - run: python3 -B scripts/test_reader_pty.py --binary target/debug/tmd
-      - run: python3 -B -m unittest discover -s scripts -p 'test_release.py'
+      - run: python3 -B -m unittest discover -s scripts -p 'test_*release.py'
+      - name: Build and verify Apple Silicon package
+        run: |
+          test "$(uname -m)" = arm64
+          cargo build --release --locked --target aarch64-apple-darwin
+          python3 -B scripts/package_release.py --binary target/aarch64-apple-darwin/release/tmd --out-dir "${{ runner.temp }}/tmd-release-package"
+          python3 -B scripts/check_package.py --package-dir "${{ runner.temp }}/tmd-release-package"
+      - name: Preserve checked macOS package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tmd-macos-arm64
+          path: ${{ runner.temp }}/tmd-release-package/
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
 
   release:
     name: Publish version
@@ -45,6 +59,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tmd-macos-arm64
+          path: target/release-assets
       - run: python3 scripts/release.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
