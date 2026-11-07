@@ -8,10 +8,25 @@ redrawing completed content, mixed Chinese and English text, and terminal themes
 Currently, only macOS is supported. Kaku is the primary terminal for hands-on
 testing.
 
+## Install the macOS package
+
+For Apple Silicon Macs, download the `.tar.gz` archive and matching `.sha256`
+file from [Releases](https://github.com/HiAriesZhou/TMD/releases).
+No Rust toolchain is needed. For version 0.1.2, run in the download directory:
+
+```sh
+shasum -a 256 -c tmd-v0.1.2-aarch64-apple-darwin.tar.gz.sha256
+tar -xzf tmd-v0.1.2-aarch64-apple-darwin.tar.gz
+./tmd-v0.1.2-aarch64-apple-darwin/tmd --version
+./tmd-v0.1.2-aarch64-apple-darwin/tmd tmd-v0.1.2-aarch64-apple-darwin/README.md
+```
+
+See the [package guide](docs/binary-package.md) for installation and signing
+status. Intel Mac binaries and Homebrew installation are not provided.
+
 ## Install from source
 
-You need Git and a stable Rust toolchain. Releases currently provide source
-archives; prebuilt packages are not available.
+You need Git and a stable Rust toolchain.
 
 These commands install tmd in `~/.local/bin` and replace an existing binary at
 that location:
