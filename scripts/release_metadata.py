@@ -37,4 +37,3 @@ def version_and_notes(root):
     if len(matches) != 1 or not matches[0]:
         raise ReleaseError(f"CHANGELOG.md needs one nonempty '## {version}' section")
     return version, matches[0]
-
