@@ -139,7 +139,9 @@ pub(crate) fn footer(view: View, state: &str, query: bool, cols: u16) -> String 
         View::Help(_) => &["↑↓ 滚动  Esc 返回", "Esc 返回", "Esc"],
         View::Search => &["Enter 搜索  Esc 取消", "Enter  Esc", "Esc"],
     };
-    let skip = if cols < 20 {
+    let skip = if view == View::Search {
+        usize::from(cols < 40)
+    } else if cols < 20 {
         variants.len().saturating_sub(2)
     } else if cols < 40 {
         2.min(variants.len() - 1)
@@ -266,5 +268,14 @@ mod tests {
         assert_eq!(rows.iter().map(Line::plain_text).collect::<String>(), text);
         assert!(rows.iter().all(|row| row.width() <= 3));
         assert!(wrapped(text, 3, 1)[0].plain_text().ends_with('…'));
+    }
+
+    #[test]
+    fn search_instructions_reserve_both_actions_in_the_header() {
+        for cols in [20, 24, 40, 80, 120] {
+            let text = footer(View::Search, "搜索", false, cols);
+            assert!(text.contains("Enter") && text.contains("Esc"));
+            assert!(text_width(&text) < cols as usize);
+        }
     }
 }
