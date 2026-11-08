@@ -6,12 +6,12 @@ platform. You do not need Rust, Python, or Lua to run it. Native Kaku positionin
 is an optional integration; the built-in reader works without configuration.
 
 Download the `.tar.gz` archive and its `.sha256` file from the same release.
-In the download directory, verify the checksum before extracting. For 0.1.2:
+In the download directory, verify the checksum before extracting. For 0.1.3:
 
 ```sh
-shasum -a 256 -c tmd-v0.1.2-aarch64-apple-darwin.tar.gz.sha256
-tar -xzf tmd-v0.1.2-aarch64-apple-darwin.tar.gz
-cd tmd-v0.1.2-aarch64-apple-darwin
+shasum -a 256 -c tmd-v0.1.3-aarch64-apple-darwin.tar.gz.sha256
+tar -xzf tmd-v0.1.3-aarch64-apple-darwin.tar.gz
+cd tmd-v0.1.3-aarch64-apple-darwin
 ./tmd --version
 ./tmd --help
 ./tmd article.md

@@ -12,13 +12,13 @@ testing.
 
 For Apple Silicon Macs, download the `.tar.gz` archive and matching `.sha256`
 file from [Releases](https://github.com/HiAriesZhou/TMD/releases).
-No Rust toolchain is needed. For version 0.1.2, run in the download directory:
+No Rust toolchain is needed. For version 0.1.3, run in the download directory:
 
 ```sh
-shasum -a 256 -c tmd-v0.1.2-aarch64-apple-darwin.tar.gz.sha256
-tar -xzf tmd-v0.1.2-aarch64-apple-darwin.tar.gz
-./tmd-v0.1.2-aarch64-apple-darwin/tmd --version
-./tmd-v0.1.2-aarch64-apple-darwin/tmd tmd-v0.1.2-aarch64-apple-darwin/README.md
+shasum -a 256 -c tmd-v0.1.3-aarch64-apple-darwin.tar.gz.sha256
+tar -xzf tmd-v0.1.3-aarch64-apple-darwin.tar.gz
+./tmd-v0.1.3-aarch64-apple-darwin/tmd --version
+./tmd-v0.1.3-aarch64-apple-darwin/tmd tmd-v0.1.3-aarch64-apple-darwin/README.md
 ```
 
 See the [package guide](docs/binary-package.md) for installation and signing
