@@ -672,6 +672,23 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
+    def test_search_cancel_preserves_decorative_top_row_without_resize(self):
+        def top_row(frame):
+            prefix = b"\x1b[2;1H"
+            output = frame[frame.rfind(prefix) + len(prefix):]
+            output = re.split(rb"\x1b\[\d+;1H", output)[0]
+            return re.sub(rb"\x1b\[[0-9;?]*[a-zA-Z]", b"", output).decode()
+
+        t = self.terminal(text="# Heading\n\n" + "Body\n\n" * 40)
+        t.until(END)
+        before = top_row(t.frame(b"j"))
+        self.assertIn("━", before)
+        t.frame(b"/")
+        after = top_row(t.frame(b"\x1b"))
+        self.assertEqual(after, before)
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
     def test_outline_large_document_operation_cycles(self):
         text = "\n\n".join(f"## Section {i:04}\n\nbody {i:04}" for i in range(1200))
         t = self.terminal(text=text)

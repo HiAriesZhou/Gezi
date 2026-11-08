@@ -681,7 +681,10 @@ fn run_with_copy(
                             (KeyCode::Esc, Some(Action::Exit)) => {
                                 search.input = None;
                                 anchor = search_anchor.clone();
-                                start = anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
+                                // Resize already remaps saved_start. Without a
+                                // resize, preserve even a decorative top row
+                                // that shares its source range with the block.
+                                start = search.saved_start;
                                 view = View::Reading;
                             }
                             (KeyCode::Enter, Some(Action::Confirm)) => {
