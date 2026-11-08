@@ -321,15 +321,21 @@ impl Anchor {
     }
 }
 
-fn section_source(lines: &[Line], start: usize) -> usize {
+fn section_source(document: &Document, lines: &[Line], start: usize) -> usize {
     lines
         .iter()
+        .enumerate()
         .skip(start)
-        .find(|line| {
+        .find(|(index, line)| {
             line.spans
                 .iter()
                 .any(|span| !span.text_ranges.is_empty() || span.code_block.is_some())
+                || document.headings().iter().any(|heading| {
+                    heading.source == line.src
+                        && Document::heading_line(lines, heading) == Some(*index)
+                })
         })
+        .map(|(_, line)| line)
         .or_else(|| lines.get(start))
         .map_or(0, |line| line.src.start)
 }
@@ -787,7 +793,10 @@ fn run_with_copy(
                             view = View::Search;
                         }
                         Some(Action::Outline) => {
-                            if outline.show(document.headings(), section_source(&lines, start)) {
+                            if outline.show(
+                                document.headings(),
+                                section_source(&document, &lines, start),
+                            ) {
                                 view = View::Outline;
                             } else {
                                 notice.show("无可导航标题", Instant::now());
@@ -942,5 +951,14 @@ mod tests {
         assert_eq!(end, 0);
         assert!(!frame.contains("\x1b#3"));
         assert!(!frame.contains("header"));
+    }
+
+    #[test]
+    fn empty_heading_is_a_section_even_without_searchable_text() {
+        let doc = Document::new("intro\n\n###\n\n## Next\n\nbody", Theme::default());
+        let lines = doc.layout(80, RenderOptions::default());
+        let heading = &doc.headings()[0];
+        let row = Document::heading_line(&lines, heading).unwrap();
+        assert_eq!(section_source(&doc, &lines, row), heading.source.start);
     }
 }
