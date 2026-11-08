@@ -465,6 +465,218 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
+    def test_outline_lists_top_level_headings_and_jumps_to_duplicate(self):
+        paragraphs = lambda prefix: "\n\n".join(f"{prefix} {i:02}" for i in range(30))
+        text = ("# Same\n\n" + paragraphs("Before") +
+                "\n\n> # quote-example\n\n- # list-example\n\n```md\n# fenced-example\n```\n\n" +
+                "# Same\n\n" + paragraphs("After") + "\n\nSetext\n------\n\n" + paragraphs("Tail"))
+        t = self.terminal(text=text)
+        self.assertIn(b"Before 00", t.until(END))
+        menu = t.frame(b"o")
+        self.assertIn("标题目录".encode(), menu)
+        self.assertIn(b"1/3", menu)
+        self.assertEqual(menu.count(b"H1 Same"), 2)
+        self.assertIn(b"H2 Setext", menu)
+        for excluded in (b"quote-example", b"list-example", b"fenced-example"):
+            self.assertNotIn(excluded, menu)
+        t.frame(b"\x1b[B")
+        jumped = t.frame(b"\r")
+        self.assertIn(b"After 00", jumped)
+        self.assertNotIn(b"Before 00", jumped)
+        self.assertIn(b"2/3", t.frame(b"o"))
+        self.assertIn("标题目录".encode(), t.frame(b"\x1b[200~\rqo\x1b[201~"))
+        self.assertIn(b"After 00", t.frame(b"q"))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_outline_resize_cancel_preserves_search_and_large_heading(self):
+        text = "# Top\n\n" + "\n\n".join(f"Before {i:02}" for i in range(30))
+        text += "\n\n# Target 中文\n\n" + "\n\n".join(f"After {i:02}" for i in range(30))
+        t = self.terminal(("--large-headings",), text=text)
+        t.until(END)
+        t.frame(b"/")
+        # One paste event avoids mistaking a partial per-key frame for the
+        # completed query when the PTY batches several printable keys.
+        t.frame(b"\x1b[200~Target\x1b[201~")
+        self.assertIn("匹配 1/1".encode(), t.frame(b"\r"))
+        t.frame(b"o")
+        t.frame(b"\x1b[H")
+        offset = len(t.data)
+        t.resize(20, 8)
+        t.until(END, offset)
+        returned = t.frame(b"\x1b")
+        self.assertIn(b"Target", returned)
+        self.assertEqual(returned.count(b"\x1b#3"), returned.count(b"\x1b#4"))
+        offset = len(t.data)
+        t.resize(80, 24)
+        self.assertIn("匹配 1/1".encode(), t.until(END, offset))
+        self.assertIn(b"2/2", t.frame(b"o"))
+        self.assertIn(b"After 00", t.frame(b"\r"))
+        self.assertEqual(t.finish(b"\x03"), 130)
+        self.assert_restored(t)
+
+    def test_outline_no_headings_and_tiny_window_interrupt(self):
+        t = self.terminal(text="plain document")
+        t.until(END)
+        self.assertIn("无可导航标题".encode(), t.frame(b"o"))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+        t = self.terminal(text="# Heading\n\nbody")
+        t.until(END)
+        t.frame(b"o")
+        offset = len(t.data)
+        t.resize(4, 1)
+        t.until(END, offset)
+        self.assertEqual(t.finish(b"\x03"), 130)
+        self.assert_restored(t)
+
+    def test_outline_confirm_before_or_during_tiny_window_keeps_target(self):
+        text = "# First\n\n" + "\n\n".join(f"Before {i:02}" for i in range(30))
+        text += "\n\n# Target\n\n" + "\n\n".join(f"After {i:02}" for i in range(30))
+        for confirm_while_tiny in (True, False):
+            with self.subTest(confirm_while_tiny=confirm_while_tiny):
+                t = Terminal(("--large-headings",), text=text)
+                try:
+                    self.assertIn(b"Before 00", t.until(END))
+                    t.frame(b"o")
+                    t.frame(b"\x1b[B")
+                    if not confirm_while_tiny:
+                        self.assertIn(b"After 00", t.frame(b"\r"))
+                    offset = len(t.data)
+                    t.resize(4, 1)
+                    t.until(END, offset)
+                    if confirm_while_tiny:
+                        t.frame(b"\r")
+                    offset = len(t.data)
+                    t.resize(80, 24)
+                    returned = t.until(END, offset)
+                    self.assertIn(b"Target", returned)
+                    self.assertIn(b"After 00", returned)
+                    self.assertNotIn(b"Before 00", returned)
+                    self.assertEqual(returned.count(b"\x1b#3"), returned.count(b"\x1b#4"))
+                    self.assertEqual(t.finish(b"q"), 0)
+                    self.assert_restored(t)
+                finally:
+                    t.close()
+
+    @staticmethod
+    def footer(frame):
+        matches = re.findall(rb"\x1b\[\d+;1H\x1b#5\x1b\[0m([^\x1b]*)", frame)
+        if not matches:
+            raise AssertionError("No footer painted")
+        return matches[-1].decode()
+
+    def test_contextual_footers_and_help_return_to_originating_chooser(self):
+        text = "# Top\n\n" + "\n\n".join(f"Paragraph {i}" for i in range(40))
+        text += "\n\n## Target\n\n```rs\nlet value = 1;\n```\n\n### Last\n"
+        t = self.terminal(text=text)
+        self.assertIn("o 目录", self.footer(t.until(END)))
+        menu = t.frame(b"o")
+        self.assertIn("Enter 跳转", self.footer(menu))
+        self.assertNotIn("/ 搜索", self.footer(menu))
+        selected = t.frame(b"j")
+        self.assertIn(b"\x1b[1;4m>    H2 Target", selected)
+        help_frame = t.frame(b"?")
+        self.assertIn("目录帮助".encode(), help_frame)
+        self.assertNotIn("Enter 跳转", self.footer(help_frame))
+        returned = t.frame(b"q")
+        self.assertIn(b"\x1b[1;4m>    H2 Target", returned)
+        self.assertNotIn("目录帮助".encode(), returned)
+        self.assertIn(b"Paragraph 0", t.frame(b"o"))
+        code = t.frame(b"c")
+        self.assertIn("Enter 复制", self.footer(code))
+        self.assertNotIn("o 目录", self.footer(code))
+        self.assertIn("代码块帮助".encode(), t.frame(b"?"))
+        self.assertIn("Enter 复制", self.footer(t.frame(b"\x1b")))
+        self.assertIn(b"Paragraph 0", t.frame(b"c"))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_narrow_footer_search_semantics_and_cancelled_outline(self):
+        text = "# Start\n\n" + "\n\n".join(f"Needle {i:02}" for i in range(40))
+        text += "\n\n## Final\n\nlast"
+        t = self.terminal(text=text)
+        t.until(END)
+        t.frame(b"/")
+        t.frame(b"\x1b[200~Needle\x1b[201~")
+        self.assertIn("匹配 1/40".encode(), t.frame(b"\r"))
+        t.frame(b"o")
+        t.frame(b"\x1b[F")
+        for width in [120, 80, 60, 40, 24]:
+            offset = len(t.data)
+            t.resize(width, 12)
+            frame = t.until(END, offset)
+            footer = self.footer(frame)
+            self.assertIn("Enter", footer)
+            self.assertIn("Esc", footer)
+            self.assertNotIn("/ 搜索", footer)
+        restored = t.frame(b"\x1b")
+        self.assertIn(b"Needle 00", restored)
+        self.assertIn("Esc 清除", self.footer(restored))
+        t.frame(b"o")
+        t.frame(b"\x1b[F")
+        jumped = t.frame(b"\r")
+        self.assertIn(b"Final", jumped)
+        # A directory jump retains the selected search result. n advances from it.
+        self.assertIn(b"Needle 01", t.frame(b"n"))
+        cleared = t.frame(b"\x1b")
+        self.assertIn(b"Needle 01", cleared)
+        self.assertNotIn("Esc 清除", self.footer(cleared))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_outline_selection_keeps_list_stationary_and_paste_cannot_dispatch(self):
+        text = "\n\n".join(f"## Section {i:04}\n\nbody {i:04}" for i in range(100))
+        t = self.terminal(text=text)
+        t.until(END)
+        t.frame(b"o")
+        t.frame(b"\x1b[F")
+        before = t.frame(b"k")
+        after = t.frame(b"k")
+        # Near the end, two upward selections fit in the same 22-row viewport.
+        for label in [b"H2 Section 0078", b"H2 Section 0099"]:
+            self.assertIn(label, before)
+            self.assertIn(label, after)
+        pasted = t.frame(b"\x1b[200~\rqo?c/\x1b[201~")
+        self.assertIn("标题目录".encode(), pasted)
+        self.assertIn("Enter 跳转", self.footer(pasted))
+        self.assertEqual(t.finish(b"\x03"), 130)
+        self.assert_restored(t)
+
+    def test_transient_message_expires_while_idle(self):
+        t = self.terminal(text="plain document")
+        t.until(END)
+        self.assertIn("无可导航标题".encode(), t.frame(b"o"))
+        offset = len(t.data)
+        expired = t.until(END, offset)
+        self.assertNotIn("无可导航标题".encode(), expired)
+        self.assertIn("? 帮助", self.footer(expired))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_outline_large_document_operation_cycles(self):
+        text = "\n\n".join(f"## Section {i:04}\n\nbody {i:04}" for i in range(1200))
+        t = self.terminal(text=text)
+        t.until(END)
+        durations = []
+        for i in range(50):
+            began = time.monotonic()
+            t.frame(b"o")
+            t.frame(b"\x1b[F")
+            t.frame(b"\x1b[5~")
+            jumped = t.frame(b"\r")
+            # Stay a page of headings away from EOF so the selected heading is
+            # also at the top of the document viewport on reopening.
+            self.assertIn(b"Section 1177", jumped)
+            self.assertIn("1178/1200".encode(), t.frame(b"o"))
+            cancelled = t.frame(b"q")
+            self.assertIn(b"body 1177", cancelled)
+            durations.append(time.monotonic() - began)
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+        print(f"\nOutline 1200 headings / 50 cycles: max={max(durations):.3f}s "
+              f"mean={sum(durations)/len(durations):.3f}s (PTY protocol only)", file=sys.stderr)
+
     def test_cli_override_and_invalid_config(self):
         t = self.terminal(("--reader", "inline"), config="[reader]\nmode='native'")
         first = t.until(END)
