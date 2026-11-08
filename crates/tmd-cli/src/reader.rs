@@ -532,7 +532,7 @@ fn run_with_copy(
             let (display, position, highlight) = match view {
                 View::Reading | View::Search => {
                     chrome.title = if view == View::Search {
-                        "tmd · 搜索 · Enter 搜索 · Esc 取消 · Ctrl-U 清空".into()
+                        reader_ui::footer(View::Search, "搜索", false, size.0)
                     } else {
                         title.clone()
                     };

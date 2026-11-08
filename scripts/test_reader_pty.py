@@ -654,6 +654,24 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
+    def test_search_input_keeps_confirm_and_cancel_in_narrow_header(self):
+        t = self.terminal(text="# Heading\n\nbody 中文")
+        t.until(END)
+        for width in [80, 40, 24, 20]:
+            offset = len(t.data)
+            t.resize(width, 12)
+            t.until(END, offset)
+            frame = t.frame(b"/")
+            # Query rendering erases the footer painted earlier in the frame.
+            # Inspect the final visible header, not any stale command bytes.
+            header = re.findall(rb"\x1b\[1;1H([^\x1b]+)", frame)[-1].decode()
+            self.assertIn("Enter", header)
+            self.assertIn("Esc", header)
+            self.assertIn(b"\x1b[?25h", frame)
+            t.frame(b"\x1b")
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
     def test_outline_large_document_operation_cycles(self):
         text = "\n\n".join(f"## Section {i:04}\n\nbody {i:04}" for i in range(1200))
         t = self.terminal(text=text)
