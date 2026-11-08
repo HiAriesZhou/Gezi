@@ -1,6 +1,7 @@
 //! Code chooser state. Backend injection keeps tests away from real clipboards.
 use crate::clipboard::CopyError;
-use tmd_core::{CodeSnippet, Line, LineSize, Span, Style, clusters, text_width, truncate};
+use crate::reader_ui::{ListViewport, ellipsize};
+use tmd_core::{CodeSnippet, Line, LineSize, Span, Style, clusters, text_width};
 
 #[derive(Default)]
 pub(crate) struct CodePicker {
@@ -8,11 +9,13 @@ pub(crate) struct CodePicker {
     pub selected: usize,
     pub notice: String,
     entries: Vec<String>,
+    viewport: ListViewport,
 }
 impl CodePicker {
     /// `following` starts at the current reading row and includes the tail.
     pub fn show(&mut self, codes: &[CodeSnippet], following: &[Line]) {
         self.notice.clear();
+        self.viewport.reset();
         self.open = false;
         if codes.is_empty() {
             self.notice = " · 未找到代码块".into();
@@ -41,9 +44,13 @@ impl CodePicker {
     pub fn rows(&self, width: u16) -> Vec<Line> {
         self.entries
             .iter()
-            .map(|text| Line {
+            .enumerate()
+            .map(|(index, text)| Line {
                 spans: vec![Span::new(
-                    truncate(text, width.saturating_sub(1) as usize),
+                    ellipsize(
+                        &format!("{} {text}", if index == self.selected { '>' } else { ' ' }),
+                        width.saturating_sub(1) as usize,
+                    ),
                     Style::default(),
                 )],
                 src: 0..0,
@@ -51,14 +58,18 @@ impl CodePicker {
             })
             .collect()
     }
-    pub fn top(&self, height: usize) -> usize {
-        self.selected.saturating_sub(height.saturating_sub(1))
+    pub fn top(&mut self, height: usize) -> usize {
+        self.viewport.top(self.selected, self.entries.len(), height)
     }
     pub fn move_by(&mut self, amount: isize) {
+        let before = self.selected;
         self.selected = self
             .selected
             .saturating_add_signed(amount)
             .min(self.entries.len().saturating_sub(1));
+        if before != self.selected {
+            self.notice.clear();
+        }
     }
     pub fn confirm(
         &mut self,

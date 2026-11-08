@@ -8,7 +8,9 @@ mod reader;
 mod reader_config;
 mod reader_copy;
 mod reader_native;
+mod reader_outline;
 mod reader_search;
+mod reader_ui;
 #[cfg(test)]
 mod snapshots;
 mod source;
