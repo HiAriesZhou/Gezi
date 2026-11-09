@@ -84,7 +84,7 @@ sidebar, then exits. Help returns to the view that opened it. Empty documents ex
 Press `o` to open the outline at your current section. At 80 columns or wider,
 it appears beside the document; narrower windows use a full-page list. Use
 arrows, `j`/`k` or paging keys to select a heading without moving the document.
-Enter jumps and focuses the document while keeping the sidebar open. Tab switches
+Enter jumps while keeping outline focus for repeated navigation. Tab switches
 focus, and the wheel scrolls the area under the pointer. In a narrow window,
 Enter jumps and closes the list. Esc, `q` or `o` closes a focused outline;
 `o` also closes it while reading.
