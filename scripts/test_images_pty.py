@@ -10,19 +10,52 @@ from pathlib import Path
 import re
 import subprocess
 import signal
+import socketserver
 import struct
 import sys
 import tempfile
 import termios
 import time
 import unittest
+from unittest.mock import patch
 
 import test_reader_pty as reader
 
 SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="160" height="480"><rect width="160" height="480" fill="red"/></svg>'
 GRAPHICS = re.compile(rb"\x1b_G(.*?);(.*?)\x1b\\", re.S)
 
-def serve(root, delay):
+def serve(root, delay, socks=False):
+    if socks:
+        class SocksHandler(socketserver.StreamRequestHandler):
+            def handle(self):
+                self.request.settimeout(3)
+                version, count = self.rfile.read(2)
+                assert version == 5
+                self.rfile.read(count)
+                self.wfile.write(b"\x05\x00")
+                self.wfile.flush()
+                header = self.rfile.read(4)
+                assert header == b"\x05\x01\x00\x03"
+                domain = self.rfile.read(self.rfile.read(1)[0])
+                self.rfile.read(2)
+                self.wfile.write(b"\x05\x00\x00\x01\x7f\x00\x00\x01\x00\x50")
+                self.wfile.flush()
+                with (root / "requests").open("ab") as log:
+                    log.write(domain + b"\n")
+                for _ in range(64):
+                    line = self.rfile.readline(8192)
+                    if line == b"\r\n":
+                        break
+                    if not line:
+                        return
+                else:
+                    return
+                self.wfile.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: "
+                                 + str(len(SVG)).encode() + b"\r\n\r\n" + SVG)
+        server = socketserver.TCPServer(("127.0.0.1", 0), SocksHandler)
+        (root / "port").write_text(str(server.server_address[1]))
+        server.serve_forever()
+        return
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             with (root / "requests").open("a") as log:
@@ -115,14 +148,17 @@ class ImagesTests(unittest.TestCase):
         self.assert_restored(terminal)
 
     @contextlib.contextmanager
-    def server(self, delay=0):
+    def server(self, delay=0, socks=False):
         # Keep the PTY-forking parent single-threaded. The local server runs in
         # its own process, avoiding inherited Python locks in the reader child.
         with tempfile.TemporaryDirectory(prefix="tmd-image-http-") as temporary:
             root = Path(temporary)
             requests = root / "requests"
             requests.write_text("")
-            process = subprocess.Popen([sys.executable, "-B", __file__, "--server", str(root), "--delay", str(delay)])
+            command = [sys.executable, "-B", __file__, "--server", str(root), "--delay", str(delay)]
+            if socks:
+                command.append("--socks")
+            process = subprocess.Popen(command)
             try:
                 deadline = time.monotonic() + 8
                 while not (root / "port").exists():
@@ -220,15 +256,28 @@ class ImagesTests(unittest.TestCase):
             self.assertNotIn(b"stack overflow", terminal.data)
             self.assert_restored(terminal)
 
+    def test_remote_images_use_configured_socks_proxy(self):
+        with self.server(socks=True) as (url, requests):
+            proxy = url.split("/badge")[0].replace("http://", "socks5h://")
+            environment = {key: proxy for key in ("ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy")}
+            environment.update(NO_PROXY="", no_proxy="")
+            with patch.dict(os.environ, environment):
+                terminal = self.terminal("![proxied](http://tmd-image.invalid/badge)")
+            self.placement(terminal)
+            self.assertEqual(requests.read_text().splitlines(), ["tmd-image.invalid"])
+            self.assertEqual(terminal.finish(b"q"), 0)
+            self.assert_restored(terminal)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--server", type=Path)
     parser.add_argument("--delay", type=float, default=0)
+    parser.add_argument("--socks", action="store_true")
     parser.add_argument("--binary", type=Path, default=reader.BINARY)
     args, remaining = parser.parse_known_args()
     if args.server:
-        serve(args.server, args.delay)
+        serve(args.server, args.delay, args.socks)
         sys.exit(0)
     reader.BINARY = args.binary.resolve()
     unittest.main(argv=[__file__, *remaining])

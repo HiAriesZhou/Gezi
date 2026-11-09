@@ -14,6 +14,9 @@ tmd --images off article.md
 Remote HTTP(S) images load by default. This contacts the image hosts named in
 the document. `--remote-images off` keeps local images and does not fetch
 remote images. `--images off` disables all image loading and graphics output.
+HTTP and SOCKS proxies configured through the environment are supported.
+`ALL_PROXY` takes precedence over `HTTPS_PROXY` and `HTTP_PROXY`; `NO_PROXY`
+excludes hosts from proxying. Lowercase forms are also recognized.
 
 Local paths resolve relative to the Markdown file, including percent-encoded
 spaces and local paths with query/fragment suffixes. File extensions are not
