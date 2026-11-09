@@ -71,21 +71,31 @@ nonempty documents.
 | PageUp / PageDown, `b` / Space | Move by a page |
 | `/`, then Enter | Search visible text, including headings and code |
 | `n` / `N` | Jump to the next or previous match |
-| `o` | Navigate document headings |
+| `o` | Toggle the heading outline |
+| `Tab` | Switch focus between the sidebar and document |
 | `c` | Choose a code block to copy |
 | `?` | Show help for the current view |
 | `q` | Return to the shell |
 
 Search is case-sensitive and supports Chinese and emoji. Esc cancels a query
-being edited; while reading, it clears active search marks before exiting on a
-second press. Help returns to the view that opened it. Empty documents exit immediately.
+being edited; while reading, it clears active search marks, then closes an open
+sidebar, then exits. Help returns to the view that opened it. Empty documents exit immediately.
 
-Press `o` to open the outline at your current section. Use arrows, `j`/`k`,
-paging keys or the wheel to choose a heading, then Enter to jump. Esc, `q`,
-or `o` cancels without moving the document. `>` marks your selection and `*`
-marks the section at the top of the reading viewport. Duplicate and empty
-headings have distinct destinations. The footer shows actions for the current
-view and keeps essential controls visible in narrow windows.
+Press `o` to open the outline at your current section. At 80 columns or wider,
+it appears beside the document; narrower windows use a full-page list. Use
+arrows, `j`/`k` or paging keys to select a heading without moving the document.
+Enter jumps and focuses the document while keeping the sidebar open. Tab switches
+focus, and the wheel scrolls the area under the pointer. In a narrow window,
+Enter jumps and closes the list. Esc, `q` or `o` closes a focused outline;
+`o` also closes it while reading.
+
+`>` marks your selection and `*` marks the current reading section. Duplicate
+and empty headings have distinct destinations. Resizing preserves the selection
+and reading anchor. Split views use ordinary headings, even with
+`--large-headings`; closing the sidebar restores the requested heading size.
+Search, code selection and help retain the sidebar state when returning.
+The footer shows controls for the focused pane, with essential actions kept
+visible in narrow windows.
 
 In the built-in reader on local macOS, press `c` to choose a code block and
 Enter to copy its original contents. Esc, `q`, or `c` cancels without copying. This copies
