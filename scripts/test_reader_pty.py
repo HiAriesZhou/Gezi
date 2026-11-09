@@ -28,7 +28,7 @@ END = b"\x1b[?2026l"
 class Terminal:
     def __init__(self, options=(), *, row=12, config=None, native=False, capacity=10000,
                  wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False,
-                 cursor_prefix=b""):
+                 cursor_prefix=b"", cols=80):
         self.temp = tempfile.TemporaryDirectory(prefix="tmd-reader-")
         root = Path(self.temp.name)
         path = root / "article.md"
@@ -51,7 +51,7 @@ class Terminal:
             args = [str(BINARY), "--theme", "default-dark", *options, str(path)]
             os.execve(str(BINARY), args, env)
         os.close(ready_read)
-        self.resize(80, 24)
+        self.resize(cols, 24)
         self.before = termios.tcgetattr(self.master)
         self.data = bytearray()
         self.cursor = row
@@ -465,12 +465,127 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
+    @staticmethod
+    def pane_rows(frame, column, first=2, last=23):
+        # Each body row is explicitly positioned. Inspect the final write at
+        # each cell origin, removing SGR/OSC without matching overwritten text.
+        result = []
+        for row in range(first, last + 1):
+            matches = list(re.finditer(fr"\x1b\[{row};{column}H".encode(), frame))
+            if not matches:
+                result.append("")
+                continue
+            text = frame[matches[-1].end():]
+            text = re.split(rb"\x1b\[\d+;\d+H", text)[0]
+            text = re.sub(rb"\x1b\]8;;.*?\x1b\\", b"", text)
+            text = re.sub(rb"\x1b\[[0-9;?]*[a-zA-Z]|\x1b#[345]", b"", text)
+            result.append(text.decode())
+        return result
+
+    def test_sidebar_enter_focus_wheel_and_close(self):
+        text = "\n\n".join(f"## Same\n\nSection {i:03}\n\n" +
+                                "\n\n".join(f"Body {i:03}-{j:02}" for j in range(30))
+                                for i in range(50))
+        t = self.terminal(text=text)
+        t.until(END)
+        opened = t.frame(b"o")
+        self.assertIn("● 标题目录", opened.decode())
+        self.assertIn("Tab 正文", self.footer(opened))
+        self.assertIn(b"\x1b[2;25H", opened)
+        before = self.pane_rows(opened, 26)
+        selected = t.frame(b"j")
+        self.assertEqual(before, self.pane_rows(selected, 26))
+        jumped = t.frame(b"\r")
+        self.assertIn("● 正文", jumped.decode())
+        self.assertIn("Section 001", "\n".join(self.pane_rows(jumped, 26)))
+        self.assertIn("Tab 目录", self.footer(jumped))
+        # Left wheel changes selection without moving document or keyboard focus.
+        left = t.frame(b"\x1b[<65;3;8M")
+        self.assertEqual(self.pane_rows(jumped, 26), self.pane_rows(left, 26))
+        self.assertIn("5/50", left.decode())
+        self.assertIn("● 正文", left.decode())
+        focused = t.frame(b"\t")
+        self.assertIn("● 标题目录", focused.decode())
+        # Right wheel moves document while keeping outline selection/focus.
+        right = t.frame(b"\x1b[<65;40;8M")
+        self.assertNotEqual(self.pane_rows(focused, 26), self.pane_rows(right, 26))
+        self.assertIn("5/50", right.decode())
+        self.assertIn("● 标题目录", right.decode())
+        closed = t.frame(b"\x1b")
+        self.assertNotIn("标题目录", closed.decode())
+        self.assertIn("Body 001", closed.decode())
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_sidebar_resize_normal_headings_and_focus_restore(self):
+        text = "# First\n\n" + "Before\n\n" * 40 + "# Target\n\n" + "After\n\n" * 40
+        t = self.terminal(("--large-headings",), text=text)
+        self.assertIn(b"\x1b#3", t.until(END))
+        opened = t.frame(b"o")
+        self.assertNotIn(b"\x1b#3", opened)
+        self.assertNotIn(b"\x1b#4", opened)
+        t.frame(b"j")
+        jumped = t.frame(b"\r")
+        self.assertIn("After", "\n".join(self.pane_rows(jumped, 26)))
+        for width in [79, 40, 4, 120, 80]:
+            offset = len(t.data)
+            t.resize(width, 24)
+            frame = t.until(END, offset)
+            if width >= 80:
+                self.assertIn("● 正文", frame.decode())
+                self.assertIn("After", frame.decode())
+                self.assertNotIn(b"\x1b#3", frame)
+            elif width >= 40:
+                self.assertIn("标题目录", frame.decode())
+                self.assertNotIn("After", frame.decode())
+                self.assertIn("2/2", frame.decode())
+        closed = t.frame(b"o")
+        self.assertIn(b"\x1b#3", closed)
+        self.assertIn("Target", closed.decode())
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_sidebar_search_copy_help_restore_selection_and_document(self):
+        text = "# First\n\n" + "Needle\n\n" * 40 + "## Second\n\n```rs\nlet value = 1;\n```\n"
+        t = self.terminal(text=text)
+        t.until(END)
+        t.frame(b"o")
+        t.frame(b"j")
+        t.frame(b"?")
+        returned = t.frame(b"\x1b")
+        self.assertIn("● 标题目录", returned.decode())
+        self.assertIn("2/2", returned.decode())
+        body = t.frame(b"\t")
+        search_frame = t.frame(b"/")
+        search_header = self.pane_rows(search_frame, 26, 1, 1)[0]
+        self.assertIn("Enter", search_header)
+        self.assertIn("Esc", search_header)
+        t.frame("\x1b[200~中文👩‍💻\x1b[201~".encode())
+        cancelled = t.frame(b"\x1b")
+        self.assertEqual(self.pane_rows(body, 26), self.pane_rows(cancelled, 26))
+        t.frame(b"/")
+        t.frame(b"\x1b[200~Needle\x1b[201~")
+        confirmed = t.frame(b"\r")
+        self.assertIn("匹配 1/40", confirmed.decode())
+        self.assertIn("标题目录", confirmed.decode())
+        t.frame(b"c")
+        returned = t.frame(b"\x1b")
+        self.assertIn("● 正文", returned.decode())
+        self.assertIn("2/2", returned.decode())
+        self.assertIn("匹配 1/40", returned.decode())
+        cleared = t.frame(b"\x1b")
+        self.assertIn("标题目录", cleared.decode())
+        self.assertNotIn("Esc 清除", self.footer(cleared))
+        self.assertNotIn("标题目录", t.frame(b"\x1b").decode())
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
     def test_outline_lists_top_level_headings_and_jumps_to_duplicate(self):
         paragraphs = lambda prefix: "\n\n".join(f"{prefix} {i:02}" for i in range(30))
         text = ("# Same\n\n" + paragraphs("Before") +
                 "\n\n> # quote-example\n\n- # list-example\n\n```md\n# fenced-example\n```\n\n" +
                 "# Same\n\n" + paragraphs("After") + "\n\nSetext\n------\n\n" + paragraphs("Tail"))
-        t = self.terminal(text=text)
+        t = self.terminal(text=text, cols=79)
         self.assertIn(b"Before 00", t.until(END))
         menu = t.frame(b"o")
         self.assertIn("标题目录".encode(), menu)
@@ -569,7 +684,7 @@ class ReaderTests(unittest.TestCase):
     def test_contextual_footers_and_help_return_to_originating_chooser(self):
         text = "# Top\n\n" + "\n\n".join(f"Paragraph {i}" for i in range(40))
         text += "\n\n## Target\n\n```rs\nlet value = 1;\n```\n\n### Last\n"
-        t = self.terminal(text=text)
+        t = self.terminal(text=text, cols=79)
         self.assertIn("o 目录", self.footer(t.until(END)))
         menu = t.frame(b"o")
         self.assertIn("Enter 跳转", self.footer(menu))
@@ -627,7 +742,7 @@ class ReaderTests(unittest.TestCase):
 
     def test_outline_selection_keeps_list_stationary_and_paste_cannot_dispatch(self):
         text = "\n\n".join(f"## Section {i:04}\n\nbody {i:04}" for i in range(100))
-        t = self.terminal(text=text)
+        t = self.terminal(text=text, cols=79)
         t.until(END)
         t.frame(b"o")
         t.frame(b"\x1b[F")
@@ -691,7 +806,7 @@ class ReaderTests(unittest.TestCase):
 
     def test_outline_large_document_operation_cycles(self):
         text = "\n\n".join(f"## Section {i:04}\n\nbody {i:04}" for i in range(1200))
-        t = self.terminal(text=text)
+        t = self.terminal(text=text, cols=79)
         t.until(END)
         durations = []
         for i in range(50):

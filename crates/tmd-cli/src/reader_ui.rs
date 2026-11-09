@@ -167,6 +167,22 @@ pub(crate) fn footer(view: View, state: &str, query: bool, cols: u16) -> String 
     }
 }
 
+/// Split panes only appear at >=80 columns, leaving room for focus controls.
+pub(crate) fn sidebar_footer(view: View, state: &str, query: bool, cols: u16) -> String {
+    let actions = match view {
+        View::Outline => "↑↓ 选择  Enter 跳转  Tab 正文  Esc 关闭  ? 帮助",
+        View::Reading if query => "n/N 跳转  Esc 清除  Tab 目录  o 关闭  ? 帮助  q 退出",
+        _ => "/ 搜索  c 复制  Tab 目录  o 关闭  ? 帮助  q 退出",
+    };
+    let width = cols.saturating_sub(1) as usize;
+    let remaining = width.saturating_sub(text_width(actions));
+    let state = ellipsize(state, remaining.saturating_sub(2));
+    format!(
+        "{state}{}{actions}",
+        " ".repeat(remaining - text_width(&state))
+    )
+}
+
 #[derive(Default)]
 pub(crate) struct Notice {
     value: Option<(String, Instant)>,
@@ -244,6 +260,22 @@ mod tests {
         let wide = footer(View::Reading, "阅读 · 开头", false, 80);
         for key in ["/ 搜索", "o 目录", "c 复制", "? 帮助", "q 退出"] {
             assert!(wide.contains(key));
+        }
+    }
+
+    #[test]
+    fn sidebar_footer_reserves_focus_and_close_actions() {
+        for width in [80, 100, 120, 200] {
+            for query in [false, true] {
+                for view in [View::Reading, View::Outline] {
+                    let text = sidebar_footer(view, &"状态".repeat(100), query, width);
+                    assert!(text_width(&text) < width as usize);
+                    assert!(text.contains("Tab") && text.contains("关闭"));
+                    if view == View::Outline {
+                        assert!(text.contains("Enter"));
+                    }
+                }
+            }
         }
     }
 
