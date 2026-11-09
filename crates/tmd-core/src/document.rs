@@ -122,6 +122,7 @@ fn collect_images(block: &mut Block, images: &mut Vec<crate::ImageSource>) {
     fn spans(spans: &mut [Span], images: &mut Vec<crate::ImageSource>) {
         for span in spans {
             if let Some(image) = &mut span.image {
+                let image = std::sync::Arc::make_mut(image);
                 image.index = images.len();
                 images.push(image.clone());
             }

@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use crate::image::{ImageCell, ImageSource};
 use crate::style::Style;
@@ -16,7 +17,7 @@ pub struct Span {
     /// None on ordinary render/streaming spans and non-code decorations.
     pub code_block: Option<usize>,
     /// Retained image metadata. Text output continues to use the alt label.
-    pub image: Option<ImageSource>,
+    pub image: Option<Arc<ImageSource>>,
     /// A reserved image row in an explicitly requested image layout.
     pub image_cell: Option<ImageCell>,
 }

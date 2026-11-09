@@ -250,7 +250,7 @@ impl Inline {
         }
         self.resolve_soft_break('[');
         let mut span = Span::new(image_label(&image.alt), style);
-        span.image = Some(image);
+        span.image = Some(std::sync::Arc::new(image));
         self.spans.push(span);
     }
 

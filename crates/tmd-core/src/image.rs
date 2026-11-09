@@ -80,7 +80,7 @@ pub(crate) fn wrap(spans: &[Span], width: usize, images: Option<&ImageLayout<'_>
             .as_ref()
             .and_then(|image| images.rectangle(image, width));
         if let Some(rect) = rect {
-            flush_text(&mut out, &mut text, width);
+            flush_text(&mut out, &mut text, width, true);
             if used + usize::from(rect.columns) + usize::from(!group.is_empty()) > width {
                 flush_group(&mut out, &mut group);
                 used = 0;
@@ -102,16 +102,28 @@ pub(crate) fn wrap(spans: &[Span], width: usize, images: Option<&ImageLayout<'_>
         }
     }
     flush_group(&mut out, &mut group);
-    flush_text(&mut out, &mut text, width);
+    flush_text(&mut out, &mut text, width, false);
     if out.is_empty() {
         out.push(Vec::new());
     }
     out
 }
 
-fn flush_text(out: &mut Vec<Row>, text: &mut Vec<Span>, width: usize) {
-    if text.iter().any(|span| !span.text.trim().is_empty()) {
-        out.extend(wrap::wrap(text, width));
+fn flush_text(out: &mut Vec<Row>, text: &mut Vec<Span>, width: usize, next_image: bool) {
+    if text
+        .iter()
+        .any(|span| !span.text.trim().is_empty() || span.text == "\n")
+    {
+        let mut rows = wrap::wrap(text, width);
+        // The adjacent image occupies the boundary row of a hard break.
+        // Keep all authored blank rows between those occupied boundaries.
+        if next_image && rows.last().is_some_and(Vec::is_empty) {
+            rows.pop();
+        }
+        if !out.is_empty() && rows.first().is_some_and(Vec::is_empty) {
+            rows.remove(0);
+        }
+        out.extend(rows);
     }
     text.clear();
 }
@@ -143,6 +155,41 @@ fn flush_group(out: &mut Vec<Row>, group: &mut Vec<(Span, ImageCell)>) {
 mod tests {
     use super::*;
     use crate::{Document, RenderOptions, Theme};
+
+    #[test]
+    fn wrapped_alt_fragments_share_image_metadata() {
+        let doc = Document::new(
+            &format!("![{}](logo.svg)", "a ".repeat(4096)),
+            Theme::default(),
+        );
+        let lines = doc.layout(40, RenderOptions::default());
+        let images: Vec<_> = lines
+            .iter()
+            .flat_map(|l| &l.spans)
+            .filter_map(|s| s.image.as_ref())
+            .collect();
+        assert!(images.len() > 100);
+        let address = images[0].alt.as_ptr();
+        assert!(images.iter().all(|image| image.alt.as_ptr() == address));
+    }
+
+    #[test]
+    fn explicit_breaks_between_images_preserve_blank_rows() {
+        let doc = Document::new("![a](a)<br><br>![b](b)", Theme::default());
+        let lines = doc.layout_with_images(
+            80,
+            RenderOptions::default(),
+            &ImageLayout {
+                cell_width: 8,
+                cell_height: 16,
+                sizes: &[Some((8, 16)), Some((8, 16))],
+                failed: &[],
+            },
+        );
+        assert_eq!(lines.len(), 3);
+        assert!(lines[1].plain_text().is_empty());
+        assert!(lines[2].spans.iter().any(|s| s.image_cell.is_some()));
+    }
 
     #[test]
     fn preserves_markdown_and_html_references_without_loading_anything() {
