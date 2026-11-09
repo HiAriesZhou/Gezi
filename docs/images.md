@@ -31,6 +31,8 @@ preserves the current text/source anchor; when viewing an image, resizing
 preserves the relative position within it. Scrolling, opening the outline,
 help, search and resizing clip or hide placements at the document boundaries.
 Only this reader's image IDs are cleaned up on exit.
+Prefetched resources evicted under memory pressure are not fetched again until
+they become visible. Font/pixel-size changes also invalidate image layout.
 
 The session has an accounted 64 MiB raster cache, at most 1,024 distinct
 resources, an 8 MiB input limit per image, a 16 megapixel raster decoding limit,
@@ -40,6 +42,9 @@ variants are cached; cache accounting also includes their decoded terminal
 footprint. SVG has a separate 2 MiB / 20,000-tag input limit. Compressed SVGZ
 and DTD declarations are rejected. SVG scripts, external images and embedded images are
 not evaluated or loaded. A small macOS system font set supplies SVG text.
+XML nesting and expanded reference depth are limited to 32; reference expansion
+is limited to 20,000 nodes. Cyclic references, CSS escapes and stylesheet URL
+references fall back to the failure label.
 Cached images are kept in memory for this process only.
 
 Missing, invalid, oversized and failed images keep their alt text with a short
