@@ -33,14 +33,14 @@ def smoke(root, directory):
         rendered = output("--ansi", "--theme", "default-dark", str(root / "fixtures/acceptance.md"))
         if "中文".encode() not in rendered or len(rendered) < 100:
             raise ReleaseError("Installed executable did not render the Markdown fixture")
-        for script in ("test_reader_pty.py", "check_stream_pty.py", "test_stream_pty.py"):
+        for script in ("test_reader_pty.py", "test_images_pty.py", "check_stream_pty.py", "test_stream_pty.py"):
             result = subprocess.run([sys.executable, "-B", str(root / "scripts" / script),
                                      "--binary", str(binary)], env=env, timeout=180,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if result.returncode:
                 detail = result.stderr[-2000:].decode(errors="replace")
                 raise ReleaseError(f"Installed package {script} failed: {detail}")
-    return "Installed package version/help/render and reader/stream PTY checks passed"
+    return "Installed package version/help/render and reader/image/stream PTY checks passed"
 
 
 def main():

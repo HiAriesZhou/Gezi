@@ -107,6 +107,19 @@ adapter in `contrib/kaku-reader.lua`; if the adapter is unavailable, tmd falls
 back to its built-in reader. See the [reader guide](docs/reader.md) for setup,
 text selection, and exit behavior.
 
+In a direct Kaku session, the inline reader displays local and remote PNG, JPEG
+and static SVG images, including Markdown images and HTML `<img>` elements.
+Remote images load in the background by default and contact the hosts named in
+the document. Relative paths resolve from the Markdown file's directory.
+
+```sh
+tmd --remote-images off README.md  # Keep local images; do not fetch remote ones
+tmd --images off README.md         # Use textual image labels everywhere
+```
+
+Images fit the document pane and follow scrolling, outline navigation and
+resizing. See the [image guide](docs/images.md) for limits and fallbacks.
+
 Piped Markdown renders incrementally. For Claude Code stream-json event files,
 select the JSONL adapter:
 
@@ -142,7 +155,10 @@ the terminal can duplicate its text, so use normal headings when copying.
 
 ## Current limitations
 
-- tmd is a reader, not an editor, and does not display images.
+- tmd is a reader, not an editor.
+- Images currently require the inline reader in direct Kaku with Kitty graphics
+  enabled. Animation, table-cell graphics and other terminal backends are not
+  supported; text and streaming output retain image labels.
 - Kaku is the primary test environment. Visual behavior in Ghostty and kitty
   still needs hands-on validation.
 - Claude JSONL has replay tests using sanitized event samples; live incremental

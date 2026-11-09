@@ -28,6 +28,7 @@ jobs:
       - run: python3 scripts/check_stream_pty.py --binary target/debug/tmd
       - run: python3 scripts/test_stream_pty.py --binary target/debug/tmd
       - run: python3 -B scripts/test_reader_pty.py --binary target/debug/tmd
+      - run: python3 -B scripts/test_images_pty.py --binary target/debug/tmd
       - run: python3 -B -m unittest discover -s scripts -p 'test_*release.py'
       - name: Build and verify Apple Silicon package
         run: |
