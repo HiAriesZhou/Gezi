@@ -526,6 +526,46 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
+    def test_sidebar_long_heading_selection_keeps_list_rows_fixed(self):
+        text = "# First\n\nbody\n\n## " + "长标题中文👩‍💻é" * 20 + "\n\nbody\n\n## Last\n"
+        for columns in [144, 80]:
+            with self.subTest(columns=columns):
+                terminal = self.terminal(text=text, cols=columns)
+                terminal.until(END)
+                opened = terminal.frame(b"o")
+                before = self.pane_rows(opened, 1)
+                self.assertTrue(any("First" in row for row in before))
+                selected = terminal.frame(b"j")
+                after = self.pane_rows(selected, 1)
+                self.assertEqual(
+                    [index for index, row in enumerate(before) if "First" in row or "Last" in row],
+                    [index for index, row in enumerate(after) if "First" in row or "Last" in row],
+                )
+                self.assertIn("First", after[0])
+                self.assertIn("长标题", after[1])
+                self.assertIn("Last", after[2])
+                self.assertIn("L5", self.pane_rows(selected, 1, 1, 1)[0])
+                back = terminal.frame(b"k")
+                self.assertEqual(self.pane_rows(back, 1), before)
+                self.assertEqual(terminal.finish(b"\x03"), 130)
+                self.assert_restored(terminal)
+
+    def test_sidebar_page_size_does_not_depend_on_selected_title_length(self):
+        text = "\n\n".join(
+            "## " + (f"Short {index}" if index % 2 == 0 else "长标题" * 30)
+            for index in range(50)
+        )
+        terminal = self.terminal(text=text, cols=144)
+        terminal.until(END)
+        terminal.frame(b"o")
+        terminal.frame(b"j")
+        down = terminal.frame(b"\x1b[6~")
+        self.assertIn("24/50", self.pane_rows(down, 1, 1, 1)[0])
+        up = terminal.frame(b"\x1b[5~")
+        self.assertIn("2/50", self.pane_rows(up, 1, 1, 1)[0])
+        self.assertEqual(terminal.finish(b"\x03"), 130)
+        self.assert_restored(terminal)
+
     def test_sidebar_resize_normal_headings_and_focus_restore(self):
         text = "# First\n\n" + "Before\n\n" * 40 + "# Target\n\n" + "After\n\n" * 40
         t = self.terminal(("--large-headings",), text=text)

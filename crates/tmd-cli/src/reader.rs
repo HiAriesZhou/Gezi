@@ -239,7 +239,6 @@ fn pane_line(out: &mut String, line: &Line, width: usize, selected: bool) {
 struct SidebarFrame {
     width: u16,
     title: String,
-    details: Vec<Line>,
     lines: Vec<Line>,
     top: usize,
     focused: bool,
@@ -292,23 +291,14 @@ fn paint_split(
         });
         out.push_str(truncate(&chrome.title, body_width));
         out.push_str("\x1b[0m");
-        let mut row = 2;
-        for detail in &sidebar.details {
-            out.push_str(&format!("\x1b[{row};1H"));
-            pane_line(
-                &mut out,
-                detail,
-                sidebar.width.saturating_sub(1) as usize,
-                false,
-            );
-            row += 1;
-        }
-        for line in sidebar
+        for (index, line) in sidebar
             .lines
             .iter()
             .skip(sidebar.top)
-            .take(height.saturating_sub(sidebar.details.len()))
+            .take(height)
+            .enumerate()
         {
+            let row = index + 2;
             out.push_str(&format!("\x1b[{row};1H"));
             pane_line(
                 &mut out,
@@ -316,7 +306,6 @@ fn paint_split(
                 sidebar.width.saturating_sub(1) as usize,
                 false,
             );
-            row += 1;
         }
         for (index, line) in lines.iter().enumerate().take(end).skip(start) {
             out.push_str(&format!("\x1b[{};{right}H", 2 + index - start));
@@ -839,19 +828,15 @@ fn run_with_copy(
                         size.0,
                     );
                 }
-                let details = outline.details(document.headings(), (width, size.1));
-                let top = outline.top(
-                    document.headings().len(),
-                    size.1.saturating_sub(2 + details.len() as u16) as usize,
-                );
+                let top = outline.top(document.headings().len(), size.1.saturating_sub(2) as usize);
                 let sidebar = SidebarFrame {
                     width,
                     title: format!(
-                        "标题目录 {}/{}",
+                        "标题目录 {}/{} · L{}",
                         outline.selected + 1,
-                        document.headings().len()
+                        document.headings().len(),
+                        document.headings()[outline.selected].source_line,
                     ),
-                    details,
                     lines: outline.rows(
                         document.headings(),
                         width,
@@ -943,12 +928,9 @@ fn run_with_copy(
                 {
                     if mouse.row > 0 && mouse.row < size.1.saturating_sub(1) {
                         if mouse.column < width {
-                            let details = outline.details(document.headings(), (width, size.1));
-                            if let Some(amount) = list_movement(
-                                None,
-                                &input,
-                                size.1.saturating_sub(2 + details.len() as u16) as usize,
-                            ) {
+                            if let Some(amount) =
+                                list_movement(None, &input, size.1.saturating_sub(2) as usize)
+                            {
                                 outline.move_by(amount, document.headings().len());
                             }
                         } else if mouse.column > width {
@@ -1058,11 +1040,8 @@ fn run_with_copy(
                     } else if let Some(amount) = list_movement(
                         action,
                         &input,
-                        if let Some(width) = split {
-                            size.1.saturating_sub(
-                                2 + outline.details(document.headings(), (width, size.1)).len()
-                                    as u16,
-                            ) as usize
+                        if split.is_some() {
+                            size.1.saturating_sub(2) as usize
                         } else {
                             chrome.height(size.1)
                         },
@@ -1253,7 +1232,6 @@ mod tests {
         let sidebar = SidebarFrame {
             width: 24,
             title: "目录".into(),
-            details: vec![],
             lines: vec![reader_ui::line("heading")],
             top: 0,
             focused: true,
