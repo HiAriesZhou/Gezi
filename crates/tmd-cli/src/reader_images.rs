@@ -15,6 +15,8 @@ const UPLOAD_BYTES: usize = 128 * 1024;
 
 enum State {
     Idle,
+    /// Evicted prefetches become eligible only when actually visible.
+    Deferred,
     Loading,
     Ready(Arc<Raster>),
     Failed,
@@ -70,6 +72,8 @@ pub struct Images {
     uploading: Option<(Key, usize)>,
     next_id: u32,
     visible: HashSet<Key>,
+    visible_resources: HashSet<usize>,
+    cell: (u16, u16),
 }
 
 impl Images {
@@ -84,19 +88,26 @@ impl Images {
     fn configured(cli: &Cli, doc: &Document, enabled: bool) -> Self {
         let mut entries = Vec::new();
         let mut lookup = HashMap::new();
+        let mut failed = vec![false; doc.images().len()];
         let mapping = doc
             .images()
             .iter()
-            .map(|image| {
+            .enumerate()
+            .map(|(reference, image)| {
                 if !enabled {
                     return None;
                 }
-                let source = image_loader::source(
-                    &image.destination,
-                    cli.file.as_deref()?,
-                    cli.remote_images == RemoteImages::On,
-                )
-                .ok()?;
+                let source =
+                    match image_loader::source(&image.destination, cli.file.as_deref()?, true) {
+                        Ok(source) => source,
+                        Err(_) => {
+                            failed[reference] = true;
+                            return None;
+                        }
+                    };
+                if matches!(source, Source::Remote(_)) && cli.remote_images == RemoteImages::Off {
+                    return None;
+                }
                 if let Some(&index) = lookup.get(&source) {
                     return Some(index);
                 }
@@ -119,7 +130,7 @@ impl Images {
             mapping,
             entries,
             sizes: vec![None; doc.images().len()],
-            failed: vec![false; doc.images().len()],
+            failed,
             variants: HashMap::new(),
             sender,
             receiver,
@@ -130,13 +141,15 @@ impl Images {
             retired: Vec::new(),
             uploading: None,
             visible: HashSet::new(),
+            visible_resources: HashSet::new(),
+            cell: cell_size(),
             next_id: (RandomState::new().hash_one(std::process::id()) as u32) % (u32::MAX / 2) + 1,
         }
     }
 
     pub fn layout(&self) -> Option<ImageLayout<'_>> {
         self.enabled.then(|| {
-            let (cell_width, cell_height) = cell_size();
+            let (cell_width, cell_height) = self.cell;
             ImageLayout {
                 cell_width,
                 cell_height,
@@ -144,6 +157,13 @@ impl Images {
                 failed: &self.failed,
             }
         })
+    }
+
+    pub fn refresh_geometry(&mut self) -> bool {
+        let cell = cell_size();
+        let changed = self.enabled && self.cell != cell;
+        self.cell = cell;
+        changed
     }
 
     fn key(&self, cell: ImageCell) -> Option<Key> {
@@ -202,6 +222,7 @@ impl Images {
                 .filter(|(index, entry)| {
                     matches!(entry.state, State::Ready(_))
                         && !self.visible.iter().any(|key| key.resource == *index)
+                        && !self.visible_resources.contains(index)
                         && !self.variants.iter().any(|(key, variant)| {
                             key.resource == *index && variant.data.is_none() && !variant.failed
                         })
@@ -209,7 +230,7 @@ impl Images {
                 .min_by_key(|(_, entry)| entry.touched)
                 .map(|(index, _)| index);
             let Some(index) = victim else { return false };
-            self.entries[index].state = State::Idle;
+            self.entries[index].state = State::Deferred;
         }
         true
     }
@@ -224,20 +245,29 @@ impl Images {
         }
     }
 
-    pub fn poll(&mut self) -> bool {
+    pub fn poll(&mut self) -> (bool, bool) {
         let mut changed = false;
+        let mut layout_changed = false;
         while let Ok(reply) = self.receiver.try_recv() {
             self.active -= 1;
             match reply {
                 Reply::Loaded(index, Ok(raster)) if self.make_room(raster.pixels.len()) => {
                     for (reference, resource) in self.mapping.iter().enumerate() {
                         if *resource == Some(index) {
+                            layout_changed |=
+                                self.sizes[reference] != Some((raster.width, raster.height));
                             self.sizes[reference] = Some((raster.width, raster.height));
                         }
                     }
                     self.entries[index].state = State::Ready(Arc::new(raster));
                 }
-                Reply::Loaded(index, _) => self.fail(index),
+                Reply::Loaded(index, Ok(_)) if !self.visible_resources.contains(&index) => {
+                    self.entries[index].state = State::Deferred;
+                }
+                Reply::Loaded(index, _) => {
+                    self.fail(index);
+                    layout_changed = true;
+                }
                 Reply::Prepared(key, Ok(data))
                     if self.make_room(
                         data.len().max(key.width as usize * key.height as usize * 4),
@@ -252,11 +282,12 @@ impl Images {
                         variant.failed = true;
                     }
                     self.fail(key.resource);
+                    layout_changed = true;
                 }
             }
             changed = true;
         }
-        changed
+        (changed, layout_changed)
     }
 
     fn resources(&self, lines: &[Line], from: usize, to: usize) -> Vec<usize> {
@@ -304,6 +335,8 @@ impl Images {
             return;
         }
         self.tick += 1;
+        let mut resources = self.resources(lines, start, end);
+        self.visible_resources = resources.iter().copied().collect();
         let keys = self.keys(lines, start, end);
         self.visible = keys.iter().copied().collect();
         for key in &keys {
@@ -345,7 +378,6 @@ impl Images {
                 });
             }
         }
-        let mut resources = self.resources(lines, start, end);
         for &index in &resources {
             self.entries[index].touched = self.tick;
         }
@@ -362,7 +394,10 @@ impl Images {
             if self.active == 2 {
                 break;
             }
-            if !matches!(self.entries[index].state, State::Idle) {
+            if !matches!(self.entries[index].state, State::Idle)
+                && !(matches!(self.entries[index].state, State::Deferred)
+                    && self.visible_resources.contains(&index))
+            {
                 continue;
             }
             self.active += 1;
@@ -454,7 +489,7 @@ impl Images {
         if show {
             let mut seen = HashSet::new();
             let mut row = 0;
-            let (_, cell_height) = cell_size();
+            let (_, cell_height) = self.cell;
             for line in lines.iter().take(end).skip(start) {
                 let mut column = 0;
                 for span in &line.spans {
@@ -565,6 +600,16 @@ mod tests {
     }
 
     #[test]
+    fn invalid_sources_fail_but_disabled_remote_sources_do_not() {
+        let (_, mut images) = fixture(
+            "![a](bad%Q0.png) ![b]() ![c](https://u:p@example.test/a) ![d](https://example.test/a)",
+            &["--remote-images", "off"],
+        );
+        assert_eq!(images.failed, [true, true, true, false]);
+        images.enabled = false;
+    }
+
+    #[test]
     fn cropped_viewport_uses_exact_pixels_without_cell_stretching() {
         let (doc, mut images) = fixture("![a](a.png)\n\n# after", &[]);
         let raster = image_loader::decode(br#"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="160"><rect width="80" height="160" fill="red"/></svg>"#).unwrap();
@@ -646,7 +691,7 @@ mod tests {
         assert!(matches!(images.entries[0].state, State::Ready(_)));
         images.visible.clear();
         assert!(images.make_room(CACHE_BYTES));
-        assert!(matches!(images.entries[0].state, State::Idle));
+        assert!(matches!(images.entries[0].state, State::Deferred));
         images.enabled = false;
     }
 }

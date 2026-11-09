@@ -703,6 +703,9 @@ fn run_with_copy(
         let mut view = View::Reading;
         let mut outline_open = false;
         let mut layouts = LayoutCache::new(size);
+        if images.layout().is_some() {
+            layouts.invalidate();
+        }
         let mut help_start = 0;
         let mut search = Search::default();
         let mut picker = CodePicker::default();
@@ -717,7 +720,8 @@ fn run_with_copy(
                 break;
             }
             let width = sidebar_width(size.0, outline_open);
-            if images.poll() {
+            let geometry_changed = images.refresh_geometry();
+            if images.poll().1 || geometry_changed {
                 layouts.invalidate();
             }
             if layouts.update(&mut lines, size, width, || {
@@ -946,8 +950,11 @@ fn run_with_copy(
                 if event::poll(Duration::from_millis(100))? {
                     break event::read()?;
                 }
-                if images.poll() {
-                    layouts.invalidate();
+                let (changed, layout_changed) = images.poll();
+                if changed {
+                    if layout_changed {
+                        layouts.invalidate();
+                    }
                     continue 'reader;
                 }
                 if show_images && images.needs_upload(&lines, start, end) {
