@@ -17,6 +17,7 @@ mod reader_ui;
 mod snapshots;
 mod source;
 mod stream;
+mod svg_limits;
 mod terminal_io;
 mod theme_select;
 

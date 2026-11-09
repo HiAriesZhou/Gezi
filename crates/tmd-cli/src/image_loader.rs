@@ -206,6 +206,8 @@ fn svg(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
     {
         return Err("SVG exceeds complexity limit".into());
     }
+    let text = std::str::from_utf8(bytes).map_err(|_| "SVG must be UTF-8")?;
+    let xml = crate::svg_limits::parse(text)?;
     static FONTS: OnceLock<Arc<resvg::usvg::fontdb::Database>> = OnceLock::new();
     let fonts = FONTS.get_or_init(|| {
         let mut db = resvg::usvg::fontdb::Database::new();
@@ -228,7 +230,7 @@ fn svg(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
         },
         ..Default::default()
     };
-    let tree = resvg::usvg::Tree::from_data(bytes, &options).map_err(|e| e.to_string())?;
+    let tree = resvg::usvg::Tree::from_xmltree(&xml, &options).map_err(|e| e.to_string())?;
     let size = tree.size();
     let scale = (MAX_SIDE as f32 / size.width().max(size.height())).min(1.0);
     let width = (size.width() * scale).ceil().max(1.0) as u32;

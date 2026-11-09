@@ -2,12 +2,18 @@
 """Image reader protocol tests with synthetic files and a local HTTP server."""
 import argparse
 import contextlib
+from collections import Counter
+import fcntl
 import http.server
+import os
 from pathlib import Path
 import re
 import subprocess
+import signal
+import struct
 import sys
 import tempfile
+import termios
 import time
 import unittest
 
@@ -23,11 +29,12 @@ def serve(root, delay):
                 log.write(self.path + "\n")
             if delay:
                 time.sleep(delay)
+            payload = SVG.replace(b'width="160" height="480"', b'width="2048" height="2048"') if self.path.startswith("/large") else SVG
             self.send_response(200)
-            self.send_header("Content-Length", str(len(SVG)))
+            self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             try:
-                self.wfile.write(SVG)
+                self.wfile.write(payload)
             except (BrokenPipeError, ConnectionResetError):
                 pass
         def log_message(self, *_):
@@ -168,6 +175,49 @@ class ImagesTests(unittest.TestCase):
             self.assertIn("末尾".encode(), frame)
             self.assertEqual(terminal.finish(b"q"), 0)
             self.assertLess(time.monotonic() - started, 1.0)
+            self.assert_restored(terminal)
+
+    def test_pixel_only_resize_reflows_and_keeps_images_within_body(self):
+        terminal = self.terminal("![image](asset.svg)\n\nTAIL-MARKER\n\n" + "body\n\n" * 25)
+        Path(terminal.temp.name, "asset.svg").write_bytes(SVG)
+        fcntl.ioctl(terminal.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 800, 384))
+        self.placement(terminal)
+        self.settled(terminal)
+        terminal.data.clear()
+        fcntl.ioctl(terminal.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 400, 768))
+        os.kill(terminal.pid, signal.SIGWINCH)
+        self.visible_text(terminal, "TAIL-MARKER")
+        placement = self.placement(terminal)
+        self.assertLessEqual(int(re.search(rb"w=(\d+)", placement)[1]), 400)
+        self.assertEqual(terminal.finish(b"q"), 0)
+        self.assert_restored(terminal)
+
+    def test_evicted_prefetch_does_not_refetch_while_idle(self):
+        with self.server() as (url, requests):
+            base = url.split("/badge")[0]
+            text = "\n\n".join(f'<img src="{base}/large/{i}" width="192">' for i in range(4))
+            terminal = self.terminal(text + "\n\n" + "body\n\n" * 30)
+            self.placement(terminal)
+            self.settled(terminal, 4)
+            before = Counter(requests.read_text().splitlines())
+            self.assertEqual(set(before), {f"/large/{i}" for i in range(4)})
+            self.settled(terminal, 1)
+            after = Counter(requests.read_text().splitlines())
+            self.assertEqual(before, after)
+            self.assertTrue(all(count == 1 for count in after.values()))
+            self.assertEqual(terminal.finish(b"q"), 0)
+            self.assert_restored(terminal)
+
+    def test_deep_svg_fails_without_aborting_or_leaving_terminal_raw(self):
+        with tempfile.TemporaryDirectory(prefix="tmd-deep-svg-") as directory:
+            path = Path(directory) / "deep.svg"
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">'
+                            + '<g opacity=".5">' * 400 + '<rect width="10" height="10"/>'
+                            + '</g>' * 400 + '</svg>')
+            terminal = self.terminal(f"![deep]({path})")
+            self.visible_text(terminal, "无法加载")
+            self.assertEqual(terminal.finish(b"q"), 0)
+            self.assertNotIn(b"stack overflow", terminal.data)
             self.assert_restored(terminal)
 
 
