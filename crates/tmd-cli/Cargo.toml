@@ -20,7 +20,7 @@ toml = "1"
 tmd-core = { path = "../tmd-core" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 resvg = { version = "0.45", default-features = false, features = ["text", "system-fonts"] }
-ureq = "3"
+ureq = { version = "3", features = ["socks-proxy"] }
 base64 = "0.22"
 xmlparser = "0.13"
 
