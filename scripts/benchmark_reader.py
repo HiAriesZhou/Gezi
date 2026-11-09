@@ -50,14 +50,13 @@ def main():
         terminal.until(harness.END)
         for index in range(100):
             frame = measure("outline_open_reflow", b"o")
-            assert "● 标题目录".encode() in frame
+            assert "Tab 正文".encode() in frame
             assert b"\x1b#3" not in frame and b"\x1b#4" not in frame
             terminal.frame(b"\x1b[F" if index % 2 else b"\x1b[H")
             frame = measure("outline_confirm", b"\r")
             expected = b"Section-0999" if index % 2 else b"Section-0000"
-            assert expected in frame and "● 正文".encode() in frame
-            assert "● 标题目录".encode() in measure("sidebar_focus", b"\t")
-            terminal.frame(b"\t")
+            assert expected in frame and "Tab 正文".encode() in frame
+            assert "Tab 目录".encode() in measure("sidebar_focus", b"\t")
             for kind, query, status in (
                 ("search_unique", f"Marker-{index * 10:04d}", "匹配 1/1"),
                 ("search_common", "中文", "匹配 1/"),
