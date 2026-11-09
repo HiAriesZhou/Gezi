@@ -52,6 +52,47 @@ fn reader_layout(cli: &Cli, document: &Document, size: (u16, u16), open: bool) -
     )
 }
 
+struct LayoutCache {
+    key: ((u16, u16), Option<u16>),
+    alternate: Option<(Option<u16>, Vec<Line>)>,
+}
+
+impl LayoutCache {
+    fn new(size: (u16, u16)) -> Self {
+        Self {
+            key: (size, None),
+            alternate: None,
+        }
+    }
+
+    fn update(
+        &mut self,
+        lines: &mut Vec<Line>,
+        size: (u16, u16),
+        sidebar: Option<u16>,
+        build: impl FnOnce() -> Vec<Line>,
+    ) -> bool {
+        if self.key == (size, sidebar) {
+            return false;
+        }
+        if self.key.0 != size {
+            self.alternate = None;
+        }
+        let next = self
+            .alternate
+            .take()
+            .filter(|(width, _)| *width == sidebar)
+            .map(|(_, cached)| cached)
+            .unwrap_or_else(build);
+        let previous = std::mem::replace(lines, next);
+        if self.key.0 == size {
+            self.alternate = Some((self.key.1, previous));
+        }
+        self.key = (size, sidebar);
+        true
+    }
+}
+
 fn header() -> String {
     std::env::args_os()
         .enumerate()
@@ -638,7 +679,7 @@ fn run_with_copy(
         let mut search_anchor = anchor.clone();
         let mut view = View::Reading;
         let mut outline_open = false;
-        let mut layout_key = (size, None);
+        let mut layouts = LayoutCache::new(size);
         let mut help_start = 0;
         let mut search = Search::default();
         let mut picker = CodePicker::default();
@@ -653,12 +694,12 @@ fn run_with_copy(
                 break;
             }
             let width = sidebar_width(size.0, outline_open);
-            if layout_key != (size, width) {
-                lines = reader_layout(cli, &document, size, outline_open);
+            if layouts.update(&mut lines, size, width, || {
+                reader_layout(cli, &document, size, outline_open)
+            }) {
                 start = anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
                 search.saved_start =
                     search_anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
-                layout_key = (size, width);
             }
             // Narrow windows temporarily present the outline full-page without
             // forgetting which pane had focus in the split layout.
@@ -1157,6 +1198,39 @@ mod tests {
             size,
         }
     }
+    #[test]
+    fn layout_cache_reuses_both_views_and_invalidates_on_resize() {
+        let mut layouts = LayoutCache::new((80, 24));
+        let mut lines = vec![reader_ui::line("full")];
+        let full = lines.as_ptr();
+        assert!(!layouts.update(&mut lines, (80, 24), None, || panic!("unchanged")));
+        assert!(layouts.update(&mut lines, (80, 24), Some(24), || {
+            vec![reader_ui::line("split")]
+        }));
+        let split = lines.as_ptr();
+        for _ in 0..100 {
+            assert!(layouts.update(&mut lines, (80, 24), None, || panic!("cached full")));
+            assert_eq!(lines.as_ptr(), full);
+            assert_eq!(lines[0].plain_text(), "full");
+            assert!(layouts.update(&mut lines, (80, 24), Some(24), || panic!("cached split")));
+            assert_eq!(lines.as_ptr(), split);
+            assert_eq!(lines[0].plain_text(), "split");
+        }
+        assert!(layouts.update(&mut lines, (120, 24), Some(30), || {
+            vec![reader_ui::line("wide split")]
+        }));
+        assert!(layouts.alternate.is_none());
+        assert!(layouts.update(&mut lines, (120, 24), None, || {
+            vec![reader_ui::line("wide full")]
+        }));
+        assert_eq!(lines[0].plain_text(), "wide full");
+        assert!(layouts.update(&mut lines, (120, 1), None, || {
+            vec![reader_ui::line("tiny height")]
+        }));
+        assert_eq!(lines[0].plain_text(), "tiny height");
+        assert!(layouts.alternate.is_none());
+    }
+
     #[test]
     fn sidebar_geometry_and_clipping_keep_panes_separate() {
         for (cols, expected) in [(79, None), (80, Some(24)), (120, Some(30)), (200, Some(36))] {
