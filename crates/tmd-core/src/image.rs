@@ -20,6 +20,9 @@ pub struct ImageCell {
     pub rows: u16,
     /// Row within the complete image, allowing a viewport to start inside it.
     pub row: u16,
+    /// Exact bitmap size within the enclosing cells; padding stays transparent.
+    pub pixel_width: u32,
+    pub pixel_height: u32,
 }
 
 pub struct ImageLayout<'a> {
@@ -50,9 +53,13 @@ impl ImageLayout<'_> {
         scale = scale.min(4096.0 * ch / f64::from(h));
         Some(ImageCell {
             index: image.index,
-            columns: ((f64::from(w) * scale / cw).ceil() as u16).max(1),
+            columns: ((f64::from(w) * scale / cw).ceil() as u16)
+                .max(1)
+                .min(width as u16),
             rows: ((f64::from(h) * scale / ch).ceil() as u16).max(1),
             row: 0,
+            pixel_width: (f64::from(w) * scale).round().max(1.0) as u32,
+            pixel_height: (f64::from(h) * scale).round().max(1.0) as u32,
         })
     }
 }
@@ -159,6 +166,18 @@ mod tests {
                 .all(|s| s.image_cell.is_none())
         );
         assert_eq!(doc.find("猫").len(), 1);
+    }
+
+    #[test]
+    fn html_alt_controls_never_become_terminal_escapes() {
+        let doc = Document::new("<img src='a.png' alt='safe&#27;[31m'>", Theme::default());
+        let text: String = doc
+            .layout(80, RenderOptions::default())
+            .iter()
+            .map(|line| line.plain_text())
+            .collect();
+        assert!(!text.contains('\x1b'));
+        assert!(!doc.images()[0].alt.contains('\x1b'));
     }
 
     #[test]

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720">
+  <rect width="400" height="720" fill="#287acc"/>
+  <rect x="400" width="400" height="720" fill="#33a078"/>
+  <rect x="800" width="400" height="720" fill="#efa13c"/>
+  <g fill="white" font-family="Arial,sans-serif" font-size="48" text-anchor="middle">
+    <text x="200" y="200">TOP LEFT</text>
+    <text x="1000" y="200">TOP RIGHT</text>
+    <text x="600" y="600">BOTTOM</text>
+  </g>
+</svg>

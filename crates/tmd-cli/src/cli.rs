@@ -24,6 +24,14 @@ pub struct Cli {
     #[arg(long, value_enum)]
     pub reader: Option<ReaderMode>,
 
+    /// Inline reader images on supported Kaku terminals
+    #[arg(long, value_enum, default_value_t = ImageMode::Auto)]
+    pub images: ImageMode,
+
+    /// Load HTTP(S) images in the inline reader
+    #[arg(long, value_enum, default_value_t = RemoteImages::On)]
+    pub remote_images: RemoteImages,
+
     /// Theme name
     #[arg(long, value_name = "NAME", default_value = "auto")]
     pub theme: String,
@@ -45,6 +53,18 @@ pub struct Cli {
 pub enum ReaderMode {
     Inline,
     Native,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ImageMode {
+    Auto,
+    Off,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum RemoteImages {
+    On,
+    Off,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

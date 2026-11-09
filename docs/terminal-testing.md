@@ -12,10 +12,13 @@ cargo build --release --locked
 python3 scripts/check_stream_pty.py --binary target/release/tmd
 python3 scripts/test_stream_pty.py --binary target/release/tmd
 python3 -B scripts/test_reader_pty.py --binary target/release/tmd
+python3 -B scripts/test_images_pty.py --binary target/release/tmd
 python3 -B -m unittest discover -s scripts -p 'test_*release.py'
 ```
 
 PTY 检查只使用 Python 标准库和 `/bin/bash`，当前在 macOS 上验证；不安装依赖，不读取用户 shell 配置，不保存 shell 历史。可用 `--binary <路径>` 指定构建产物。
+
+图片 PTY 使用合成 SVG 和本地 HTTP 服务，验证默认加载、关闭远程及全部图片、慢请求期间滚动与退出、局部裁剪、侧栏/帮助切换和仅清理自身图片。它验证输出协议，不代替 Kaku 中的图片效果验收。
 
 它发送带中文和 emoji 的分段 UTF-8 代码块，检查：
 

@@ -13,6 +13,8 @@ Cargo workspace 保持两个 crate：
 
 core 不依赖终端库，也不检测环境变量。CLI 的 `main` 组装输入、主题和输出；`source::Source` 提供 `push`、`finish`、`set_width` 和诊断队列，供普通 Markdown 与 Claude JSONL 共同使用。输入适配器不直接绘制终端或输出诊断。
 
+图片引用由 core 保留地址、替代文字和尺寸提示，`Document::images` 分配会话内索引。显式图片布局只接收已知像素尺寸和字符单元尺寸，输出带 `ImageCell` 的普通逻辑行；不进行网络、文件或图形协议操作。CLI 的 `image_loader` 在两个后台任务中限量加载和栅格化，`reader_images` 管理有上限的会话缓存、分块传输和按自身 ID 清理的 Kitty 图片。普通渲染和流式仍输出替代文字。图片尺寸到达时丢弃两份阅读布局缓存，按文字/源码锚点重新定位；图片内部位置另保留行比例。详情与边界见 [图片说明](images.md)。
+
 `config` 只确定配置根目录，`theme_select` 负责主题选择和文件加载，`reader_config` 负责阅读配置校验。`terminal_io` 只共享可取消写入、重置序列及 Kaku 直连判断，各输出方式保留自己的生命周期管理。
 
 ## 解析与布局

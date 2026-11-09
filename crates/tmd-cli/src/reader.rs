@@ -39,17 +39,28 @@ fn sidebar_width(cols: u16, open: bool) -> Option<u16> {
 }
 
 fn reader_layout(cli: &Cli, document: &Document, size: (u16, u16), open: bool) -> Vec<Line> {
+    reader_image_layout(cli, document, size, open, None)
+}
+
+fn reader_image_layout(
+    cli: &Cli,
+    document: &Document,
+    size: (u16, u16),
+    open: bool,
+    images: Option<&tmd_core::ImageLayout<'_>>,
+) -> Vec<Line> {
     let sidebar = sidebar_width(size.0, open);
     let size = (size.0.saturating_sub(sidebar.map_or(0, |w| w + 2)), size.1);
     let width = cli.width.unwrap_or(size.0).min(size.0).max(1);
     let large =
         sidebar.is_none() && size.1 >= 4 && large_headings::enabled(cli, true, Some(size), width);
-    document.layout(
-        width,
-        RenderOptions {
-            large_headings: large,
-        },
-    )
+    let options = RenderOptions {
+        large_headings: large,
+    };
+    match images {
+        Some(images) => document.layout_with_images(width, options, images),
+        None => document.layout(width, options),
+    }
 }
 
 struct LayoutCache {
@@ -58,6 +69,10 @@ struct LayoutCache {
 }
 
 impl LayoutCache {
+    fn invalidate(&mut self) {
+        self.key = ((0, 0), None);
+        self.alternate = None;
+    }
     fn new(size: (u16, u16)) -> Self {
         Self {
             key: (size, None),
@@ -454,6 +469,7 @@ fn help_lines(width: u16, pane: Pane, fallback: &str, copy_error: &str) -> Vec<L
 struct Anchor {
     text: Option<usize>,
     source: usize,
+    image: Option<(usize, u16, u16)>,
 }
 
 impl Anchor {
@@ -466,12 +482,30 @@ impl Anchor {
                     .find_map(|s| s.text_ranges.first().map(|r| r.start))
             }),
             source: line.map_or(0, |l| l.src.start),
+            image: line
+                .and_then(|line| line.spans.iter().find_map(|span| span.image_cell))
+                .map(|cell| (cell.index, cell.row, cell.rows)),
         }
     }
 
     fn resolve(&self, lines: &[Line], height: usize) -> usize {
-        self.text
-            .and_then(|text| Document::match_line(lines, &(text..text + 1)))
+        self.image
+            .and_then(|(index, row, rows)| {
+                lines.iter().position(|line| {
+                    line.spans.iter().any(|span| {
+                        span.image_cell.is_some_and(|cell| {
+                            cell.index == index
+                                && u32::from(cell.row)
+                                    == u32::from(row) * u32::from(cell.rows)
+                                        / u32::from(rows.max(1))
+                        })
+                    })
+                })
+            })
+            .or_else(|| {
+                self.text
+                    .and_then(|text| Document::match_line(lines, &(text..text + 1)))
+            })
             .or_else(|| lines.iter().position(|l| l.src.start >= self.source))
             .unwrap_or_else(|| lines.len().saturating_sub(1))
             .min(last_start(lines, height))
@@ -653,6 +687,7 @@ fn run_with_copy(
         }
         notice = " · 原生定位不可用，使用内置阅读".into();
     }
+    let mut images = crate::reader_images::Images::new(cli, &document);
     let result: io::Result<()> = (|| {
         session.painted = true;
         crossterm::execute!(
@@ -682,8 +717,11 @@ fn run_with_copy(
                 break;
             }
             let width = sidebar_width(size.0, outline_open);
+            if images.poll() {
+                layouts.invalidate();
+            }
             if layouts.update(&mut lines, size, width, || {
-                reader_layout(cli, &document, size, outline_open)
+                reader_image_layout(cli, &document, size, outline_open, images.layout().as_ref())
             }) {
                 start = anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
                 search.saved_start =
@@ -851,6 +889,22 @@ fn run_with_copy(
                 paint(display, position, size, &chrome, highlight)
             };
             frame.truncate(frame.len() - "\x1b[?2026l".len());
+            let show_images =
+                split.is_some() || matches!(active_view, View::Reading | View::Search);
+            if show_images {
+                images.request(&lines, start, end, size.1.saturating_sub(2) as usize);
+            }
+            images.paint(
+                &mut frame,
+                &lines,
+                crate::reader_images::Viewport {
+                    start,
+                    end,
+                    origin: split.map_or(1, |width| width + 2),
+                    height: size.1.saturating_sub(2) as usize,
+                    show: show_images,
+                },
+            );
             if view == View::Search {
                 if let Some(query) = &search.input {
                     // The actual cursor remains inside the query for system IME.
@@ -891,6 +945,13 @@ fn run_with_copy(
                 }
                 if event::poll(Duration::from_millis(100))? {
                     break event::read()?;
+                }
+                if images.poll() {
+                    layouts.invalidate();
+                    continue 'reader;
+                }
+                if show_images && images.needs_upload(&lines, start, end) {
+                    continue 'reader;
                 }
                 if notice.expire(Instant::now()) {
                     continue 'reader;
