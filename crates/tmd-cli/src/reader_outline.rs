@@ -36,10 +36,8 @@ impl Outline {
                 );
                 let indent = if cols >= 60 {
                     "  ".repeat(heading.level.saturating_sub(1) as usize)
-                } else if cols >= 40 {
-                    " ".repeat(heading.level.saturating_sub(1).min(3) as usize)
                 } else {
-                    String::new()
+                    " ".repeat(heading.level.saturating_sub(1).min(3) as usize)
                 };
                 let level = if cols >= 40 {
                     format!("H{} ", heading.level)
