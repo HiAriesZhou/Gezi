@@ -7,7 +7,7 @@ use crate::style::Style;
 use crate::table;
 use crate::theme::Theme;
 use crate::width::{text_width, truncate};
-use crate::wrap::{Row, push_text, wrap};
+use crate::wrap::{Row, push_text};
 
 /// Columns a quote or list must leave for its content, enough for one wide
 /// character; with less room the bar or marker is dropped instead.
@@ -17,6 +17,7 @@ pub(crate) struct Ctx<'t> {
     pub theme: &'t Theme,
     /// How many lists enclose the current block; picks the bullet.
     pub list_depth: usize,
+    pub images: Option<&'t crate::ImageLayout<'t>>,
 }
 
 /// Lays out sibling blocks, with a blank row between them unless `tight`.
@@ -35,9 +36,9 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
     let width = width.max(1);
     let theme = ctx.theme;
     match item {
-        Block::Paragraph(spans) => wrap(spans, width),
+        Block::Paragraph(spans) => crate::image::wrap(spans, width, ctx.images),
         Block::Heading { level, spans } => {
-            let mut rows = wrap(spans, width);
+            let mut rows = crate::image::wrap(spans, width, ctx.images);
             let underline = match level {
                 1 => Some((&theme.symbols.h1_rule, &theme.h1)),
                 2 => Some((&theme.symbols.h2_rule, &theme.rule)),
@@ -97,6 +98,7 @@ fn list(ctx: &Ctx, start: Option<u64>, tight: bool, items: &[Item], width: usize
     let inner_ctx = Ctx {
         theme,
         list_depth: ctx.list_depth + 1,
+        images: ctx.images,
     };
     let mut rows = Vec::new();
     for (i, item) in items.iter().enumerate() {
