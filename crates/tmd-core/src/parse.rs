@@ -133,6 +133,7 @@ struct Inline {
     styles: Vec<Style>,
     /// Alt text being collected while inside an image.
     image_alt: Option<String>,
+    image_destination: String,
     /// Images nested inside the alt text being collected.
     nested_images: usize,
     /// For each open link, whether it is an unresolved reference whose
@@ -152,6 +153,7 @@ impl Inline {
             spans: Vec::new(),
             styles: vec![base],
             image_alt: None,
+            image_destination: String::new(),
             nested_images: 0,
             link_brackets: Vec::new(),
             pending_soft_break: None,
@@ -207,7 +209,9 @@ impl Inline {
             return;
         }
         match self.spans.last_mut() {
-            Some(last) if last.style == style && last.text != "\n" => last.text.push_str(text),
+            Some(last) if last.style == style && last.text != "\n" && last.image.is_none() => {
+                last.text.push_str(text)
+            }
             _ => self.spans.push(Span::new(text, style)),
         }
     }
@@ -226,13 +230,28 @@ impl Inline {
                     self.spans.push(Span::new("\n", style));
                 }
                 Piece::Break => {}
-                Piece::Image(alt) => {
+                Piece::Image(image) => {
                     let style = self.style().patch(muted);
-                    self.text(&image_label(alt.as_deref().unwrap_or("")), style);
+                    self.image(image, style);
                 }
                 Piece::Hide(start) => self.hidden = start,
             }
         }
+    }
+
+    fn image(&mut self, mut image: crate::ImageSource, style: Style) {
+        if self.hidden {
+            return;
+        }
+        image.alt = clean_inline(&image.alt);
+        if self.image_alt.is_some() {
+            self.text(&image.alt, style);
+            return;
+        }
+        self.resolve_soft_break('[');
+        let mut span = Span::new(image_label(&image.alt), style);
+        span.image = Some(image);
+        self.spans.push(span);
     }
 
     fn into_block(self) -> Block {
@@ -418,7 +437,7 @@ impl<'t> Builder<'t> {
             Tag::TableCell => {
                 self.inline = Some(Inline::new(InlineKind::Paragraph, theme.text.clone()));
             }
-            Tag::Image { .. } => {
+            Tag::Image { dest_url, .. } => {
                 let inline = self.inline_mut();
                 if inline.image_alt.is_some() {
                     inline.nested_images += 1;
@@ -426,6 +445,7 @@ impl<'t> Builder<'t> {
                     // The placeholder starts with a narrow `[`.
                     inline.resolve_soft_break('[');
                     inline.image_alt = Some(String::new());
+                    inline.image_destination = dest_url.into_string();
                 }
             }
             // Not enabled in the parser options.
@@ -523,7 +543,14 @@ impl<'t> Builder<'t> {
                 if inline.nested_images > 0 {
                     inline.nested_images -= 1;
                 } else if let Some(alt) = inline.image_alt.take() {
-                    inline.text(&image_label(&alt), style);
+                    let image = crate::ImageSource {
+                        destination: std::mem::take(&mut inline.image_destination),
+                        alt,
+                        width: None,
+                        height: None,
+                        index: 0,
+                    };
+                    inline.image(image, style);
                 }
             }
             _ => {}

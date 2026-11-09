@@ -17,7 +17,7 @@ pub(crate) enum Piece {
     Text(String),
     Break,
     /// An `<img>`, with its alt text when present and non-empty.
-    Image(Option<String>),
+    Image(crate::ImageSource),
     /// Start (`true`) or end of a `<script>` or `<style>` whose content
     /// arrives as separate inline events and must stay hidden.
     Hide(bool),
@@ -134,7 +134,7 @@ enum Raw {
     LineBreak,
     /// Start or end of a block tag.
     BlockBreak,
-    Image(Option<String>),
+    Image(crate::ImageSource),
     /// A script or style element opens (`true`) without closing in this
     /// text, or closes (`false`) without having opened in it.
     Hide(bool),
@@ -192,10 +192,21 @@ fn scan(html: &str) -> Vec<Raw> {
 fn tag_piece(tag: &Tag) -> Option<Raw> {
     match tag.name.as_str() {
         "br" => Some(Raw::LineBreak),
-        "img" if !tag.closing => {
-            let alt = attribute(&tag.attrs, "alt").map(|alt| decode_entities(&alt));
-            Some(Raw::Image(alt.filter(|alt| !alt.trim().is_empty())))
-        }
+        "img" if !tag.closing => Some(Raw::Image(crate::ImageSource {
+            destination: attribute(&tag.attrs, "src")
+                .map(|s| decode_entities(&s))
+                .unwrap_or_default(),
+            alt: attribute(&tag.attrs, "alt")
+                .map(|s| decode_entities(&s))
+                .unwrap_or_default(),
+            width: attribute(&tag.attrs, "width")
+                .and_then(|s| s.parse().ok())
+                .filter(|&n| n > 0),
+            height: attribute(&tag.attrs, "height")
+                .and_then(|s| s.parse().ok())
+                .filter(|&n| n > 0),
+            index: 0,
+        })),
         name if BLOCK_TAGS.contains(&name) => Some(Raw::BlockBreak),
         "td" | "th" if tag.closing => Some(Raw::Text(" ".to_string())),
         _ => None,
@@ -360,15 +371,25 @@ mod tests {
         Piece::Text(s.to_string())
     }
 
+    fn image(src: &str, alt: &str, width: Option<u32>) -> Piece {
+        Piece::Image(crate::ImageSource {
+            destination: src.into(),
+            alt: alt.into(),
+            width,
+            height: None,
+            index: 0,
+        })
+    }
+
     #[test]
     fn inline_hides_tags_and_keeps_breaks_and_images() {
         assert_eq!(inline("<kbd>"), []);
         assert_eq!(inline("<br/>"), [Piece::Break]);
         assert_eq!(
             inline(r#"<img src="a.png" alt="猫 &amp; 狗">"#),
-            [Piece::Image(Some("猫 & 狗".into()))]
+            [image("a.png", "猫 & 狗", None)]
         );
-        assert_eq!(inline("<img src=a.png>"), [Piece::Image(None)]);
+        assert_eq!(inline("<img src=a.png>"), [image("a.png", "", None)]);
         assert_eq!(inline("<!-- hidden -->"), []);
     }
 
@@ -393,11 +414,11 @@ mod tests {
         assert_eq!(
             block(html),
             [
-                Piece::Image(Some("TMD logo".into())),
+                image("logo.png", "TMD logo", Some(120)),
                 Piece::Break,
-                Piece::Image(Some("CI".into())),
+                image("ci.svg", "CI", None),
                 text(" "),
-                Piece::Image(Some("License: MIT".into())),
+                image("lic.svg", "License: MIT", None),
             ]
         );
     }

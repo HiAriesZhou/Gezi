@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use crate::image::{ImageCell, ImageSource};
 use crate::style::Style;
 use crate::width::text_width;
 
@@ -14,6 +15,10 @@ pub struct Span {
     /// Index in Document::code_blocks(), including labels and empty code rows.
     /// None on ordinary render/streaming spans and non-code decorations.
     pub code_block: Option<usize>,
+    /// Retained image metadata. Text output continues to use the alt label.
+    pub image: Option<ImageSource>,
+    /// A reserved image row in an explicitly requested image layout.
+    pub image_cell: Option<ImageCell>,
 }
 
 impl Span {
@@ -23,6 +28,8 @@ impl Span {
             style,
             text_ranges: Vec::new(),
             code_block: None,
+            image: None,
+            image_cell: None,
         }
     }
 
@@ -38,6 +45,8 @@ impl Span {
             style: self.style.clone(),
             text_ranges,
             code_block: self.code_block,
+            image: self.image.clone(),
+            image_cell: self.image_cell,
         }
     }
 

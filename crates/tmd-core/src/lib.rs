@@ -7,6 +7,7 @@ mod code;
 mod document;
 mod highlight;
 mod html;
+mod image;
 mod layout;
 mod line;
 mod parse;
@@ -19,6 +20,7 @@ mod width;
 mod wrap;
 
 pub use document::{CodeSnippet, Document, Heading};
+pub use image::{ImageCell, ImageLayout, ImageSource};
 pub use line::{Line, LineSize, Span};
 pub use streamer::{Frame, Streamer};
 pub use style::{Color, Style};
@@ -61,16 +63,28 @@ fn render_blocks(
     theme: &Theme,
     options: RenderOptions,
 ) -> Vec<Line> {
+    render_blocks_with_images(blocks, width, theme, options, None)
+}
+
+fn render_blocks_with_images(
+    blocks: &[parse::TopBlock],
+    width: u16,
+    theme: &Theme,
+    options: RenderOptions,
+    images: Option<&ImageLayout<'_>>,
+) -> Vec<Line> {
     let width = usize::from(width.max(1));
     let ctx = layout::Ctx {
         theme,
         list_depth: 0,
+        images,
     };
     let mut lines = Vec::new();
     for top_block in blocks {
         let rows: Vec<Line> = if options.large_headings
             && width >= 4
             && let parse::Block::Heading { level: 1, spans } = &top_block.block
+            && !(images.is_some() && spans.iter().any(|span| span.image.is_some()))
         {
             let mut rows: Vec<Line> = wrap::wrap(spans, width / 2)
                 .into_iter()

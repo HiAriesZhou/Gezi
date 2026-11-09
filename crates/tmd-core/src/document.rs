@@ -12,13 +12,16 @@ pub struct Document {
     theme: Theme,
     code_blocks: Vec<CodeSnippet>,
     headings: Vec<Heading>,
+    images: Vec<crate::ImageSource>,
 }
 
 impl Document {
     pub fn new(markdown: &str, theme: Theme) -> Self {
         let mut blocks = parse::parse_for_reader(markdown, &theme);
         let mut text = String::new();
+        let mut images = Vec::new();
         for block in &mut blocks {
+            collect_images(&mut block.block, &mut images);
             index_block(&mut block.block, &mut text);
         }
         let newline_offsets: Vec<usize> = markdown.match_indices('\n').map(|(i, _)| i).collect();
@@ -49,11 +52,25 @@ impl Document {
             blocks,
             text,
             theme,
+            images,
         }
     }
 
     pub fn code_blocks(&self) -> &[CodeSnippet] {
         &self.code_blocks
+    }
+
+    pub fn images(&self) -> &[crate::ImageSource] {
+        &self.images
+    }
+
+    pub fn layout_with_images(
+        &self,
+        width: u16,
+        options: RenderOptions,
+        images: &crate::ImageLayout<'_>,
+    ) -> Vec<Line> {
+        crate::render_blocks_with_images(&self.blocks, width, &self.theme, options, Some(images))
     }
 
     /// Top-level ATX/Setext headings in source order, including duplicates.
@@ -101,6 +118,45 @@ impl Document {
     }
 }
 
+fn collect_images(block: &mut Block, images: &mut Vec<crate::ImageSource>) {
+    fn spans(spans: &mut [Span], images: &mut Vec<crate::ImageSource>) {
+        for span in spans {
+            if let Some(image) = &mut span.image {
+                image.index = images.len();
+                images.push(image.clone());
+            }
+        }
+    }
+    match block {
+        Block::Paragraph(s) | Block::Heading { spans: s, .. } => spans(s, images),
+        Block::List { items, .. } => {
+            for item in items {
+                for block in &mut item.blocks {
+                    collect_images(block, images);
+                }
+            }
+        }
+        Block::Quote(children) => {
+            for block in children {
+                collect_images(block, images);
+            }
+        }
+        // Tables deliberately keep compact textual alt labels; they must not
+        // accidentally alias the first image resource in the document.
+        Block::Table(table) => {
+            for cell in table
+                .header
+                .iter_mut()
+                .chain(table.rows.iter_mut().flatten())
+            {
+                for span in cell {
+                    span.image = None;
+                }
+            }
+        }
+        Block::Code(_) | Block::Rule => {}
+    }
+}
 /// A document heading, independent of display wrapping or terminal size.
 #[derive(Debug)]
 pub struct Heading {
