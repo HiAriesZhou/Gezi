@@ -4,12 +4,14 @@ import argparse
 import contextlib
 from collections import Counter
 import fcntl
+import faulthandler
 import http.server
 import os
 from pathlib import Path
 import re
 import subprocess
 import signal
+import socket
 import socketserver
 import struct
 import sys
@@ -23,6 +25,11 @@ import test_reader_pty as reader
 
 SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="160" height="480"><rect width="160" height="480" fill="red"/></svg>'
 GRAPHICS = re.compile(rb"\x1b_G(.*?);(.*?)\x1b\\", re.S)
+
+def http_server(handler):
+    # HTTPServer.server_bind does a reverse DNS lookup for an unused server
+    # name. The synthetic server must not depend on the runner's DNS service.
+    return socketserver.TCPServer(("127.0.0.1", 0), handler)
 
 def serve(root, delay, socks=False):
     if socks:
@@ -54,6 +61,7 @@ def serve(root, delay, socks=False):
                                  + str(len(SVG)).encode() + b"\r\n\r\n" + SVG)
         server = socketserver.TCPServer(("127.0.0.1", 0), SocksHandler)
         (root / "port").write_text(str(server.server_address[1]))
+        faulthandler.cancel_dump_traceback_later()
         server.serve_forever()
         return
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -72,12 +80,18 @@ def serve(root, delay, socks=False):
                 pass
         def log_message(self, *_):
             pass
-    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
-    (root / "port").write_text(str(server.server_port))
+    server = http_server(Handler)
+    (root / "port").write_text(str(server.server_address[1]))
+    faulthandler.cancel_dump_traceback_later()
     server.serve_forever()
 
 
 class ImagesTests(unittest.TestCase):
+    def test_http_fixture_startup_does_not_resolve_hostnames(self):
+        with patch.object(socket, "getfqdn", side_effect=AssertionError("unexpected DNS lookup")):
+            with http_server(http.server.BaseHTTPRequestHandler) as server:
+                self.assertGreater(server.server_address[1], 0)
+
     def terminal(self, text, options=()):
         terminal = reader.Terminal(text=text, options=options, cols=100)
         self.addCleanup(terminal.close)
@@ -277,6 +291,7 @@ if __name__ == "__main__":
     parser.add_argument("--binary", type=Path, default=reader.BINARY)
     args, remaining = parser.parse_known_args()
     if args.server:
+        faulthandler.dump_traceback_later(6)
         serve(args.server, args.delay, args.socks)
         sys.exit(0)
     reader.BINARY = args.binary.resolve()
