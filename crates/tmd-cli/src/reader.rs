@@ -242,7 +242,6 @@ struct SidebarFrame {
     details: Vec<Line>,
     lines: Vec<Line>,
     top: usize,
-    selected: usize,
     focused: bool,
 }
 
@@ -304,10 +303,9 @@ fn paint_split(
             );
             row += 1;
         }
-        for (index, line) in sidebar
+        for line in sidebar
             .lines
             .iter()
-            .enumerate()
             .skip(sidebar.top)
             .take(height.saturating_sub(sidebar.details.len()))
         {
@@ -316,7 +314,7 @@ fn paint_split(
                 &mut out,
                 line,
                 sidebar.width.saturating_sub(1) as usize,
-                index == sidebar.selected,
+                false,
             );
             row += 1;
         }
@@ -438,8 +436,9 @@ fn help_lines(width: u16, pane: Pane, fallback: &str, copy_error: &str) -> Vec<L
         ],
         Pane::Outline => &[
             "目录帮助",
-            "> 为选中项；* 为当前阅读章节；L 为源码行号",
-            "Enter：跳转，宽窗口保留侧栏并聚焦正文；Tab：切换焦点",
+            "背景为选中项；▎ 为当前阅读章节；L 为源码行号",
+            "Enter：跳转并保留目录焦点，可连续选择跳转；Tab：切换到正文",
+            "窄窗口中 Enter 跳转后关闭目录",
             "Esc / q / o：关闭目录；滚轮只移动指针所在区域",
             "80 列起显示侧栏并使用普通标题，窄窗口使用整页目录",
             "选择不会移动正文。重复和空标题按各自源码位置跳转",
@@ -778,9 +777,9 @@ fn run_with_copy(
                         outline.selected + 1,
                         document.headings().len()
                     );
-                    overlay = outline.rows(document.headings(), size.0);
+                    overlay = outline.rows(document.headings(), size.0, theme, true);
                     let top = outline.top(overlay.len(), chrome.height(size.1));
-                    (&overlay, top, Some(outline.selected))
+                    (&overlay, top, None)
                 }
                 View::Outline => {
                     chrome.title = format!("正文 · {title}");
@@ -830,7 +829,7 @@ fn run_with_copy(
                 reader_ui::footer(active_view, &state, !search.query.is_empty(), size.0);
             let (mut frame, end) = if let Some(width) = split {
                 if active_view == View::Reading {
-                    chrome.title = format!("● 正文 · {title}");
+                    chrome.title = format!("正文 · {title}");
                 }
                 if active_view != View::Search {
                     chrome.footer = reader_ui::sidebar_footer(
@@ -848,19 +847,18 @@ fn run_with_copy(
                 let sidebar = SidebarFrame {
                     width,
                     title: format!(
-                        "{} 标题目录 {}/{}",
-                        if active_view == View::Outline {
-                            "●"
-                        } else {
-                            "○"
-                        },
+                        "标题目录 {}/{}",
                         outline.selected + 1,
                         document.headings().len()
                     ),
                     details,
-                    lines: outline.rows(document.headings(), width),
+                    lines: outline.rows(
+                        document.headings(),
+                        width,
+                        theme,
+                        active_view == View::Outline,
+                    ),
                     top,
-                    selected: outline.selected,
                     focused: active_view == View::Outline,
                 };
                 paint_split(&lines, start, size, &chrome, highlight, &sidebar)
@@ -1034,9 +1032,11 @@ fn run_with_copy(
                                 anchor = Anchor::at(&lines, row);
                                 start =
                                     row.min(last_start(&lines, size.1.saturating_sub(2) as usize));
-                                view = View::Reading;
                                 if split.is_none() {
                                     outline_open = false;
+                                    view = View::Reading;
+                                } else {
+                                    view = View::Outline;
                                 }
                                 notice.show(
                                     format!(
@@ -1256,7 +1256,6 @@ mod tests {
             details: vec![],
             lines: vec![reader_ui::line("heading")],
             top: 0,
-            selected: 0,
             focused: true,
         };
         let lines = vec![reader_ui::line("x".repeat(100))];

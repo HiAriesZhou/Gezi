@@ -172,7 +172,7 @@ pub(crate) fn sidebar_footer(view: View, state: &str, query: bool, cols: u16) ->
     let actions = match view {
         View::Outline => "↑↓ 选择  Enter 跳转  Tab 正文  Esc 关闭  ? 帮助",
         View::Reading if query => "n/N 跳转  Esc 清除  Tab 目录  o 关闭  ? 帮助  q 退出",
-        _ => "/ 搜索  c 复制  Tab 目录  o 关闭  ? 帮助  q 退出",
+        _ => "↑↓ 滚动  Tab 目录  / 搜索  c 复制  o 关闭  ? 帮助  q 退出",
     };
     let width = cols.saturating_sub(1) as usize;
     let remaining = width.saturating_sub(text_width(actions));
