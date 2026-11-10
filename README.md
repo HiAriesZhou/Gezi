@@ -1,196 +1,103 @@
 # tmd
 
-A Kaku-first Markdown reader for the terminal, built for developer documentation
-and AI output. Read files, search their contents, or render a stream as it arrives.
+A Kaku-first Markdown editor for the terminal, built for developer and AI workflows.
 
-tmd is an early, read-only tool written in Rust. It focuses on streaming without
-redrawing completed content, mixed Chinese and English text, and terminal themes.
-Currently, only macOS is supported. Kaku is the primary terminal for hands-on
-testing.
+**In development:** current releases deliver the reading and rendering foundation.
+Editing, undo/redo and saving files are next. macOS Apple Silicon is supported.
 
-## Install the macOS package
+## Install
 
-For Apple Silicon Macs, download the `.tar.gz` archive and matching `.sha256`
-file from [Releases](https://github.com/HiAriesZhou/TMD/releases).
-No Rust toolchain is needed. For version 0.1.3, run in the download directory:
+Install the latest release, or run the same command to update:
 
 ```sh
-shasum -a 256 -c tmd-v0.1.3-aarch64-apple-darwin.tar.gz.sha256
-tar -xzf tmd-v0.1.3-aarch64-apple-darwin.tar.gz
-./tmd-v0.1.3-aarch64-apple-darwin/tmd --version
-./tmd-v0.1.3-aarch64-apple-darwin/tmd tmd-v0.1.3-aarch64-apple-darwin/README.md
+curl -fsSL https://raw.githubusercontent.com/HiAriesZhou/TMD/main/install.sh | sh
 ```
 
-See the [package guide](docs/binary-package.md) for installation and signing
-status. Intel Mac binaries and Homebrew installation are not provided.
-
-## Install from source
-
-You need Git and a stable Rust toolchain.
-
-These commands install tmd in `~/.local/bin` and replace an existing binary at
-that location:
-
-```sh
-git clone https://github.com/HiAriesZhou/TMD.git tmd
-cd tmd
-cargo build --release --locked
-mkdir -p "$HOME/.local/bin"
-install -m 755 target/release/tmd "$HOME/.local/bin/tmd"
-```
-
-If that directory is not on your PATH, run the following. Add the `export` line
-to your shell configuration to keep it across sessions.
+The installer verifies SHA256, installs to `~/.local/bin`, and keeps a backup when
+replacing an existing binary. No Rust, sudo or shell configuration changes are
+needed. If the directory is not on your PATH, add this line to `~/.zshrc` and run
+it in your current shell:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
-tmd --version
 ```
 
-## Usage
+To choose a release or directory, set `TMD_VERSION=v0.1.4` or
+`TMD_INSTALL_DIR=/absolute/path` on the `sh` command. You can also inspect
+[install.sh](install.sh) or download the archive and checksum from
+[Releases](https://github.com/HiAriesZhou/TMD/releases/latest).
+Packages are ad hoc signed, without Developer ID signing or notarization.
+
+<details>
+<summary>Build from source</summary>
+
+With Git and a stable Rust toolchain:
 
 ```sh
-tmd README.md          # Read a Markdown file
-cat notes.md | tmd     # Render Markdown from stdin
-tmd --ansi README.md   # Print once, without the interactive reader
-tmd --help             # Show all options
+cargo install --git https://github.com/HiAriesZhou/TMD.git --locked tmd-cli
 ```
 
-Supported Markdown includes headings, emphasis, lists, blockquotes, links,
-highlighted code blocks, and tables with mixed Chinese and English text.
-Headings use color, weight, and separators by default.
+Cargo installs the `tmd` command in `~/.cargo/bin`. Use `--force` to reinstall.
+If you also use the binary installer, check `command -v tmd` to see which copy
+runs.
 
-When reading a file in an interactive terminal, tmd opens at the beginning and
-uses the current screen. It preserves terminal history and stays open for
-nonempty documents.
+</details>
 
-| Control | Action |
+## Quick start
+
+```sh
+tmd README.md                        # Open the interactive reader
+cat notes.md | tmd                    # Render a Markdown stream
+tmd --ansi README.md                 # Print once and return to the shell
+tmd --remote-images off README.md    # Load local images only
+tmd --theme neon-tokyo README.md     # Choose a theme
+tmd --help
+```
+
+File reading is interactive when stdin and stdout are terminals. Press `q` to
+exit. Use `--reader inline` if you previously configured native output.
+
+| Key | Action |
 | --- | --- |
-| Mouse wheel, arrow keys, `j` / `k` | Scroll |
-| Home / End | Go to the beginning or end |
-| PageUp / PageDown, `b` / Space | Move by a page |
-| `/`, then Enter | Search visible text, including headings and code |
-| `n` / `N` | Jump to the next or previous match |
-| `o` | Toggle the heading outline |
-| `Tab` | Switch focus between the sidebar and document |
-| `c` | Choose a code block to copy |
-| `?` | Show help for the current view |
-| `q` | Return to the shell |
+| Scroll wheel, ↑ / ↓, `j` / `k` | Scroll |
+| `/`, then Enter; `n` / `N` | Search; next / previous match |
+| `o`; Tab | Toggle the outline; switch panes |
+| `c` | Choose and copy a code block |
+| `?` | Help for the current view |
 
-Search is case-sensitive and supports Chinese and emoji. Esc cancels a query
-being edited; while reading, it clears active search marks, then closes an open
-sidebar, then exits. Help returns to the view that opened it. Empty documents exit immediately.
+## Available today
 
-Press `o` to open the outline at your current section. At 80 columns or wider,
-it appears beside the document; narrower windows use a full-page list. Use
-arrows, `j`/`k` or paging keys to select a heading without moving the document.
-Enter jumps while keeping outline focus for repeated navigation. Tab switches
-focus, and the wheel scrolls the area under the pointer. In a narrow window,
-Enter jumps and closes the list. Esc, `q` or `o` closes a focused outline;
-`o` also closes it while reading.
+- Markdown rendering with highlighted code, tables, links, lists and mixed Chinese/English layout.
+- Interactive reading with search, a heading sidebar, repeated navigation and a responsive footer.
+- Code copying that preserves indentation and line breaks, without rendered borders.
+- Local and remote PNG, JPEG and static SVG images in direct Kaku sessions, including HTML `<img>` and badge rows.
+- Incremental Markdown output and a Claude Code stream-json adapter: `cat events.jsonl | tmd --from claude-json`.
+- Automatic light/dark themes, custom TOML themes and optional large H1 headings in Kaku.
+- Main-screen reading that preserves terminal history and restores terminal input on exit.
 
-`>` marks your selection and `*` marks the current reading section. Duplicate
-and empty headings have distinct destinations. Resizing preserves the selection
-and reading anchor. Split views use ordinary headings, even with
-`--large-headings`; closing the sidebar restores the requested heading size.
-Search, code selection and help retain the sidebar state when returning.
-The footer shows controls for the focused pane, with essential actions kept
-visible in narrow windows.
+Remote images load by default and contact the hosts in the document. Use
+`--remote-images off` to disable remote loading or `--images off` to disable all
+image loading. Graphics require the inline reader in direct Kaku; native output,
+streams and other terminals keep text labels. Code copying requires local macOS.
 
-In the built-in reader on local macOS, press `c` to choose a code block and
-Enter to copy its original contents. Esc, `q`, or `c` cancels without copying. This copies
-code without rendered borders or wrapping; SSH sessions do not support it.
+## TODO
 
-No configuration is required. `--reader inline|native` and the optional
-`reader.mode` setting select the reading mode. Native Kaku positioning needs the
-adapter in `contrib/kaku-reader.lua`; if the adapter is unavailable, tmd falls
-back to its built-in reader. See the [reader guide](docs/reader.md) for setup,
-text selection, and exit behavior.
+Editing is planned; these capabilities are not in the current release. In order:
 
-In a direct Kaku session, the inline reader displays local and remote PNG, JPEG
-and static SVG images, including Markdown images and HTML `<img>` elements.
-Remote images load in the background by default and contact the hosts named in
-the document. Relative paths resolve from the Markdown file's directory.
+- [ ] Editable Markdown source with cursor movement, selection, Chinese input and undo/redo.
+- [ ] Safe saving, unsaved-change prompts and detection of external file changes.
+- [ ] Switch between source and rendered views while keeping the reading/editing position.
+- [ ] Find and replace, followed by task-list and code-block editing shortcuts.
 
-```sh
-tmd --remote-images off README.md  # Keep local images; do not fetch remote ones
-tmd --images off README.md         # Use textual image labels everywhere
-```
+## Documentation
 
-Images fit the document pane and follow scrolling, outline navigation and
-resizing. See the [image guide](docs/images.md) for limits and fallbacks.
+- [Reader guide](docs/reader.md): navigation, images and optional Kaku integration.
+- [Themes](themes/README.md): built-in palettes and custom themes.
+- [Changelog](CHANGELOG.md): changes by release.
 
-Piped Markdown renders incrementally. For Claude Code stream-json event files,
-select the JSONL adapter:
+For contributors: [architecture](docs/architecture.md),
+[testing](docs/terminal-testing.md), [release maintenance](docs/release.md)
+and [repository rules](AGENTS.md). Bug reports should include the tmd version,
+terminal and a minimal Markdown example.
 
-```sh
-cat events.jsonl | tmd --from claude-json
-python3 scripts/slowcat.py fixtures/acceptance.md --rate 600 | tmd
-```
-
-Choose a theme or set the output width:
-
-```sh
-tmd --theme neon-tokyo README.md
-tmd --width 80 fixtures/acceptance.md
-```
-
-Built-in themes are `default-dark`, `default-light`, and `neon-tokyo`. The default
-`auto` setting chooses a light or dark theme based on the terminal background.
-See [themes](themes/README.md) for custom TOML themes.
-
-For static files directly in Kaku, experimental large headings double the width
-and height of top-level H1 headings. Other headings and body text keep their
-normal size:
-
-```sh
-tmd --large-headings fixtures/large-headings.md
-```
-
-This option is off by default. Piped input, redirected output, `--ansi`, Claude
-JSONL, tmux/screen, and other terminals retain normal headings. Large headings
-need at least four columns and three rows; an explicit `--width` must fit the
-terminal and be at least four columns. Copying a double-height heading through
-the terminal can duplicate its text, so use normal headings when copying.
-
-## Current limitations
-
-- tmd is a reader, not an editor.
-- Images currently require the inline reader in direct Kaku with Kitty graphics
-  enabled. Animation, table-cell graphics and other terminal backends are not
-  supported; text and streaming output retain image labels.
-- Kaku is the primary test environment. Visual behavior in Ghostty and kitty
-  still needs hands-on validation.
-- Claude JSONL has replay tests using sanitized event samples; live incremental
-  Claude pipelines still need further validation.
-- During streaming, resize only reflows the active area. Completed output in
-  terminal history is not redrawn.
-- Large headings are limited to static files and do not provide a separate font
-  size for each heading level.
-
-See the [changelog](CHANGELOG.md) for release history. The detailed reader,
-theme, architecture, testing, and release guides are currently in Chinese.
-
-## Development
-
-```sh
-cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-```
-
-The workspace has two crates: `tmd-core` handles parsing and layout; `tmd-cli`
-handles input and terminal control. See [architecture](docs/architecture.md),
-[terminal testing](docs/terminal-testing.md), and [contributor rules](AGENTS.md).
-
-Changes go through pull requests with macOS checks. Version updates
-publish automatically after main CI passes, so they require maintainer approval
-before merging. See [release maintenance](docs/release.md).
-
-Report bugs with the tmd version, terminal, operating system, and a minimal
-Markdown example. Remove private document content and credentials before sharing
-samples. Keep task plans, handoffs, and discussion records outside the repository.
-
-## License
-
-[MIT](LICENSE)
+[MIT License](LICENSE)

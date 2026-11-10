@@ -1,108 +1,121 @@
-# 静态文件阅读
+# Reader guide
 
-`tmd article.md` 在 stdin/stdout 都是终端时默认从文章开头阅读。全文提前布局到内存，滚轮可以连续上下阅读，无需按键加载下一段。
+`tmd article.md` opens the built-in reader when stdin and stdout are terminals.
+It starts at the beginning, uses the main screen and preserves terminal history.
+Files are currently read-only. Nonempty documents stay open until you exit.
 
-阅读器使用当前终端主屏，把此前占用的可见内容推入终端历史，不进入备用屏，也不清除历史。顶部显示本次 tmd 调用信息；这不是 shell 提示符或可执行命令的精确重建。长调用信息只显示一行。
+## Navigation
 
-## 默认使用
+| Control | Action |
+| --- | --- |
+| Wheel, ↑ / ↓, `j` / `k` | Scroll |
+| Home / End | Beginning / end |
+| PageUp / PageDown, `b` / Space | Previous / next page |
+| `/`, Enter, `n` / `N` | Search, confirm, next / previous match |
+| `o`, Tab | Toggle the outline, switch sidebar/document focus |
+| `c` | Choose a code block to copy |
+| `?` | Help for the current view |
+| `q` | Exit reading; close a focused list or help |
+| Esc | Cancel input or close a list/help; while reading, clear search, then close the sidebar, then exit |
+| Ctrl-C | Exit from any view with status 130 |
 
-- 滚轮或 ↑/↓、j/k：上下滚动。
-- Home/End：文章首尾。
-- PageUp/PageDown、b/空格：翻页。
-- `/`：搜索正文，Enter 确认；n/N 前后跳转，首尾循环。
-- `o`：开关标题目录，↑↓ 选择，Enter 跳转；目录焦点下 q/Esc/o 关闭。
-- Tab：侧栏与正文切换焦点；窄窗口整页目录不切换。
-- `c`：选择代码块，↑↓ 选择，Enter 复制内容；q/Esc 取消。
-- `?`：打开当前界面的帮助；帮助中的 q、Esc、? 返回打开帮助前的界面。
-- 阅读中的 q 直接退出；Esc 依次清除搜索、关闭已展开侧栏、退出。Ctrl-C 在所有界面均中断并返回 130。
-- Kaku 默认可按住 Shift 拖选文字，绕过阅读器的鼠标报告；终端自定义绑定可能不同。
+Kaku normally lets you hold Shift while dragging to select text. Custom terminal
+bindings can change this. The footer shows shortcuts for the focused view; it is
+not clickable. Resizing preserves a text/source anchor, not an exact screen row.
 
-非空文档保持打开，空文档显示后直接返回。帮助内可滚动，关闭后保留原界面的阅读位置或列表选择。底栏只显示当前可用操作；窄窗口优先保留确认、返回或退出提示，更多操作见帮助。窗口缩放会重新布局并保留文字或源码锚点，不能保证原来那一行的位置完全不变。
+## Search and code copying
 
-`--large-headings` 仍是显式选项，能力判断与原输出一致；大标题上下半行一起显示。复制完整双高标题仍可能得到重复文字。
+Search is literal and case-sensitive, including Chinese and emoji. It covers
+rendered text, headings and code, including offscreen content. Hidden link URLs,
+decorations, regular expressions and cross-paragraph matches are excluded.
+`n` / `N` wrap around the results. An empty query keeps the previous search;
+a query with no matches keeps the reading position.
 
-管道输入、输出重定向、`--ansi`、Claude JSONL、非交互输入、`TERM=dumb` 以及初始不足 4 列/4 行的窗口不进入阅读器。需要直接打印文件时使用 `tmd --ansi article.md`；这条路径保持普通字号。
+While entering a query, letters are text, Esc cancels, and Ctrl-U clears the
+input. Arrow keys, Home/End and Backspace/Delete edit it. The visible cursor
+anchors the system input method. Narrow tables may show a match at an ellipsis;
+widen the window to see the text.
 
-## 正文搜索
+Press `c`, select a code block and press Enter to copy. This preserves tabs,
+indentation, trailing spaces and line breaks, with CRLF normalized to LF. Markdown
+fences and rendered borders are excluded. Empty blocks leave the clipboard
+unchanged. Esc, `q` or `c` cancels. Clipboard writes occur only on confirmation,
+on local macOS; SSH copying is not supported.
 
-内置 `inline` 阅读器支持区分大小写的字面搜索。搜索覆盖显示的正文、标题和代码，不匹配状态栏、装饰线或隐藏的链接地址；屏幕软换行不改变匹配结果，不做跨段落、正则或模糊搜索。
+## Heading outline
 
-按 `/` 输入查询，Enter 确认后定位并标记当前命中行，底栏显示匹配计数；按 n/N 循环跳转。空查询保留之前的搜索，无结果时保留当前阅读位置。表格内容被窄窗口截断时，匹配可定位到该行的省略号，需加宽窗口查看完整内容。
+Press `o` to open the outline at your current section. Windows at least 80 columns
+wide show a left sidebar; narrower windows show a full-page list.
 
-输入中 q、j、k、n 等均作为查询文字，Esc 取消并返回原阅读位置；Ctrl-U 清空查询，方向键、Home/End、Backspace/Delete 编辑查询。粘贴中的换行和 Tab 转为空格，控制字符移除。输入框显示终端光标供系统输入法定位，不要求修改 Kaku 配置。
+- Move the selection with arrows, `j` / `k`, paging keys or Home/End. This does not move the document.
+- In the sidebar, Enter jumps and keeps focus so you can jump again. Tab switches panes.
+- In the full-page list, Enter jumps and returns to the document.
+- The selection has a background; a leading `▎` marks the current section. The two can differ. Inactive selection is muted.
+- The wheel scrolls the pane under the pointer without changing focus. Esc, `q` or `o` closes a focused outline.
 
-阅读态 Esc 先清除搜索标记，再关闭已展开侧栏，最后退出；q 直接退出。帮助中的 Esc 只关闭帮助，不清除搜索。native 输出后已经退出，不提供这些交互。
+Headings retain their source order and level. Repeated and empty headings have
+separate destinations. Long titles are truncated; the header shows the source
+line. Search, code selection and help preserve the sidebar when returning.
+Split views use ordinary headings, even with `--large-headings`.
 
-## 复制代码内容
+## Images
 
-内置阅读器按 `c` 列出文档中的代码块，包含围栏代码、缩进代码及列表/引用中的代码。列表显示语言、源码行号和首个非空行，默认选中当前视口内的代码块，否则选择后方最近的块。用 ↑↓、翻页或滚轮选择，Enter 复制，q/Esc/c 返回原阅读位置；搜索查询不受影响。`?` 打开代码列表帮助，再返回时保留选择。
+The inline reader displays PNG, JPEG and static SVG in direct Kaku sessions with
+Kitty graphics enabled. Markdown images and HTML `<img>` work; `<picture>` uses
+its `<img>` fallback. Relative paths resolve from the Markdown file's directory,
+not the shell's working directory. Formats are detected from content, so an
+extension is not required.
 
-复制内容不含 Markdown 围栏、语言标签、容器标记或终端排版，保留代码本身的 Tab、缩进、尾随空格、空行和末尾换行，CRLF 统一为 LF。空代码块不改剪贴板；纯空白代码会按内容复制。
-
-本期系统剪贴板复制仅用于本机 macOS，不要求 Lua。检测到 SSH 会话或其他系统时给出不支持提示，不发送 OSC 52。成功反馈只在系统接口确认写入后显示，失败保留列表及选择，不后台重试。原生剪贴板接口不提供事务回滚，写入中途失败可能已影响旧内容。打开、滚动、查询、取消和退出均不读取或写入剪贴板。
-
-## 标题目录
-
-按 `o` 打开目录。80 列及以上使用左侧目录、右侧正文，侧栏宽度约为窗口四分之一，限制在 24–36 列。不足 80 列时退回整页目录；再次扩大后恢复并排显示和原焦点。缩放保留目录选择和正文锚点。
-
-目录按源码顺序列出正文中的 ATX/Setext H1–H6，不收录列表、引用和代码里的示例标题。打开时默认选中视口顶部所在章节；在首个标题之前则预选第一项。整行背景表示待跳转的选择，行首 `▎` 表示当前阅读章节，两者独立。正文滚动会更新竖线，不会覆盖目录选择。选择背景沿用主题代码块背景；焦点切到正文时，目录选择退为弱化文字和普通背景，当前章节竖线保留。焦点所在区域的标题加粗，底栏显示该区域的操作。
-
-目录焦点下 ↑↓、j/k 移动一项，PageUp/PageDown、b/空格翻页，Home/End 到首尾。列表不循环；选择仍在可见范围内时列表保持不动，越过边缘才滚动。移动选择不会移动正文。侧栏中 Enter 跳转后保留目录焦点，可连续选择并跳转；Tab 显式切换到正文，再按 Tab 返回目录。窄窗口整页目录中 Enter 跳转并关闭列表，Tab 不切换到被遮住的正文。目标尽量出现在正文顶部，接近文末时显示包含目标的末页。
-
-滚轮只移动指针所在区域，每次三项或三行，不改变键盘焦点；分隔线、顶部和底栏不响应滚轮。目录焦点下 Esc、q、o 关闭目录；正文焦点下 o 关闭，Esc 先清除已有搜索再关闭。关闭保留当前阅读位置，不撤销已经确认的跳转。`?` 查看当前区域帮助，关闭后保留选择及位置。复制列表和帮助临时占用整个界面，返回时恢复侧栏；正文搜索可在侧栏展开时使用。目录中的粘贴不执行快捷键。无标题时留在正文，显示“无可导航标题”。
-
-侧栏展开时正文按剩余宽度重新排版，使用普通标题，避免终端整行双高属性影响目录；关闭后恢复请求的大标题。打开、关闭和缩放都保留文字或源码位置，重新换行后不保证原来的屏幕行号。
-
-标题按层级缩进，长标题显示省略号。侧栏列表始终从标题栏下一行开始，不随选中标题长度插入详情行；选中项源码行号放在标题栏，空间不足时按列宽裁剪。整页目录在较高窗口中补充选中标题的详情。重复标题及空标题按各自源码区间定位，空标题显示“（空标题）”。目录跳转保留搜索查询及匹配序号，n/N 仍从原先选中的匹配继续；Esc 清除搜索不会撤销目录跳转。
-
-## 底栏和反馈
-
-底栏是快捷键提示，不支持鼠标点击。80 列及以上显示常用操作，40–79 列减少次要提示，20–39 列优先保留 Enter/Esc 或 ?/q。极小窗口只保留能容纳的提示和输入响应，扩大窗口后恢复原状态。提示按终端列宽分配，不从中间截断一个操作标签。
-
-跳转、复制成功、无标题等反馈在三秒后或下一次有效操作时消失，不改变正文位置或搜索光标。复制错误保留到改选、重试或取消，错误详情可在帮助查看。原生方式回退原因首次短暂提示，之后可在帮助中查看。搜索输入时底部保留真实光标供输入法定位，确认和取消说明放在顶部。
-
-## 可选配置
-
-图片显示及远程加载选项见 [图片说明](images.md)。默认在直连 Kaku 的内置阅读器中显示本地与远程静态图片；`--remote-images off` 只关闭远程加载，`--images off` 关闭全部图片加载与图形输出。
-
-默认不用配置。配置根目录优先采用 `$XDG_CONFIG_HOME`，未设置时采用 `~/.config`。阅读设置存放在 `<配置根目录>/tmd/config.toml`，自定义主题文件位置不变。
-
-```toml
-[reader]
-mode = "inline"
+```sh
+tmd article.md                         # Local and remote images
+tmd --remote-images off article.md     # Local only
+tmd --images off article.md            # No image IO or graphics
 ```
 
-支持 `inline`、`native` 两个值。`--reader inline|native` 优先于文件中的设置；显式参数也可以绕过错误的阅读配置。管道、重定向等非阅读路径不读取该文件。
+Remote HTTP(S) images load in the background and contact the document's image
+hosts. A proxy is optional: existing `ALL_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` and
+`NO_PROXY` settings are respected, including lowercase forms. `ALL_PROXY` takes
+precedence. tmd does not change proxy configuration.
 
-## Kaku 原生定位增强
+Images keep their proportions and fit the document pane. Adjacent badges share
+rows when they fit. Scrolling and resizing crop placements to the document;
+failed or oversized images retain alt text and a failure label. Caches last only
+for the current process. See [resource limits](architecture.md#图片资源边界).
 
-原生方式一次输出全文，再让终端把可见位置定位回文章开头。滚轮、滚动条和复制由终端处理，tmd 不驻留，不需要 q 退出。输入下一条命令可能使终端回到实际 shell 提示符所在的底部。
+Animation, browser CSS, table-cell graphics, `file:`/`data:` URLs and images in
+streaming, native or redirected output are not supported. Those output modes use
+text labels. If Kitty graphics is disabled in Kaku, use `--images off`.
 
-只有希望使用原生方式的用户需要安装适配脚本。tmd 不会自动修改终端配置，也不要求 shell 插件。
+## Output and configuration
 
-1. 把仓库中的 `contrib/kaku-reader.lua` 复制为 `~/.config/kaku/tmd-reader.lua`。若已有同名文件，先比较内容，不直接覆盖。
-2. 在已有 Kaku 配置 `~/.config/kaku/kaku.lua` 的 `return config` 之前添加以下一行，保留原有配置及事件处理器：
+`--ansi` prints once and returns to the shell. Piped input streams incrementally;
+completed output is not redrawn on resize. `--large-headings` is an experimental
+option for double-size top-level H1 in static files in direct Kaku. Copying such
+headings through the terminal can duplicate text.
+
+The default theme is `auto`. Built-in palettes and custom TOML files are described
+in [Themes](../themes/README.md).
+
+No configuration is needed. To select a reading mode, use `--reader inline|native`
+or set `reader.mode` in `~/.config/tmd/config.toml` (under `$XDG_CONFIG_HOME` when
+set). The command-line option wins. Non-reader output ignores this file.
+
+### Optional native Kaku mode
+
+Native mode prints the whole document, scrolls back to its beginning and exits.
+The terminal handles scrolling and selection; interactive search, outline, code
+copying and images are available in inline mode instead.
+
+1. Copy [kaku-reader.lua](../contrib/kaku-reader.lua) to `~/.config/kaku/tmd-reader.lua`; compare before replacing an existing file.
+2. Add this line before `return config` in your Kaku configuration, preserving existing handlers:
 
    ```lua
    dofile(require('wezterm').config_dir .. '/tmd-reader.lua').setup()
    ```
 
-3. Kaku 加载配置后执行 `tmd --reader native article.md`。验证正常后，可将 tmd 的 `reader.mode` 改为 `native`，作为个人默认值。
+3. Reload Kaku and run `tmd --reader native article.md`.
 
-原生适配仅用于直接 Kaku，不穿过 tmux/screen。tmd 在输出全文前确认适配器可用，并检查终端历史容量是否足以保留全文。探测最多等待 500 ms，回复不经过键盘输入。适配器只滚动对应窗格，不执行 shell 命令或修改用户配置。握手与回执边界见[架构说明](architecture.md#静态文件阅读)。
-
-未安装、回复超时或不匹配、容量不足及不支持的终端均在全文输出前回到内置阅读，底部显示原因类别提示。若输出完成后的终端定位失败，tmd 不重复输出文档；须检查终端配置和日志。历史容量估算是保守检查，不保证外部并发输出时仍能保留全文。Kaku 的真实定位、复制和不同配置下的时序仍须独立验收。
-
-撤销增强时将模式改回 `inline`，删除配置中的注册行即可；无须修改文档或 shell 历史。
-
-## 验证
-
-```sh
-cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-cargo build --locked
-python3 -B scripts/test_reader_pty.py --binary target/debug/tmd
-```
-
-PTY 检查覆盖首屏、滚轮、首尾、窗口缩放、信号、输入恢复、配置及模拟原生握手。它不证明实际 Kaku 的字体、视觉效果、复制或 Lua 事件定位已通过。
+Native mode requires direct Kaku and enough terminal history. If the adapter is
+unavailable, tmd falls back to inline mode before printing. To undo the setup,
+select inline mode and remove the registration line. The adapter never edits
+shell or terminal configuration itself.
