@@ -5,9 +5,7 @@
 //! upstream program stops too, and tmd only has to restore the cursor.
 
 use std::io::{self, Read, Write};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -23,6 +21,22 @@ use crate::source::Source;
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const READ_BUFFER: usize = 8 * 1024;
 
+/// How streaming ended once the terminal has been restored.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Finished,
+    /// A handled signal arrived; the caller should end the process by it.
+    Signalled(i32),
+}
+
+/// Everything the output loop waits for, so a signal wakes it as input does.
+enum Event {
+    Input(Vec<u8>),
+    Failed(io::Error),
+    End,
+    Signal(i32),
+}
+
 /// Streams `input` to stdout until it ends. `make_source` builds the
 /// source for the starting width; `fixed_width` disables following the
 /// terminal's width.
@@ -30,11 +44,22 @@ pub fn run(
     input: Box<dyn Read + Send>,
     make_source: impl FnOnce(u16) -> Box<dyn Source>,
     fixed_width: Option<u16>,
-) -> io::Result<u8> {
-    let chunks = spawn_reader(input);
+) -> io::Result<Outcome> {
+    let (events, received) = mpsc::channel();
     let mut out = io::stdout().lock();
-    let restore = Restore::start(&mut out)?;
+    let restore = Restore::start(&mut out, events.clone())?;
+    spawn_reader(input, events);
+    let outcome = stream(&received, &mut out, make_source, fixed_width)?;
+    drop(restore);
+    Ok(outcome)
+}
 
+fn stream(
+    received: &Receiver<Event>,
+    out: &mut impl Write,
+    make_source: impl FnOnce(u16) -> Box<dyn Source>,
+    fixed_width: Option<u16>,
+) -> io::Result<Outcome> {
     let (mut width, mut height) = terminal_size();
     if let Some(fixed) = fixed_width {
         width = fixed;
@@ -46,24 +71,20 @@ pub fn run(
     let mut last_frame = Instant::now() - FRAME_INTERVAL;
 
     loop {
-        if let Some(code) = restore.exit_code() {
-            return Ok(code);
-        }
-        // Bound even an idle input wait so cancellation does not depend on
-        // the producer closing stdin. The reader thread may stay blocked.
-        let received = if pending.is_empty() {
-            chunks.recv_timeout(FRAME_INTERVAL)
+        // Idle waits block: signals arrive on the same channel, so
+        // cancellation needs neither polling nor the producer closing stdin.
+        // The reader thread may stay blocked after a signal.
+        let event = if pending.is_empty() {
+            received.recv().map_err(|_| RecvTimeoutError::Disconnected)
         } else {
-            chunks.recv_timeout(FRAME_INTERVAL.saturating_sub(last_frame.elapsed()))
+            received.recv_timeout(FRAME_INTERVAL.saturating_sub(last_frame.elapsed()))
         };
-        if let Some(code) = restore.exit_code() {
-            return Ok(code);
-        }
-        match received {
-            Ok(Ok(bytes)) => pending.push_str(&decoder.feed(&bytes)),
-            Ok(Err(err)) => return Err(err),
+        match event {
+            Ok(Event::Input(bytes)) => pending.push_str(&decoder.feed(&bytes)),
+            Ok(Event::Failed(err)) => return Err(err),
+            Ok(Event::Signal(signal)) => return Ok(Outcome::Signalled(signal)),
+            Ok(Event::End) | Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break,
         }
         if !pending.is_empty() && last_frame.elapsed() >= FRAME_INTERVAL {
             if fixed_width.is_none() {
@@ -71,7 +92,7 @@ pub fn run(
                 streamer.set_width(width);
             }
             let frame = streamer.push(&std::mem::take(&mut pending));
-            draw_source_frame(&mut screen, &mut out, &mut *streamer, &frame, height)?;
+            draw_source_frame(&mut screen, out, &mut *streamer, &frame, height)?;
             last_frame = Instant::now();
         }
     }
@@ -79,11 +100,18 @@ pub fn run(
     pending.push_str(&decoder.finish());
     if !pending.is_empty() {
         let frame = streamer.push(&pending);
-        draw_source_frame(&mut screen, &mut out, &mut *streamer, &frame, height)?;
+        draw_source_frame(&mut screen, out, &mut *streamer, &frame, height)?;
     }
     let last = streamer.finish();
-    draw_source_frame(&mut screen, &mut out, &mut *streamer, &last, height)?;
-    Ok(restore.exit_code().unwrap_or(0))
+    draw_source_frame(&mut screen, out, &mut *streamer, &last, height)?;
+    // A signal during the final frames still decides how the process ends.
+    Ok(received
+        .try_iter()
+        .find_map(|event| match event {
+            Event::Signal(signal) => Some(Outcome::Signalled(signal)),
+            _ => None,
+        })
+        .unwrap_or(Outcome::Finished))
 }
 
 /// stderr may share stdout's terminal. Clear the active rows before a
@@ -114,28 +142,24 @@ fn terminal_size() -> (u16, u16) {
         .unwrap_or((crate::cli::FALLBACK_WIDTH, 24))
 }
 
-/// Reads `input` on its own thread; the channel closes at end of input.
-fn spawn_reader(mut input: Box<dyn Read + Send>) -> mpsc::Receiver<io::Result<Vec<u8>>> {
-    let (send, receive) = mpsc::channel();
+/// Reads `input` on its own thread and reports its end explicitly: the
+/// signal thread keeps the channel open.
+fn spawn_reader(mut input: Box<dyn Read + Send>, events: Sender<Event>) {
     thread::spawn(move || {
         let mut buffer = vec![0; READ_BUFFER];
         loop {
-            match input.read(&mut buffer) {
-                Ok(0) => break,
-                Ok(n) => {
-                    if send.send(Ok(buffer[..n].to_vec())).is_err() {
-                        break;
-                    }
-                }
-                Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
-                Err(err) => {
-                    let _ = send.send(Err(err));
-                    break;
-                }
+            let event = match input.read(&mut buffer) {
+                Ok(0) => Event::End,
+                Ok(n) => Event::Input(buffer[..n].to_vec()),
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) => Event::Failed(err),
+            };
+            let last = !matches!(event, Event::Input(_));
+            if events.send(event).is_err() || last {
+                break;
             }
         }
     });
-    receive
 }
 
 /// The rows of the active area currently on screen, right above the
@@ -170,18 +194,18 @@ impl ActiveArea {
     }
 }
 
-/// The output thread owns restoration; signal handlers only request exit.
+/// The output thread owns restoration; signal handlers only queue an event.
 /// This keeps cleanup from interleaving with a frame or waiting on its lock.
 struct Restore {
-    signal: Arc<AtomicUsize>,
     unicode_pushed: bool,
     #[cfg(unix)]
-    hooks: Vec<signal_hook::SigId>,
+    signals: signal_hook::iterator::Handle,
 }
 
 impl Restore {
-    fn start(out: &mut impl Write) -> io::Result<Self> {
-        let mut restore = Self::signals()?;
+    fn start(out: &mut impl Write, events: Sender<Event>) -> io::Result<Self> {
+        // Register before changing terminal state.
+        let mut restore = Self::signals(events)?;
         if matches!(
             std::env::var("TERM_PROGRAM").as_deref(),
             Ok("WezTerm") | Ok("Kaku")
@@ -196,42 +220,33 @@ impl Restore {
         Ok(restore)
     }
 
-    fn signals() -> io::Result<Self> {
-        let signal = Arc::new(AtomicUsize::new(0));
-        #[cfg(unix)]
-        {
-            use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-            let mut restore = Self {
-                signal,
-                unicode_pushed: false,
-                hooks: Vec::new(),
-            };
-            // Register before changing terminal state. Partial registration
-            // failures also drop the guard and unregister earlier hooks.
-            for signum in [SIGINT, SIGTERM, SIGHUP, SIGQUIT] {
-                restore.hooks.push(signal_hook::flag::register_usize(
-                    signum,
-                    restore.signal.clone(),
-                    signum as usize,
-                )?);
+    #[cfg(unix)]
+    fn signals(events: Sender<Event>) -> io::Result<Self> {
+        use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+        let mut signals = signal_hook::iterator::Signals::new([SIGINT, SIGTERM, SIGHUP, SIGQUIT])?;
+        let handle = signals.handle();
+        thread::spawn(move || {
+            for signal in signals.forever() {
+                if events.send(Event::Signal(signal)).is_err() {
+                    break;
+                }
             }
-            Ok(restore)
-        }
-        #[cfg(not(unix))]
-        {
-            let cancelled = signal.clone();
-            ctrlc::set_handler(move || cancelled.store(2, Ordering::SeqCst))
-                .map_err(io::Error::other)?;
-            Ok(Self {
-                signal,
-                unicode_pushed: false,
-            })
-        }
+        });
+        Ok(Self {
+            unicode_pushed: false,
+            signals: handle,
+        })
     }
 
-    fn exit_code(&self) -> Option<u8> {
-        let signal = self.signal.load(Ordering::SeqCst);
-        (signal != 0).then_some((128 + signal) as u8)
+    #[cfg(not(unix))]
+    fn signals(events: Sender<Event>) -> io::Result<Self> {
+        ctrlc::set_handler(move || {
+            let _ = events.send(Event::Signal(2));
+        })
+        .map_err(io::Error::other)?;
+        Ok(Self {
+            unicode_pushed: false,
+        })
     }
 }
 
@@ -240,10 +255,9 @@ impl Drop for Restore {
         let mut out = io::stdout();
         let _ = out.write_all(restore_sequence(self.unicode_pushed).as_bytes());
         let _ = out.flush();
+        // Ends the signal thread, which unregisters the handlers.
         #[cfg(unix)]
-        for hook in self.hooks.drain(..) {
-            signal_hook::low_level::unregister(hook);
-        }
+        self.signals.close();
     }
 }
 

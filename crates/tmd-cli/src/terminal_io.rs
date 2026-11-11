@@ -39,3 +39,15 @@ pub fn write_all_cancelled(
     }
     Ok(())
 }
+
+/// Ends the process by `signal` after the caller restored the terminal.
+/// Shells stop a script or command list only when a child died by SIGINT;
+/// exiting with `128 + signal` would let the next command run.
+pub fn terminate_by(signal: i32) -> ! {
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+    #[cfg(unix)]
+    let _ = signal_hook::low_level::emulate_default_handler(signal);
+    // Reached only without signal emulation or when it fails.
+    std::process::exit(128 + signal)
+}
