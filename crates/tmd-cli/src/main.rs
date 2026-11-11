@@ -138,7 +138,7 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) if large && err.kind() == io::ErrorKind::Interrupted => {
-            ExitCode::from(large_headings::interrupted_exit_code())
+            terminal_io::terminate_by(large_headings::interrupted_signal())
         }
         // The reader went away (e.g. `tmd file | head`); nothing left to do.
         Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
