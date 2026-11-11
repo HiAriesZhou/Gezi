@@ -100,10 +100,11 @@ viewport.
 Streaming stays out of raw mode, so Ctrl-C acts on the shell pipeline. Diagnostics
 clear and repaint the active area. INT, TERM, HUP and QUIT set a flag and wake the
 input channel, so an idle wait blocks without polling and a signal never waits
-behind input that was already read. The output thread
-restores cursor and any changed Unicode version, then ends the process by the same
-signal, so a calling shell stops its script or loop. Blocked writes must become
-writable before cleanup can finish.
+behind input that was already read. The output thread restores cursor and any
+changed Unicode version, then ends the process by the same signal, so a calling
+shell stops its script or loop. QUIT exits with `128 + 3` instead, because its
+default action dumps core and macOS records a crash report. Blocked writes must
+become writable before cleanup can finish.
 Check terminal capabilities before changing Unicode protocol settings.
 
 ## Static reader
