@@ -1,42 +1,44 @@
-# TMD 工程约定
+# TMD engineering rules
 
-面向 Kaku 的终端 Markdown 编辑器项目，命令 `tmd`。当前发布版本提供只读阅读与渲染；编辑、撤销重做和保存仍待实现，公开介绍须区分已发布功能与规划。
+TMD is a Kaku-first terminal Markdown editor project, invoked as `tmd`. Current
+releases provide read-only rendering and navigation. Editing, undo/redo and
+saving are planned; distinguish shipped behavior from plans in public copy.
 
-## 阅读入口
+## Entry points
 
-- 安装、用法和限制：`README.md`。
-- 当前模块边界和行为契约：`docs/architecture.md`。
-- 阅读方式与配置：`docs/reader.md`；主题格式：`themes/README.md`。
-- 自动检查和真实终端验收：`docs/terminal-testing.md`。
-- 发布维护：`docs/release.md`；版本历史：`CHANGELOG.md`。
-- `CLAUDE.md` 引用本文件，不复制维护另一套工程规则。
+- Installation, usage and limits: `README.md`.
+- Module boundaries and behavior contracts: `docs/architecture.md`.
+- Reader controls and configuration: `docs/reader.md`; themes: `themes/README.md`.
+- Automated checks and real-terminal acceptance: `docs/terminal-testing.md`.
+- Release maintenance: `docs/release.md`; version history: `CHANGELOG.md`.
+- `CLAUDE.md` references this file instead of maintaining duplicate rules.
 
-## 工作边界
+## Scope and documentation
 
-- 一次推进一个任务，不擅自增加功能或扩大范围。
-- 修改前检查 Git 状态和 diff，保留既有修改；不得自动覆盖、清理、重置或暂存他人的工作。
-- 阶段结束报告实现、验证结果和待人工验收项。提交、PR、合并和发布只在当前授权范围内执行。
-- 仓库只保留公开的产品介绍、使用、架构、验证和维护文档。计划、交接、进展、审查报告、思考及沟通记录放在仓库外，不改名留在 docs 中。
-- 不把原始会话、私人策略、账号信息或凭据写进仓库。
-- README 中的简短公开 TODO 只描述产品能力；详细实施计划和进展仍放在仓库外。
-- Use English for commit subjects and bodies, branch names, and pull request titles and descriptions.
+- Work on one task at a time. Do not add features or expand scope without authorization.
+- Inspect Git status and diffs before editing. Preserve existing changes; never overwrite, reset, clean or stage someone else's work automatically.
+- At each milestone, report implementation, verification and outstanding human acceptance. Commit, push, merge and release only within the current authorization.
+- Use English for project documentation, repository rules, commit subjects and bodies, branch names, and PR titles and descriptions. Keep intentional multilingual test fixtures intact.
+- Keep only public product, usage, architecture, testing and maintenance documentation in the repository. Plans, handoffs, progress notes, reviews, analysis and conversation records belong outside it; do not rename them to keep them under `docs`.
+- A short public feature TODO in README is allowed. Detailed implementation plans and progress still belong outside the repository.
+- Never put raw conversations, private strategy, account details or credentials in the repository.
 
-## 架构和行为
+## Architecture and behavior
 
-- 保持两个 crate：`tmd-core` 负责解析、布局、主题、高亮和定稿，`tmd-cli` 负责输入适配、ANSI 输出和终端控制。
-- `tmd-core` 不依赖终端库，输出结构化的 `Line` / `Frame`。`Line.size` 表示逻辑字号，`width()` 是实际列数，`physical_height()` 是占用行数。
-- 大标题是静态文件的显式选项；先检查终端能力和窗口尺寸再布局，只放大顶层 H1。默认 `render` 和 `Streamer::new` 始终输出普通行。DEC 行属性须显式恢复，SGR 重置不能代替。
-- 一次性原生大标题输出期间，临时设置 `NOFLSH` 并关闭 `ECHO`/`ECHONL`，避免控制键丢弃半行或插入转义序列；保留 canonical/ISIG，退出恢复原 termios。Ctrl-C 回归须使用真实 VINTR，不能只向进程发送 SIGINT。
-- 显示宽度通过现有宽度模块计算，使用 `width()`，不用 `width_cjk()`；截断和换行不能拆开现有模块识别的字符簇。
-- 图片 IO、解码和 Kitty 协议属于 CLI；core 只保留引用并计算单元布局。图片须限制在正文视口，保持有上限的加载和缓存，只按本次会话拥有的 ID 清理，不发送全局图片删除。普通文本和流式保留替代文字。
-- 流式按源码字节边界定稿，只让完整行决定边界；已定稿内容不重绘，缩放只重排活动区。块间空行归属后一个块。
-- 流式使用 crossterm，不进入 raw 模式；退出时恢复光标及设置过的 Unicode 版本。
-- 静态文件阅读器使用主屏及临时 raw/鼠标输入；不得进入备用屏或清除历史。退出须恢复 termios、光标及鼠标报告，大标题按完整上下半行绘制。该例外不改变流式或一次性输出的输入约定。
-- 流式诊断须与活动区绘制协调，不能由输入适配器直接写入共享终端并改变光标位置。
-- Claude 工具结果另起一行，不能回改已经进入回滚区的工具行。事件行为以真实样本为依据，未知事件忽略。
-- 快照变化必须解释原因，不得直接批量接受。库接口或事件格式与文档不符时，明确报告差异。
+- Keep two crates: `tmd-core` owns parsing, layout, themes, highlighting and stream commitment; `tmd-cli` owns input adapters, ANSI output and terminal control.
+- Core must not depend on terminal libraries. It emits structured `Line` / `Frame` values. `Line.size` is logical size; `width()` is the actual column count and `physical_height()` is the occupied row count.
+- Large headings are an explicit static-file option. Check terminal capabilities and dimensions before layout, and enlarge only top-level H1. Default `render` and `Streamer::new` always emit ordinary lines. Restore DEC line attributes explicitly; SGR reset is insufficient.
+- During one-shot native large-heading output, temporarily enable `NOFLSH` and disable `ECHO`/`ECHONL` so control keys cannot discard half a heading or inject escapes. Preserve canonical mode and ISIG; restore the original termios on exit. Ctrl-C regressions must use actual VINTR, not only a delivered SIGINT.
+- Use the existing width module and `width()`, not `width_cjk()`. Wrapping and truncation must not split the character clusters it recognizes.
+- Image IO, decoding and Kitty protocol belong in CLI. Core retains references and computes cell layout only. Clip images to the document viewport, bound loading and caches, and delete only session-owned IDs. Never send a global image deletion command. Plain and streaming output retain alt text.
+- Commit streaming content at source byte boundaries using only complete lines. Never repaint committed content; resize reflows only the active area. Inter-block blank lines belong to the following block.
+- Streaming uses crossterm without raw mode. Restore the cursor and any configured Unicode version on exit.
+- The static reader uses the main screen with temporary raw mode and mouse input. Never enter the alternate screen or clear history. Restore termios, cursor and mouse reporting on exit; draw both halves of large headings together. This exception does not change streaming or one-shot input contracts.
+- Coordinate stream diagnostics with active-area painting. Input adapters must not write directly to the shared terminal and move its cursor.
+- Put Claude tool results on a new line; never rewrite tool lines already in scrollback. Derive event behavior from real samples and ignore unknown events.
+- Explain snapshot changes; do not accept them in bulk without analysis. Report discrepancies between library interfaces or event formats and their documentation.
 
-## 验证和沟通
+## Verification and communication
 
 ```sh
 cargo fmt --all --check
@@ -44,18 +46,20 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-按当前任务的完成标准补充回放和真实终端验收。测试通过、终端效果合格和作者接受分别报告，不能互相替代。
+Add replays and real-terminal acceptance required by the task. Passing tests,
+acceptable terminal behavior and maintainer acceptance are separate outcomes.
 
-中文，简洁、直接；区分源码事实、历史记录、文档要求和待确认方案。
+Communicate with the maintainer in concise Chinese. Distinguish source facts,
+historical records, documented requirements and proposals awaiting approval.
 
-## 发布
+## Releases
 
-- 普通功能、体验改进和修复默认只递增第三段版本号；当前统一在 `0.1.x` 迭代。只有维护者明确确认的大改动才升级第二段，不按每个功能或里程碑自动升级。
-- 每个独立交付的功能或修复任务占一个小版本，按完成顺序递增；同一任务发布前的审修、测试和文档归入该版本。整理历史时保留任务边界，不把多个已独立交付的功能合并成一个版本，也不把纯测试修复描述为产品功能修复。
-- 最终发布前须取得维护者确认；合并会触发自动发布的 PR 也受此限制。历史 Release 或 tag 的撤回须单独确认，不能因版本整理自动执行。
-- 当前仅支持 macOS；检查和发布任务均使用 macOS runner。
-- `main` 推送的 macOS CI 成功后自动发布；PR 不执行发布任务。
-- Cargo workspace 版本决定 `v<版本>` tag，两个 crate 和 lockfile 必须一致；CHANGELOG 须有唯一、非空的 `## <版本>` 段落。
-- 版本未变且已有正式发布时跳过；禁止移动已有 tag，禁止覆盖或接管运行前已有的草稿。
-- macOS CI 构建并验证 Apple Silicon 包，发布任务只上传同次运行的归档和 SHA256。上传后须下载核对字节、草稿归属及实际 tag，再正式发布本次运行创建的草稿。
-- 发布使用通过 CI 的精确提交，出错先回读远端状态，不盲目重试写请求。维护和验证步骤见 `docs/release.md`。
+- Increment only the third version component for ordinary features, improvements and fixes; stay on `0.1.x`. Change the second component only for a major change explicitly approved by the maintainer, not for each feature or milestone.
+- Each independently delivered feature or fix has its own patch version, in completion order. Pre-release review fixes, tests and documentation belong to that version. Preserve task boundaries when rebuilding history; do not combine independently delivered features or describe test-only fixes as product fixes.
+- Obtain maintainer confirmation immediately before final publication, including a PR merge that triggers publication. Withdraw old Releases or tags only with separate confirmation; version cleanup does not authorize it.
+- Only macOS is supported. Check and publish jobs both use macOS runners.
+- Successful macOS CI for a push to `main` publishes automatically; PR jobs never publish.
+- The Cargo workspace version determines the `v<version>` tag. Both crates and the lockfile must agree, and CHANGELOG must have exactly one nonempty `## <version>` section.
+- Skip an unchanged version that is already published. Never move an existing tag, overwrite a Release or adopt a draft that existed before the run.
+- macOS CI builds and verifies the Apple Silicon package. The publisher uploads only that run's archive and SHA256 file, downloads them to verify their bytes, then rechecks draft ownership and the actual tag before publishing its own draft.
+- Release the exact commit that passed CI. After an error, read remote state before retrying a write. See `docs/release.md` for verification and recovery.

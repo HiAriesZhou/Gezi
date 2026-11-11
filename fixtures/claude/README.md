@@ -1,9 +1,19 @@
-# Claude JSONL 回放样本
+# Claude JSONL replay fixtures
 
-`plain.jsonl` 和 `tools.jsonl` 是脱敏功能样本，保留实际录制的事件类型、顺序和增量文本分段，用于测试 Markdown 渲染、回答中断后重新生成、工具输入分段和结果关联。
+`plain.jsonl` and `tools.jsonl` are sanitized functional samples. They preserve
+recorded event types, ordering and incremental text boundaries to test Markdown
+rendering, interrupted-answer regeneration, split tool input and result matching.
 
-仅保留适配器使用的事件字段：块类型和索引、文本与空思考增量、工具名称和输入、工具关联、回答作废标记，以及结果的状态、耗时和费用。工具 ID 统一为样本内的占位值。耗时和费用只用于结尾展示回归，不作为性能或费用基准。
+Keep only fields used by the adapter: block type/index, text and empty reasoning
+deltas, tool name/input, tool associations, invalidation markers, and result
+status/duration/cost. Tool IDs are fixture-local placeholders. Duration and cost
+are display regression data, not performance or pricing benchmarks.
 
-样本不包含会话标识、原始用户提示、思考正文或签名。会话与请求元数据、时间戳、用量统计、重复的 assistant 正文和 result 正文均已移除；被忽略的事件仍保留类型和原有顺序。
+Samples contain no session identifiers, original user prompts, reasoning text
+or signatures. Session/request metadata, timestamps, usage, duplicate assistant
+bodies and result bodies have been removed. Ignored events keep only their type
+and original order.
 
-新增样本应沿用这一字段范围，先脱敏再提交。单元测试还会构造独立事件，覆盖未知事件、子代理消息、异常输入和错误结果。
+Sanitize new fixtures to the same field scope before committing. Unit tests also
+construct independent events for unknown types, subagent messages, malformed
+input and failed results.
