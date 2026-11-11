@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- Pressing Ctrl-C or sending TERM or HUP while streaming or printing large headings now ends tmd by that signal after the terminal is restored, so a shell script or loop around tmd stops as well. QUIT still exits with status 131.
+- An idle stream waiting for input no longer wakes about 60 times per second.
+
 ## 0.1.5
 
 - Run `tmd help` for full command-line help without entering the reader or waiting for stdin. `--help` and `-h` remain supported; use `./help` or `-- help` for a file named `help`.
