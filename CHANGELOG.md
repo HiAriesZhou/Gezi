@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Run `tmd help` for full command-line help without entering the reader or waiting for stdin. `--help` and `-h` remain supported; use `./help` or `-- help` for a file named `help`.
+- Use English throughout project documentation and repository rules, with updated help examples. Multilingual rendering fixtures remain unchanged.
+
 ## 0.1.4
 
 View document images directly in Kaku's built-in reader.
