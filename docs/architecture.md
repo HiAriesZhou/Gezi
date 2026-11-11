@@ -98,8 +98,9 @@ into synchronized frames roughly every 16 ms and bounds active height to the
 viewport.
 
 Streaming stays out of raw mode, so Ctrl-C acts on the shell pipeline. Diagnostics
-clear and repaint the active area. INT, TERM, HUP and QUIT arrive as events on the
-same channel as input, so an idle wait blocks without polling. The output thread
+clear and repaint the active area. INT, TERM, HUP and QUIT set a flag and wake the
+input channel, so an idle wait blocks without polling and a signal never waits
+behind input that was already read. The output thread
 restores cursor and any changed Unicode version, then ends the process by the same
 signal, so a calling shell stops its script or loop. Blocked writes must become
 writable before cleanup can finish.

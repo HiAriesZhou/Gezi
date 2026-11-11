@@ -5,6 +5,8 @@
 //! upstream program stops too, and tmd only has to restore the cursor.
 
 use std::io::{self, Read, Write};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -29,12 +31,14 @@ pub enum Outcome {
     Signalled(i32),
 }
 
-/// Everything the output loop waits for, so a signal wakes it as input does.
+/// Everything the output loop waits for. `Wake` only interrupts a wait:
+/// the signal itself is read from a shared flag, so it is never queued
+/// behind input that was read earlier.
 enum Event {
     Input(Vec<u8>),
     Failed(io::Error),
     End,
-    Signal(i32),
+    Wake,
 }
 
 /// Streams `input` to stdout until it ends. `make_source` builds the
@@ -49,13 +53,20 @@ pub fn run(
     let mut out = io::stdout().lock();
     let restore = Restore::start(&mut out, events.clone())?;
     spawn_reader(input, events);
-    let outcome = stream(&received, &mut out, make_source, fixed_width)?;
+    let outcome = stream(
+        &received,
+        &restore.signal,
+        &mut out,
+        make_source,
+        fixed_width,
+    )?;
     drop(restore);
     Ok(outcome)
 }
 
 fn stream(
     received: &Receiver<Event>,
+    signal: &AtomicI32,
     out: &mut impl Write,
     make_source: impl FnOnce(u16) -> Box<dyn Source>,
     fixed_width: Option<u16>,
@@ -70,10 +81,17 @@ fn stream(
     let mut pending = String::new();
     let mut last_frame = Instant::now() - FRAME_INTERVAL;
 
+    let signalled = || match signal.load(Ordering::SeqCst) {
+        0 => None,
+        signal => Some(Outcome::Signalled(signal)),
+    };
     loop {
-        // Idle waits block: signals arrive on the same channel, so
-        // cancellation needs neither polling nor the producer closing stdin.
-        // The reader thread may stay blocked after a signal.
+        if let Some(outcome) = signalled() {
+            return Ok(outcome);
+        }
+        // Idle waits block: a signal also sends `Wake`, so cancellation
+        // needs neither polling nor the producer closing stdin. The reader
+        // thread may stay blocked after a signal.
         let event = if pending.is_empty() {
             received.recv().map_err(|_| RecvTimeoutError::Disconnected)
         } else {
@@ -82,9 +100,8 @@ fn stream(
         match event {
             Ok(Event::Input(bytes)) => pending.push_str(&decoder.feed(&bytes)),
             Ok(Event::Failed(err)) => return Err(err),
-            Ok(Event::Signal(signal)) => return Ok(Outcome::Signalled(signal)),
             Ok(Event::End) | Err(RecvTimeoutError::Disconnected) => break,
-            Err(RecvTimeoutError::Timeout) => {}
+            Ok(Event::Wake) | Err(RecvTimeoutError::Timeout) => {}
         }
         if !pending.is_empty() && last_frame.elapsed() >= FRAME_INTERVAL {
             if fixed_width.is_none() {
@@ -97,6 +114,9 @@ fn stream(
         }
     }
 
+    if let Some(outcome) = signalled() {
+        return Ok(outcome);
+    }
     pending.push_str(&decoder.finish());
     if !pending.is_empty() {
         let frame = streamer.push(&pending);
@@ -105,13 +125,7 @@ fn stream(
     let last = streamer.finish();
     draw_source_frame(&mut screen, out, &mut *streamer, &last, height)?;
     // A signal during the final frames still decides how the process ends.
-    Ok(received
-        .try_iter()
-        .find_map(|event| match event {
-            Event::Signal(signal) => Some(Outcome::Signalled(signal)),
-            _ => None,
-        })
-        .unwrap_or(Outcome::Finished))
+    Ok(signalled().unwrap_or(Outcome::Finished))
 }
 
 /// stderr may share stdout's terminal. Clear the active rows before a
@@ -197,6 +211,8 @@ impl ActiveArea {
 /// The output thread owns restoration; signal handlers only queue an event.
 /// This keeps cleanup from interleaving with a frame or waiting on its lock.
 struct Restore {
+    /// The first handled signal, or 0.
+    signal: Arc<AtomicI32>,
     unicode_pushed: bool,
     #[cfg(unix)]
     signals: signal_hook::iterator::Handle,
@@ -225,14 +241,18 @@ impl Restore {
         use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
         let mut signals = signal_hook::iterator::Signals::new([SIGINT, SIGTERM, SIGHUP, SIGQUIT])?;
         let handle = signals.handle();
+        let flag = Arc::new(AtomicI32::new(0));
+        let raised = flag.clone();
         thread::spawn(move || {
             for signal in signals.forever() {
-                if events.send(Event::Signal(signal)).is_err() {
+                let _ = raised.compare_exchange(0, signal, Ordering::SeqCst, Ordering::SeqCst);
+                if events.send(Event::Wake).is_err() {
                     break;
                 }
             }
         });
         Ok(Self {
+            signal: flag,
             unicode_pushed: false,
             signals: handle,
         })
@@ -240,11 +260,15 @@ impl Restore {
 
     #[cfg(not(unix))]
     fn signals(events: Sender<Event>) -> io::Result<Self> {
+        let flag = Arc::new(AtomicI32::new(0));
+        let raised = flag.clone();
         ctrlc::set_handler(move || {
-            let _ = events.send(Event::Signal(2));
+            let _ = raised.compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst);
+            let _ = events.send(Event::Wake);
         })
         .map_err(io::Error::other)?;
         Ok(Self {
+            signal: flag,
             unicode_pushed: false,
         })
     }
