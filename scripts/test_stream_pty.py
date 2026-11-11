@@ -84,7 +84,8 @@ class StaticLargeHeadings(unittest.TestCase):
                 _, status = os.waitpid(pid, 0)
                 waited = True
                 self.assertTrue(sent)
-                self.assertEqual(os.waitstatus_to_exitcode(status), 130)
+                # Dying by SIGINT lets a calling shell stop its script too.
+                self.assertEqual(os.waitstatus_to_exitcode(status), -signal.SIGINT)
                 self.assertTrue(during[3] & termios.NOFLSH, "VINTR must not discard half a heading")
                 self.assertFalse(during[3] & (termios.ECHO | termios.ECHONL))
                 self.assertEqual(during[3] & (termios.ICANON | termios.ISIG),
@@ -157,7 +158,7 @@ class StaticLargeHeadings(unittest.TestCase):
                     self.fail("static renderer did not exit")
                 child.wait(timeout=5)
                 self.assertEqual(child.returncode,
-                                 128 + (interrupt_signal or signal.SIGINT) if interrupt else 0)
+                                 -(interrupt_signal or signal.SIGINT) if interrupt else 0)
                 if interrupt:
                     self.assertTrue(sent, "signal must follow actual double-height output")
                 self.assertTrue(received, "must exercise real CLI output")

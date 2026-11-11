@@ -72,11 +72,13 @@ pub fn write(_lines: &[Line]) -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
 }
 
-pub fn interrupted_exit_code() -> u8 {
-    let signal = INTERRUPTED
+/// The signal that interrupted output; SIGINT when none was recorded.
+pub fn interrupted_signal() -> i32 {
+    INTERRUPTED
         .get()
-        .map_or(2, |signal| signal.load(Ordering::SeqCst));
-    128 + signal as u8
+        .map(|signal| signal.load(Ordering::SeqCst) as i32)
+        .filter(|&signal| signal != 0)
+        .unwrap_or(2)
 }
 
 #[cfg(unix)]
