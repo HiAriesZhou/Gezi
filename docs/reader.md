@@ -3,6 +3,8 @@
 `tmd article.md` opens the built-in reader when stdin and stdout are terminals.
 It starts at the beginning, uses the main screen and preserves terminal history.
 Files are currently read-only. Nonempty documents stay open until you exit.
+Run `tmd help` for command-line options (`--help` and `-h` also work).
+To read a file named `help`, use `tmd ./help` or `tmd -- help`.
 
 ## Navigation
 
@@ -80,7 +82,7 @@ precedence. tmd does not change proxy configuration.
 Images keep their proportions and fit the document pane. Adjacent badges share
 rows when they fit. Scrolling and resizing crop placements to the document;
 failed or oversized images retain alt text and a failure label. Caches last only
-for the current process. See [resource limits](architecture.md#图片资源边界).
+for the current process. See [resource limits](architecture.md#image-resource-limits).
 
 Animation, browser CSS, table-cell graphics, `file:`/`data:` URLs and images in
 streaming, native or redirected output are not supported. Those output modes use
