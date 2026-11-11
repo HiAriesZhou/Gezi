@@ -346,11 +346,17 @@ class StreamingSignals(unittest.TestCase):
                 self.assertLess(time.monotonic(), deadline, "no initial stream frame")
                 self.assertTrue(read_output(.05), "renderer exited before receiving a signal")
             child.send_signal(signal.SIGINT)
-            sent = time.monotonic()
+            before_signal = len(received)
+            deadline = time.monotonic() + 10
             while read_output(.05):
-                self.assertLess(time.monotonic() - sent, 2, "signal waited behind queued input")
+                self.assertLess(time.monotonic(), deadline, "signal did not stop the renderer")
             child.wait(timeout=2)
             self.assertEqual(child.returncode, -signal.SIGINT)
+            # Rendering the whole backlog writes megabytes; a signal handled
+            # before queued input stops after at most a few frames. Bytes,
+            # not elapsed time, keep this independent of build speed.
+            self.assertLess(len(received) - before_signal, 1 << 20,
+                            "signal waited behind queued input")
             self.assertGreater(received.rfind(b"\x1b[?25h"), received.rfind(b"\x1b[?25l"))
         finally:
             if child.poll() is None:
