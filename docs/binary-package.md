@@ -8,7 +8,7 @@ From this extracted directory:
 
 ```sh
 ./tmd --version
-./tmd --help
+./tmd help
 ./tmd /path/to/document.md
 ```
 

@@ -28,7 +28,7 @@ def smoke(root, directory):
             return subprocess.check_output([str(binary), *arguments], env=env, timeout=30)
         if output("--version").strip() != f"tmd {version}".encode():
             raise ReleaseError("Installed executable version does not match the package")
-        if b"Usage:" not in output("--help"):
+        if b"Usage:" not in output("help"):
             raise ReleaseError("Installed executable help is missing")
         rendered = output("--ansi", "--theme", "default-dark", str(root / "fixtures/acceptance.md"))
         if "中文".encode() not in rendered or len(rendered) < 100:

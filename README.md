@@ -51,7 +51,7 @@ cat notes.md | tmd                    # Render a Markdown stream
 tmd --ansi README.md                 # Print once and return to the shell
 tmd --remote-images off README.md    # Load local images only
 tmd --theme neon-tokyo README.md     # Choose a theme
-tmd --help
+tmd help
 ```
 
 File reading is interactive when stdin and stdout are terminals. Press `q` to

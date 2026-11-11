@@ -1,14 +1,23 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 
 /// Width used when stdout is not a terminal or its size is unknown.
 pub const FALLBACK_WIDTH: u16 = 80;
 
 /// Render markdown in the terminal.
 #[derive(Debug, Parser)]
-#[command(name = "tmd", version, about)]
+#[command(
+    name = "tmd",
+    version,
+    about,
+    disable_help_subcommand = true,
+    args_conflicts_with_subcommands = true
+)]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
     /// Markdown file to render; reads stdin when omitted
     pub file: Option<PathBuf>,
 
@@ -47,6 +56,12 @@ pub struct Cli {
     /// Report malformed JSONL records to stderr (without their contents)
     #[arg(long)]
     pub debug: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Show command-line help
+    Help,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -133,6 +148,24 @@ mod tests {
     #[test]
     fn rejects_zero_width() {
         assert!(Cli::try_parse_from(["tmd", "--width", "0"]).is_err());
+    }
+
+    #[test]
+    fn help_is_a_command_and_explicit_help_paths_remain_files() {
+        let cli = Cli::try_parse_from(["tmd", "help"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Help)));
+        assert!(cli.file.is_none());
+        for arguments in [
+            vec!["tmd", "--", "help"],
+            vec!["tmd", "./help"],
+            vec!["tmd", "help.md"],
+        ] {
+            let cli = Cli::try_parse_from(arguments.clone()).unwrap();
+            assert!(cli.command.is_none());
+            assert_eq!(cli.file, Some(PathBuf::from(arguments.last().unwrap())));
+        }
+        assert!(Cli::try_parse_from(["tmd", "help", "README.md"]).is_err());
+        assert!(Cli::try_parse_from(["tmd", "README.md", "help"]).is_err());
     }
 
     #[test]

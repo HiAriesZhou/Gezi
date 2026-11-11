@@ -26,7 +26,7 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use tmd_core::{RenderOptions, Streamer, Theme, render_with_options};
 
 use crate::cli::{Cli, InputFormat, resolve_width};
@@ -34,6 +34,16 @@ use crate::source::Source;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if matches!(cli.command, Some(cli::Command::Help)) {
+        return match Cli::command().print_long_help() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("tmd: {err}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let width = resolve_width(cli.width, terminal_width());
     // Picked before any input is read: `auto` may ask the terminal.
     let theme = match pick_theme(&cli.theme) {
