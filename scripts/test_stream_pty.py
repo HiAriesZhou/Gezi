@@ -20,6 +20,14 @@ import check_stream_pty as probe
 BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
 
 
+def expected_status(signum):
+    """Interrupted output ends by its signal so calling shells stop too.
+    QUIT exits with 128 + 3 instead: its default action dumps core, which
+    macOS records as a crash report."""
+    import signal
+    return 128 + signum if signum == signal.SIGQUIT else -signum
+
+
 class StaticLargeHeadings(unittest.TestCase):
     def test_keyboard_ctrl_c_preserves_output_queue_and_restores_tty(self):
         import errno
@@ -158,7 +166,7 @@ class StaticLargeHeadings(unittest.TestCase):
                     self.fail("static renderer did not exit")
                 child.wait(timeout=5)
                 self.assertEqual(child.returncode,
-                                 -(interrupt_signal or signal.SIGINT) if interrupt else 0)
+                                 expected_status(interrupt_signal or signal.SIGINT) if interrupt else 0)
                 if interrupt:
                     self.assertTrue(sent, "signal must follow actual double-height output")
                 self.assertTrue(received, "must exercise real CLI output")
@@ -284,7 +292,7 @@ class StreamingSignals(unittest.TestCase):
                         child.wait(timeout=2)
                         # Dying by the signal, not exiting with 128 + signal,
                         # lets a calling shell stop its script as well.
-                        self.assertEqual(child.returncode, -signum)
+                        self.assertEqual(child.returncode, expected_status(signum))
                         self.assertGreater(received.rfind(b"\x1b[?25h"), received.rfind(b"\x1b[?25l"))
                         self.assertIn(b"UnicodeVersion=pop", received)
                         self.assertEqual(termios.tcgetattr(master), before)

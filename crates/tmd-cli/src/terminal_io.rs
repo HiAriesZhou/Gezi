@@ -47,7 +47,11 @@ pub fn terminate_by(signal: i32) -> ! {
     let _ = io::stdout().flush();
     let _ = io::stderr().flush();
     #[cfg(unix)]
-    let _ = signal_hook::low_level::emulate_default_handler(signal);
-    // Reached only without signal emulation or when it fails.
+    if signal != signal_hook::consts::SIGQUIT {
+        // QUIT's default action dumps core, which macOS records as a crash
+        // report; it keeps the plain `128 + signal` exit below.
+        let _ = signal_hook::low_level::emulate_default_handler(signal);
+    }
+    // Reached for QUIT, without signal emulation, or when it fails.
     std::process::exit(128 + signal)
 }
