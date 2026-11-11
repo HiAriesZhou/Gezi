@@ -1,74 +1,86 @@
-# 版本记录
+# Changelog
 
 ## 0.1.4
 
-在 Kaku 的内置阅读器中直接查看文档图片。
+View document images directly in Kaku's built-in reader.
 
-1. **图片显示**：支持 Markdown 图片和 HTML `<img>`，显示本地及远程 PNG、JPEG 和静态 SVG；图片等比适配正文，随滚动、目录侧栏和窗口尺寸调整，退出时只清理本次阅读器创建的图片。
-2. **加载控制**：远程图片默认后台加载，`--remote-images off` 只保留本地图片，`--images off` 使用文字占位；加载失败保留替代文字，慢请求期间仍可导航和退出。
+- Display local and remote PNG, JPEG and static SVG from Markdown images and HTML `<img>`. Preserve proportions through scrolling, sidebar navigation and resizing; clean up only this reader's image IDs on exit.
+- Load remote images in the background by default. `--remote-images off` keeps local images; `--images off` uses text labels. Failures retain alt text, and slow requests do not block navigation or exit.
 
-本期仍仅支持 macOS Apple Silicon，图片显示要求直连 Kaku 并启用 Kitty 图形支持。动画、表格单元格图片、流式图片及其他终端图形后端暂不包含。
+Apple Silicon macOS only. Graphics require direct Kaku with Kitty support enabled.
+Animation, table-cell graphics, streaming images and other terminal backends are
+not included.
 
 ## 0.1.3
 
-通过目录侧栏浏览长文档，底栏按当前焦点显示可用操作。
+Navigate long documents with an outline sidebar and focus-specific controls.
 
-1. **标题目录**：按 `o` 导航正文 H1–H6，区分当前章节和选择，支持重复、空标题及源码行号；80 列起并排显示目录和正文，Enter 跳转后保留侧栏，Tab 切换焦点，滚轮按区域移动；窄窗口退回整页目录，缩放后保留选择和阅读位置。
-2. **交互提示**：阅读、搜索、目录、代码和帮助使用各自底栏，窄窗口优先保留确认和返回；帮助返回原界面，保留列表选择。
-3. **反馈信息**：跳转、复制成功和空目录提示自动消退，复制错误保留到改选、重试或取消；目录导航保留已有搜索。
+- Press `o` to navigate body H1-H6, with separate current-section and selection indicators, duplicate/empty headings and source line numbers. At 80 columns, show sidebar and document together; Enter keeps outline focus, Tab switches panes and the wheel follows its pane. Narrow windows use a full-page list; resize preserves selection and reading position.
+- Reading, search, outline, code and help have their own footers. Narrow windows prioritize confirmation and return actions. Help restores the previous view and list selection.
+- Jump, copy-success and empty-outline feedback expires automatically. Copy errors persist until selection changes, retry or cancellation. Outline navigation preserves search.
 
-侧栏并排显示时使用普通标题，关闭后恢复请求的大标题。本期仍仅支持 macOS；目录用于内置阅读器，不提供筛选、折叠、拖动宽度或启动时自动展开。
+Split views use ordinary headings; closing the sidebar restores requested large
+headings. macOS only. The inline outline does not filter, fold, resize by dragging
+or open automatically at startup.
 
 ## 0.1.2
 
-在内置阅读器中选择代码块，复制未经终端排版的代码内容。
+Choose a code block in the inline reader and copy its original contents.
 
-1. **代码复制**：按 `c` 打开代码列表，Enter 复制所选块；保留 Tab、尾随空格、空行和末尾换行，支持列表和引用中的代码。
-2. **macOS 下载包**：提供 Apple Silicon 可执行包和 SHA256 校验文件，下载解压即可运行，无需安装 Rust；包内附带使用说明、许可证及版本和提交信息。
+- Press `c` for the code chooser and Enter to copy, preserving tabs, trailing spaces, blank lines and the final newline. Includes code inside lists and blockquotes.
+- Download an Apple Silicon executable archive and SHA256 file without installing Rust. The archive includes instructions, license and version/commit metadata.
 
-本期仅支持本机 macOS 系统剪贴板，CRLF 转为 LF；空块不修改剪贴板，q/Esc 取消并返回原阅读位置。SSH 和其他系统暂不支持。
+Copying uses the local macOS clipboard and normalizes CRLF to LF. Empty blocks do
+not alter the clipboard; q/Esc cancels and restores the reading position. SSH and
+other systems are not supported.
 
 ## 0.1.1
 
-在内置阅读器中搜索文档，并在匹配位置之间跳转。
+Search documents in the inline reader and move between matches.
 
-1. **正文搜索**：按 `/` 输入中英文或 emoji 查询，Enter 确认后标记命中行，n/N 循环跳转；查询中 Esc 取消并回到原阅读位置。
+- Press `/` to enter English, Chinese or emoji, then Enter to locate and mark the matching line. n/N wraps through matches; Esc while editing cancels and restores the reading position.
 
-搜索区分大小写，屏幕软换行不影响匹配；阅读中 Esc 先清除搜索标记，再按一次退出。
+Search is case-sensitive and independent of soft wrapping. While reading, Esc
+clears search marks before a second press exits.
 
 ## 0.1.0
 
-短 Markdown 文档也会保持打开，可以随时查看阅读帮助。
+Keep short Markdown documents open and access reading help at any time.
 
-1. **持续阅读**：非空文档不再自动退出，放大窗口后也可继续操作，按 q/Esc 返回命令行。
-2. **阅读帮助**：按 `?` 查看滚动、翻页和选择操作，关闭帮助后回到原阅读位置；粘贴文字不会触发阅读快捷键。
-3. **退出恢复**：流式输出在收到中断或终止信号后恢复光标和终端设置；等待上游输入时也能及时退出。
+- Nonempty documents no longer exit automatically. Enlarging the window keeps interaction active; q/Esc returns to the shell.
+- Press `?` for scrolling, paging and selection help; closing it restores the reading position. Pasted text does not execute reader shortcuts.
+- Streaming restores the cursor and terminal settings after interruption or termination, including while waiting for upstream input.
 
-空文档仍直接返回，需要一次打印时使用 `--ansi`。
+Empty documents still exit immediately. Use `--ansi` to print once.
 
 ## 0.0.3
 
-阅读长 Markdown 文件时，默认从文章开头显示，可以用滚轮连续阅读。
+Read long files from their beginning with continuous mouse-wheel scrolling.
 
-1. **原地阅读**：静态文件在当前终端主屏显示，支持滚轮、方向键、首尾跳转和窗口缩放，长文档按 q/Esc 返回命令行。
-2. **阅读配置**：新增 `--reader inline|native` 和可选配置文件，默认无需配置；Kaku 原生定位须安装适配脚本，不可用时回到内置阅读。
+- Static files use the terminal's main screen, with wheel/arrows, beginning/end navigation and resize handling. q/Esc returns to the shell.
+- Add `--reader inline|native` and optional configuration. No setup is needed by default; native Kaku positioning requires an adapter and falls back to inline reading when unavailable.
 
-文件模式的默认行为已改变；需要直接打印时使用 `--ansi`，管道和重定向行为不变。Kaku 的真实显示、复制和原生定位仍待验收。
+The default file behavior changed. Use `--ansi` for one-shot output; pipes and
+redirection are unchanged. At this release, real Kaku display, copying and native
+positioning still required acceptance.
 
 ## 0.0.2
 
-在 Kaku 中阅读文件时，可以选择更醒目的一级标题。
+Opt into more prominent top-level headings in Kaku.
 
-1. **大标题**：新增 `--large-headings`，将静态 Markdown 文件中的顶层 H1 宽高各放大两倍，其他标题和正文保持常规字号。
+- `--large-headings` doubles the width and height of top-level H1 in static Markdown files. Other headings and body text retain ordinary size.
 
-该选项默认关闭，暂不支持流式输出；放大标题在终端复制时可能出现重复文字。
+Disabled by default and unavailable for streaming. Terminal copying of enlarged
+headings can duplicate text.
 
 ## 0.0.1
 
-首个日常试用版本，用于在终端中阅读 Markdown 文件和管道输出。
+Initial daily-use version for Markdown files and piped output.
 
-1. **Markdown 阅读**：支持标题、文字强调、列表、引用、链接、代码高亮，以及按显示宽度排版的中英文表格。
-2. **流式输出**：接收持续写入的 Markdown，逐步输出定稿内容，窗口缩放时重排活动区，正常结束和 Ctrl-C 后恢复光标。
-3. **主题**：提供三套内置主题、自动亮暗选择，以及 TOML 自定义主题。
+- Render headings, emphasis, lists, blockquotes, links, highlighted code and Chinese/English tables measured by display width.
+- Render incoming Markdown progressively, committing completed content and reflowing the active area on resize. Restore the cursor after completion and Ctrl-C.
+- Include three built-in themes, automatic light/dark selection and custom TOML themes.
 
-当前以 Kaku 中的日常试用为主；Ghostty、kitty 显示效果和真实 Claude 增量管道尚未完成验收。标题不单独改变字号，也暂未提供全屏查看器、搜索和图片显示。
+Kaku was the primary trial environment. Ghostty, kitty and live incremental Claude
+pipelines had not completed acceptance. This version did not change heading font
+size or provide a full-screen viewer, search or images.

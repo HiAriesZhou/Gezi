@@ -1,90 +1,191 @@
-# 架构
+# Architecture
 
-TMD 把 Markdown 转为带样式的逻辑行，再由 CLI 根据输入和终端能力选择输出方式。只读文档，不修改用户的终端配置或 shell 配置。
+TMD converts Markdown to styled logical lines; CLI selects an output mode from
+the input and terminal capabilities. Current releases read documents without
+modifying them or changing terminal or shell configuration.
 
-## 模块边界
+## Module boundaries
 
-Cargo workspace 保持两个 crate：
+The Cargo workspace has two crates:
 
-| 层 | 职责 | 主要模块 |
+| Layer | Responsibility | Main modules |
 | --- | --- | --- |
-| `tmd-core` | 解析、字符宽度、换行、布局、主题、语法高亮和流式定稿 | `parse`、`html`、`width`、`wrap`、`layout`、`table`、`code`、`highlight`、`theme`、`theme_file`、`streamer` |
-| `tmd-cli` | 参数、输入适配、输出选择、ANSI 编码和终端生命周期 | `cli`、`source`、`claude`、`ansi`、`stream`、`reader`、`reader_native`、`large_headings` |
+| `tmd-core` | Parsing, display width, wrapping, layout, themes, highlighting, stream commitment | `parse`, `html`, `width`, `wrap`, `layout`, `table`, `code`, `highlight`, `theme`, `theme_file`, `streamer` |
+| `tmd-cli` | Arguments, input adapters, output selection, ANSI encoding, terminal lifecycle | `cli`, `source`, `claude`, `ansi`, `stream`, `reader`, `reader_native`, `large_headings` |
 
-core 不依赖终端库，也不检测环境变量。CLI 的 `main` 组装输入、主题和输出；`source::Source` 提供 `push`、`finish`、`set_width` 和诊断队列，供普通 Markdown 与 Claude JSONL 共同使用。输入适配器不直接绘制终端或输出诊断。
+Core has no terminal dependencies and does not inspect environment variables.
+CLI `main` assembles input, theme and output. `source::Source` exposes `push`,
+`finish`, `set_width` and a diagnostic queue for Markdown and Claude JSONL.
+Adapters never draw or print diagnostics directly.
 
-图片引用由 core 保留地址、替代文字和尺寸提示，`Document::images` 分配会话内索引。显式图片布局只接收已知像素尺寸和字符单元尺寸，输出带 `ImageCell` 的普通逻辑行；不进行网络、文件或图形协议操作。CLI 的 `image_loader` 在两个后台任务中限量加载和栅格化，`reader_images` 管理有上限的会话缓存、分块传输和按自身 ID 清理的 Kitty 图片。普通渲染和流式仍输出替代文字。图片尺寸到达时丢弃两份阅读布局缓存，按文字/源码锚点重新定位；图片内部位置另保留行比例。用户操作见[图片说明](reader.md#images)。
+Core retains image URLs, alt text and size hints; `Document::images` assigns
+session indexes. Explicit image layout receives known pixel and cell dimensions
+and emits ordinary logical lines with `ImageCell`. It performs no IO or graphics
+protocol operations. CLI `image_loader` bounds loading/rasterization across two
+workers; `reader_images` owns caches, chunked Kitty transfers and ID-scoped
+cleanup. Plain and streaming rendering retain alt text. New image dimensions
+invalidate both reader layout caches and restore a text/source anchor. Positions
+inside an image preserve a row ratio. See [image usage](reader.md#images).
 
-`config` 只确定配置根目录，`theme_select` 负责主题选择和文件加载，`reader_config` 负责阅读配置校验。`terminal_io` 只共享可取消写入、重置序列及 Kaku 直连判断，各输出方式保留自己的生命周期管理。
+`config` resolves the configuration directory; `theme_select` loads themes;
+`reader_config` validates reading settings. `terminal_io` shares cancellable
+writes, reset sequences and direct-Kaku detection. Each output mode keeps its
+own lifecycle management.
 
-## 图片资源边界
+## Image resource limits
 
-图片网络请求和解码最多使用两个后台任务，只预取可见区及相邻一屏；已预取后淘汰的资源在重新可见前不重复下载。字体像素尺寸变化须使图片布局失效，成功准备图片不应导致整篇重复排版。
+Load only the visible viewport and one adjacent viewport using at most two
+workers. Evicted prefetches are not downloaded again until visible. Font/pixel
+size changes invalidate image layout; successful preparation must not repeatedly
+relayout the whole document.
 
-会话光栅缓存计入终端解码占用，上限 64 MiB；资源最多 1,024 个、准备后的尺寸变体最多 256 个。单图输入上限 8 MiB，解码最多 16 百万像素，输出每边最多 2,048 像素；HTTP 超时八秒、最多三次重定向。
+The raster cache accounts for terminal decoding cost and is limited to 64 MiB,
+1,024 resources and 256 prepared size variants. Each input is limited to 8 MiB
+and raster decoding to 16 megapixels; output is downsampled to at most 2,048
+pixels per side. HTTP requests have an eight-second timeout and at most three
+redirects.
 
-SVG 输入最多 2 MiB、20,000 个标签。递归 XML 解析前先检查嵌套深度；XML 与展开引用深度均最多 32，展开节点最多 20,000。拒绝 DTD、SVGZ、循环引用、CSS 转义和样式表 URL 引用；不执行脚本，不加载外部或内嵌图片。失败保留替代文字，不能让工作线程的栈溢出终止阅读器。
+SVG input is limited to 2 MiB and 20,000 tags. Check nesting before recursive XML
+parsing. XML and expanded-reference depth are limited to 32; reference expansion
+to 20,000 nodes. Reject DTD, SVGZ, cyclic references, CSS escapes and stylesheet
+URL references. Do not execute scripts or load external/embedded images. Failures
+retain alt text; worker stack overflow must not abort the reader.
 
-## 解析与布局
+## Parsing and layout
 
-`parse` 使用 pulldown-cmark 事件形成块结构，保留源码字节区间。`html` 处理可显示的 HTML 文本和结构；标签本身不直接作为终端控制输出。布局将段落、标题、列表、引用、表格和代码转换为 `Vec<Line>`。
+`parse` turns pulldown-cmark events into blocks with source byte ranges. `html`
+handles visible HTML text and structure; tags are never emitted as terminal
+controls. Layout converts blocks to `Vec<Line>`.
 
-- `Span` 包含文字和样式；`Line` 包含 spans、源码区间和 `LineSize`。
-- `Line::width()` 是实际终端列数，`physical_height()` 是所占物理行数。普通行占一行，放大行宽高各两倍。
-- 同一块换行后的行共享源码区间；顶层代码保留逐行区间，以便流式定稿。块间空行归属后一个块。
-- `width` 集中处理字符簇、显示宽度和截断，使用 Unicode `width()` 语义。换行与截断不拆开识别出的组合字符或 emoji 字符簇。
-- 表格先测量、再分配列宽、最后绘制；代码通过 syntect 高亮。高亮缓存复用已有前缀，使用进程内锁；单个超大代码块可以超过缓存行数目标，因此该目标不是严格的内存上限。
+- `Span` carries text and style. `Line` carries spans, a source range and `LineSize`.
+- `Line::width()` counts terminal columns; `physical_height()` counts rows. Ordinary lines occupy one row; large lines double both dimensions.
+- Wrapped lines in a block share its source range. Top-level code retains per-line ranges for streaming commitment. Inter-block blank lines belong to the following block.
+- `width` owns cluster handling, measurement and truncation using Unicode `width()` semantics. Wrapping never splits recognized combining-character or emoji clusters.
+- Tables are measured before allocating widths and drawing. Syntect highlights code. Its process-local locked cache reuses prefixes; a single large code block may exceed the target cached line count, so this is not a strict memory bound.
 
-主题由样式和绘制符号组成，内置主题与用户 TOML 使用同一布局。格式、颜色和字段校验见[主题说明](../themes/README.md)。
+Built-in and user TOML themes use the same layout. See the
+[theme schema](../themes/README.md) for colors, symbols and validation.
 
-## 输入与输出选择
+## Input and output selection
 
-| 条件 | 输出方式 |
+`tmd help` prints CLI help and exits before theme, terminal or input IO. The
+legacy `--help` and `-h` flags remain supported.
+
+| Condition | Output |
 | --- | --- |
-| 无文件参数、stdin 为管道、stdout 为终端，且未指定 `--ansi` | 流式输出 |
-| Unix 下的 Markdown 文件、stdin/stdout 均为终端、未指定 `--ansi`，且初始窗口至少 4 列/4 行、`TERM` 已设置且非 `dumb` | 主屏阅读；可显式请求 Kaku 原生增强 |
-| 其他情况 | 读完后一次性输出 |
+| No file, piped stdin, terminal stdout, no `--ansi` | Streaming |
+| On Unix: Markdown file, terminal stdin/stdout, no `--ansi`, initial size at least 4 columns and 4 rows, `TERM` set and not `dumb` | Main-screen reader, optionally native Kaku integration |
+| Otherwise | Read to completion, then print once |
 
-`--from claude-json` 解析 Claude Code JSONL。只渲染增量父消息，避免完整 assistant 消息造成重复；未知事件忽略。工具开始和结果分别输出，不能回改已进入历史的行。`--debug` 诊断不包含原始记录内容，交由输出驱动协调显示。
+`--from claude-json` handles incremental parent-message events and ignores
+unknown events. It avoids repeating complete assistant messages. Tool starts and
+results are separate output; scrollback is immutable. `--debug` diagnostics omit
+raw records and pass through the output driver.
 
-一次性输出的宽度优先使用 `--width`，否则采用终端宽度，无法确定时为 80 列；文件阅读宽度限制在当前窗口内。无效 UTF-8 转为替换字符。stdout 不是终端时不输出 OSC 8 链接；消费者提前关闭管道按正常结束处理。
+One-shot width is `--width`, otherwise terminal width, otherwise 80. Reader width
+is bounded by the window. Invalid UTF-8 becomes replacement characters. Redirected
+stdout has no OSC 8 links. A consumer closing a pipe early is normal termination.
 
-## 流式定稿
+## Streaming commitment
 
-`Streamer` 保存增长中的源码，每次重新解析并渲染，当前不是增量解析器。仅完整源码行决定可定稿边界；最后一个顶层块保持活动状态，代码块的完整源码行可提前定稿。
+`Streamer` stores growing source and reparses/renders it; it is not an incremental
+parser. Only complete source lines determine commitment. The last top-level
+block stays active; complete code lines can commit early.
 
-每次返回 `Frame { committed, active }`：`committed` 只输出一次，`active` 完整替换上一帧活动区。缩放只改变活动区宽度，已进入终端历史的内容不重排。CLI 合并短时间内到达的输入，以约 16 ms 的间隔绘制同步更新帧，活动区限制在终端可见高度内。
+`Frame { committed, active }` separates lines written once from the active frame,
+which is replaced in full. Resize changes only active width. CLI coalesces input
+into synchronized frames roughly every 16 ms and bounds active height to the
+viewport.
 
-流式不进入 raw 模式，Ctrl-C 仍由 shell 作用于管道。诊断输出前清理活动区，随后重绘。SIGINT、SIGTERM、SIGHUP 和 SIGQUIT 只设置取消标记，由输出线程恢复光标和本次设置的 Unicode 版本，并返回 `128 + signal`。输出被阻塞时，信号退出和恢复须等待终端可写。设置 Unicode 协议前检查终端能力，不把终端特有行为放进 core。
+Streaming stays out of raw mode, so Ctrl-C acts on the shell pipeline. Diagnostics
+clear and repaint the active area. INT, TERM, HUP and QUIT set cancellation flags;
+the output thread restores cursor and any changed Unicode version, then returns
+`128 + signal`. Blocked writes must become writable before cleanup can finish.
+Check terminal capabilities before changing Unicode protocol settings.
 
-## 静态文件阅读
+## Static reader
 
-默认阅读器通过 `Document` 解析静态文档并预先布局全文，保留在内存中，只绘制可见行。正文索引使用去除 Markdown 标记后的语义文本，在内容块、表格单元格及代码行之间保留换行边界。`Span.text_ranges` 将排版后的文字单向关联到该索引，装饰不参与索引；普通 `render` 和 `Streamer` 的 span 不包含该关联。`Line.src` 仍是原来的源码区间，不用于精确搜索或编辑回写。开始时依据真实光标位置将此前可见内容推入历史，顶部显示 tmd 调用信息，正文从开头显示。不切换备用屏、不清除历史。非空文档始终驻留，帮助面板单独保存滚动位置，关闭后返回原阅读位置；空文档直接返回。
+`Document` parses and lays out the complete static file in memory. Its semantic
+text index removes Markdown markers and separates blocks, table cells and code
+lines. `Span.text_ranges` maps displayed text one way into that index; decorations
+are excluded. Ordinary `render` and `Streamer` spans do not have this mapping.
+`Line.src` identifies a source block, not an exact search range or an editing
+writeback position.
 
-阅读期间临时启用 raw 模式、鼠标报告和 bracketed paste。粘贴作为整体事件处理，不执行其中的阅读快捷键。窗口缩放后重新布局，以源码区间锚定原来的顶部段落；双高标题必须成对进入视口。静态解析额外保留未经显示清洗的代码事件文本，并将其移动到 `Document.code_blocks()`；普通解析和流式不保留复制载荷。代码选择列表只展示经过控制字符清理和截断的预览，系统剪贴板接收完整代码内容。剪贴板 I/O 只在 CLI 中执行，本机 macOS 使用纯文本接口，测试注入假后端。
+The reader moves existing visible content into history, shows invocation context
+at the top and starts at the document beginning. It never enters the alternate
+screen or clears history. Nonempty documents stay open; empty documents exit.
+Raw mode, mouse reporting and bracketed paste are temporary. Pasted text does
+not execute reader shortcuts.
 
-`Document.headings()` 只索引正文顶层的 H1–H6，保留级别、语义标题、源码区间和行号；重复或空标题仍有独立身份。`heading_line` 用源码区间映射到当前布局，跳过块前分隔行，不依赖标题文字查找。
+`Document.code_blocks()` retains original code text only for static reading.
+Chooser previews sanitize controls and truncate; confirmed copying uses full
+text. CLI owns clipboard IO, with a local macOS backend and test doubles.
+`Span.code_block` associates code lines, labels and blank lines with chooser
+entries, including nested code. Ordinary and streaming rendering omit it.
 
-CLI 的 `View` 明确区分阅读、搜索输入、目录、代码列表和带返回来源的帮助。侧栏打开状态与焦点视图分开保存：80 列起将目录和普通字号正文绘制到独立列区间；窄窗口临时显示整页目录，不丢失并排布局的焦点。正文以实际可用列宽排版，输出在字符簇边界裁剪；侧栏打开、关闭和跨宽度边界时通过锚点重排。侧栏确认跳转保留目录焦点，Tab 显式切换；整页目录确认后关闭并返回正文。滚轮按指针列路由，不修改键盘焦点。`reader_outline` 保留目录选择和当前章节，分别生成主题背景和行首竖线；`reader_ui` 共享列表视口、按列宽分配的底栏和定时反馈。进入临时界面不会移动正文；连续缩放使用保留的文字/源码锚点，避免把极小窗口中的临时位置当成新的原位置。列表视口和选择分开保存，帮助关闭后返回原界面。core 不依赖这些终端状态。
+`Document.headings()` indexes top-level H1-H6 with level, semantic title, source
+range and line number. Repeated and empty titles retain distinct identities.
+`heading_line` maps ranges to layout lines, skipping preceding separators rather
+than searching by title.
 
-同一窗口尺寸最多保留普通全文和侧栏正文两份布局，开关侧栏通过移动布局所有权复用，不克隆全文；窗口行列变化时丢弃旧缓存。文档、主题和 CLI 选项在只读会话中不变，缓存不跨会话保留。
+CLI `View` separates reading, query input, outline, code chooser and help with
+its return origin. Sidebar visibility and keyboard focus are independent. At 80
+columns, outline and ordinary-size text use separate column ranges; narrower
+windows temporarily show a full-page outline without losing split-view focus.
+Enter keeps sidebar focus after jumping, but closes a full-page list. Tab switches
+panes; wheel routing uses pointer position without changing keyboard focus.
+Clipping respects character clusters.
 
-代码行通过 `Span.code_block` 关联到代码列表，标签和空行同样携带标识；嵌套代码不依赖外层共享的源码区间定位。普通渲染和流式没有该关联。
+`reader_outline` keeps selection and current section separately, drawn as a theme
+background and leading bar. `reader_ui` shares list viewports, width-aware footers
+and timed feedback. Temporary views preserve document and list positions. Tiny
+window states retain the original anchor for later expansion.
 
-查询输入与阅读、帮助、代码选择分开处理，输入中显示真实光标，取消后恢复阅读位置；确认后以正文区间定位当前命中行。窗口缩放优先按正文位置恢复，装饰行回退到源码块。退出时恢复原 termios、鼠标报告、粘贴模式、光标、样式和 DEC 行属性。
+Cache at most full-width and sidebar layouts for one window size, moving ownership
+rather than cloning the document. Resize invalidates them. The document, theme
+and CLI options are immutable within a read-only session; caches are not shared
+across sessions. New layout restores a semantic-text anchor, falling back to a
+source block; large headings enter the viewport as complete pairs.
 
-可选 `native` 方式依赖 `contrib/kaku-reader.lua`，只用于直接 Kaku。全文输出前进行 v1 探测：唯一标识与回执文件位于权限为 0700 的私有临时目录，文件带匹配 marker，适配器仅向该文件追加历史容量。等待最多 500 ms，探测结束移除回执；迟到回复不会进入键盘输入。
+Query input displays a real cursor for IME positioning. Cancel restores the
+reading position; confirmation locates the active match. Exit restores original
+termios, mouse/paste modes, cursor, styles and DEC line attributes.
 
-只有容量足以保留全文且没有待处理输入时才输出并请求定位。超时、不支持或容量不足时先回退内置阅读。全文输出后定位失败不重复输出。适配器不执行 shell 命令，不自动改终端配置。外部并发输出和真实终端事件时序仍需实机验证。用户操作见[静态文件阅读](reader.md)。
+### Native Kaku integration
 
-## 大标题与终端恢复
+`contrib/kaku-reader.lua` is optional and direct-Kaku only. Its v1 preflight uses
+a unique marker and acknowledgement file in a private mode-0700 temporary
+directory. The adapter appends matching history capacity. The reader waits at
+most 500 ms and removes the file; late replies never enter keyboard input.
 
-`--large-headings` 只放大顶层 H1，先判断静态输入、Kaku 直连、TTY、窗口及宽度，再向 core 传入 `RenderOptions`。H2–H6、嵌套标题、正文和分隔线保持普通字号。默认 `render` 与 `Streamer::new` 始终采用普通行。
+Only print the full document when history capacity is sufficient and no input
+is pending. Unsupported, timed-out or insufficient-capacity preflight falls back
+to inline reading before output. Failure to position after output never prints
+the document again. The adapter executes no shell commands and edits no user
+configuration. Concurrent external output and actual event timing need real
+terminal verification. See [setup](reader.md#optional-native-kaku-mode).
 
-`reader` 与 `large_headings` 输出模块把双高行转换为 DEC 上下半行；SGR 重置不能恢复 DEC 行属性，必须显式输出 `ESC # 5`。复制时可能重复文本，属于终端双高协议的已知限制。
+## Large headings and recovery
 
-一次性大标题保留 canonical/ISIG，仅临时开启 `NOFLSH`、关闭 `ECHO`/`ECHONL`，避免真实 VINTR 丢弃半行或回显插入转义序列。输出状态区分普通行、上半行和下半行，失败时清理未配对行，再恢复 termios。它与 raw 阅读器及非 raw 流式的恢复规则不同，不共用会话 guard。
+`--large-headings` checks static input, direct Kaku, TTY, dimensions and width
+before passing `RenderOptions` to core. Only top-level H1 is enlarged; other
+headings, body text and separators remain ordinary. Default rendering and
+`Streamer::new` always use ordinary lines.
 
-## 验证与维护
+Reader and one-shot large-heading output translate DEC double-height lines into
+upper/lower halves. SGR reset is insufficient; explicitly emit `ESC # 5`. Terminal
+copying can duplicate text because both halves contain it.
 
-Rust 行为测试、渲染快照、PTY 协议回归和真实终端验收各自负责不同证据，不能相互替代。步骤见[终端验收](terminal-testing.md)；发布边界见[自动发布](release.md)。本文件只记录当前实现，规划、交接、审查过程和沟通记录放在仓库外。
+One-shot large-heading output retains canonical mode and ISIG, temporarily enables
+`NOFLSH`, and disables `ECHO`/`ECHONL` so VINTR cannot discard a half-line or inject
+echoed controls. On failure, clean up any unmatched half before restoring termios.
+This lifecycle differs from both raw reading and non-raw streaming; do not share
+a session guard across them.
+
+## Verification
+
+Rust tests, snapshots, PTY protocol checks and real-terminal acceptance provide
+different evidence. See [testing](terminal-testing.md) and [releases](release.md).
+This document describes current implementation; plans and review records stay
+outside the repository.

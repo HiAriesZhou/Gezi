@@ -1,8 +1,8 @@
-# 终端验收
+# Terminal testing
 
-## 自动检查
+## Automated checks
 
-先运行格式、Clippy 和 Rust 测试，再构建待验收版本：
+Run formatting, Clippy and Rust tests, then build the candidate:
 
 ```sh
 cargo fmt --all --check
@@ -16,46 +16,69 @@ python3 -B scripts/test_images_pty.py --binary target/release/tmd
 python3 -B -m unittest discover -s scripts -p 'test_*release.py'
 ```
 
-PTY 检查只使用 Python 标准库和 `/bin/bash`，当前在 macOS 上验证；不安装依赖，不读取用户 shell 配置，不保存 shell 历史。可用 `--binary <路径>` 指定构建产物。
+PTY checks use only Python's standard library and `/bin/bash` on macOS. They do
+not load user shell configuration or save history. Pass `--binary <path>` to test
+a downloaded package instead of a local build.
 
-图片 PTY 使用合成 SVG 和本地 HTTP 服务，验证默认加载、关闭远程及全部图片、慢请求期间滚动与退出、局部裁剪、侧栏/帮助切换和仅清理自身图片。它验证输出协议，不代替 Kaku 中的图片效果验收。
+Image checks use synthetic SVG and a local HTTP server. They cover default
+loading, remote/all-images off, responsiveness during slow requests, cropping,
+sidebar/help transitions and session-owned cleanup. These verify protocol output,
+not actual Kaku rendering.
 
-流式探针检查分段 UTF-8、多个输出帧、缩放、正常退出，以及 INT/TERM/HUP/QUIT 后的退出码、光标和终端属性恢复。场景以观察到的输出触发，不依赖固定启动延迟；同时覆盖纯文本和 Claude JSONL。失败返回非零，输出中用 `TERM_PROGRAM=Kaku` 选择协议分支不等于真实 Kaku 验收。
+Streaming probes cover split UTF-8, multiple frames, resize, normal completion and
+INT/TERM/HUP/QUIT exit status and restoration. Scenarios use observed output rather
+than fixed startup delays, for both Markdown and Claude JSONL. Failures return
+nonzero. Setting `TERM_PROGRAM=Kaku` selects protocol branches; it is not real
+Kaku acceptance.
 
-CI 在 macOS 上执行相同检查。安装脚本测试使用隔离目录和模拟下载，验证校验失败、备份、重复安装及原子替换；修改安装流程后还须把正式 Release 包安装到临时目录验证，不能直接覆盖个人安装。
+CI runs the same checks on macOS. Installer tests use isolated destinations and
+mock downloads to verify failed checksums, backups, repeat installation and
+atomic replacement. After changing installation, also install an official Release
+into a temporary directory; do not overwrite the personal installation.
 
-发布候选还须运行 [macOS 归档验证](release.md#构建-apple-silicon-候选包)，检查下载包中实际可执行文件的版本、帮助、中文渲染和阅读/流式行为。
+Release candidates must pass [archive verification](release.md#building-a-candidate)
+using the actual packaged executable, including version, help, rendering and PTY
+behavior.
 
-## 阅读器性能
+## Reader performance
 
-对 release 构建或解压后的实际下载包运行：
+Use a release build or an extracted download:
 
 ```sh
 python3 -B scripts/benchmark_reader.py --binary target/release/tmd > /tmp/tmd-reader-performance.json
 ```
 
-基准在隔离 PTY 中使用 80×24 窗口、1 MiB 合成中英文文档和 1,000 个标题，每项操作采样 100 次，包含首次操作。报告开关侧栏、跳转、焦点切换和搜索的首次、P50、P95 及最大耗时；P95 超过 100 ms 时返回非零。请在空闲机器记录硬件信息并将结果保存在仓库外，避免用共享 CI 的运行时争用作为产品性能结论。
+The isolated 80x24 PTY uses a 1 MiB synthetic Chinese/English document and 1,000
+headings. It samples each action 100 times, including the first, and reports first,
+P50, P95 and maximum latency for sidebar toggling, jumps, focus and search. P95
+above 100 ms fails. Record hardware on an idle machine and keep results outside
+the repository; shared CI contention is not a product performance measurement.
 
-侧栏开关复用当前窗口尺寸的两份布局，不复制整份布局；改变窗口尺寸会丢弃缓存并重新排版。首次展开及缩放仍需排版；报告单独列出每项操作的首次耗时。计时结束点是收到同步输出结束标记，不包含 Kaku 绘制、输入法或人的按键时间。
+The reader reuses two layouts for a window size without copying the full document.
+Initial sidebar opening and resizing still require layout. Timings end at the
+synchronized-output end marker and exclude Kaku painting, IME and human input.
 
-## 真实终端检查
+## Real-terminal checks
 
-PTY 通过不能证明无闪烁、字体宽度和终端兼容性。当前以 macOS 上的 Kaku 为验收环境：
+PTY success does not prove smooth painting, font alignment or terminal
+compatibility. The current acceptance environment is Kaku on macOS:
 
 ```sh
 python3 scripts/slowcat.py fixtures/long.md | target/release/tmd
 target/release/tmd --width 80 fixtures/cjk-table.md
 ```
 
-检查长输出不闪、中文/emoji 表格对齐、代码块逐行出现、活动区不超过终端高度，以及正常结束后光标可用。流式期间缩放窗口，确认只重排活动区；再运行一次并按 Ctrl-C，确认上游结束、光标和输入正常。
+Check flicker, Chinese/emoji table alignment, progressive code output and active
+height. Resize while streaming: only the active region should reflow. Repeat and
+press Ctrl-C; verify upstream termination, cursor restoration and normal typing.
+Record the actual terminal, executable version and result. Report automated
+checks, visual acceptance and maintainer acceptance separately; mark environments
+that were not exercised.
 
-记录实际使用的终端、执行版本和结果；未运行的终端明确标为待验收。自动检查、视觉验收和作者接受分别报告。
+## Large headings
 
-## 静态大标题
-
-以下命令使用非交互 stdin 测试一次性输出；交互阅读器另按下节验收。
-
-在 Kaku 直接运行，先保持至少 40 列、10 行：
+These noninteractive-stdin commands exercise one-shot output. Test the interactive
+reader separately below. Use direct Kaku with at least 40 columns and 10 rows:
 
 ```sh
 target/release/tmd --large-headings fixtures/large-headings.md < /dev/null
@@ -63,34 +86,39 @@ target/release/tmd fixtures/large-headings.md < /dev/null
 target/release/tmd --large-headings --width 20 fixtures/large-headings.md < /dev/null
 ```
 
-逐项记录结果，截图和验收记录保存于仓库外：
+Keep screenshots and acceptance records outside the repository.
 
-1. 对比开启和关闭：顶层 ATX、Setext H1 宽高各两倍，H2 至 H6、引用/列表中的 H1、正文、代码和表格维持常规字号；H1 分隔线全宽且普通高度。
-2. 检查中文、组合字符、emoji、带样式和链接的标题，20 列换行不截断字符、不重叠；文档超出窗口高度并滚入历史时上下半行仍配对。
-3. 输出结束后输入 `printf 'normal prompt test\n'`，确认提示符和后续文字大小正常；缩放窗口后再次检查后续输出。静态历史不承诺重新排版。
-4. 选中并复制放大标题到纯文本编辑区，记录是否出现两份文字。标准上下半行写有相同内容，复制重复是已披露限制，不能声称已无损复制。
-5. 将样本重复成较长临时文件，使用 `< /dev/null` 执行大标题输出并在输出期间按 Ctrl-C；检查退出码为 130，后续提示符普通大小，没有孤立的半个标题。不要向仓库写入临时长文件。
-6. `--ansi`、输出重定向、管道输入及 tmux/screen 中均应为普通标题；不能手动伪造 Kaku 环境变量来声称完成真实显示验收。
+1. Only top-level ATX/Setext H1 doubles in width and height. H2-H6, nested H1, body, code and tables stay ordinary. H1 separators remain full-width and single-height.
+2. Check Chinese, combining characters, emoji, styles and links. At 20 columns, wrapping must not split clusters or overlap. Upper/lower halves remain paired in scrollback.
+3. After completion, run `printf 'normal prompt test\n'`. The prompt and later text must use ordinary size, including after resize. Static history does not promise reflow.
+4. Copy a large heading into a plain-text editor and record duplication. Both physical halves contain the same text; this disclosed limitation is not lossless copying.
+5. Repeat the sample in a temporary file outside the repository. Interrupt one-shot output with Ctrl-C; expect status 130, normal prompt size and no orphaned half-heading.
+6. `--ansi`, redirected output, piped input and tmux/screen retain ordinary headings. Do not spoof terminal variables and call it real display acceptance.
 
-`scripts/test_stream_pty.py` 包含静态正常结束、收到实际大标题输出后 Ctrl-C、过窄/过矮窗口及能力回退检查；Rust 测试在每个输出字节边界注入一次写入错误或取消，检查恢复序列。真实 VINTR 回归向控制终端写入 `0x03`，检查临时 `NOFLSH`、关闭回显、保留 canonical/ISIG，以及退出后恢复原 termios；另测 HUP、QUIT、TERM 的恢复与退出码。这些只证明输出协议与生命周期，真实 Kaku 显示和剪贴板结果须单独记录。
+Stream PTY tests cover static completion, interruption after observed heading
+output, small windows and capability fallback. Rust tests inject errors or
+cancellation at every output byte boundary. VINTR regressions write `0x03` to the
+controlling terminal and verify temporary NOFLSH/no-echo, retained canonical/ISIG,
+and restoration of original termios. HUP, QUIT and TERM are also covered. These
+prove lifecycle/protocol behavior; Kaku visuals and copying need separate checks.
 
-## 主屏滚动阅读
+## Main-screen reader
 
-自动检查：`python3 -B scripts/test_reader_pty.py --binary target/debug/tmd`，与已有流式/大标题回归同时运行。
+Use the candidate binary for every scenario:
 
-Kaku 手动检查：
+1. Launch `tmd fixtures/acceptance.md` from the top, middle and bottom of a window. Invocation context appears above the beginning of the document; no alternate screen is used.
+2. Scroll continuously without loading more pages. Check Home/End, Shift-drag selection, persistent short documents and enlargement. Help can scroll and returns to the old position. Pasting text containing `q` does not exit.
+3. With `--large-headings fixtures/large-headings.md`, scroll across viewport edges and resize. No half-heading remains and body text never becomes large.
+4. Shrink to a narrow or one-row window, then expand. Anchors and exit remain usable. `q`/Esc restores the prompt; Ctrl-C returns 130. Run another command to check echo and inspect preserved shell history.
+5. Search with the system Chinese IME. Candidate placement follows the input cursor; Enter confirms, counts and locates matches; n/N wraps. A typed q stays query text. Cancel after resize restores location. Check soft-wrapped words, no matches, help/search Esc behavior and Ctrl-C recovery.
+6. Copy code with tabs, Chinese and long lines, then compare its text. Check CRLF normalization, nested code, trailing newline and empty-block clipboard preservation. Save personal clipboard content before manual tests; automated tests use fake backends. Cancel, scroll, search and exit must not alter it. Resize and interrupt the chooser to verify recovery.
+7. Check configuration, CLI overrides and invalid settings. ANSI, redirection, Markdown pipes and Claude JSONL keep their behavior.
+8. Use temporary Kaku configuration outside the repository for native integration; never overwrite personal settings. Successful preflight prints and positions at the beginning. Missing adapters or insufficient history fall back before output. Terminal scrolling/copying work and no extra input reaches the shell.
+9. Open the outline with `o`. Include H1-H6, Setext, duplicate and empty headings; omit examples in quotes, lists and code. Moving selection leaves the document still. Repeat Down/Enter three times in a wide window without reopening or switching focus. Tab changes focus; Esc/q/o closes the focused outline. Selection background and current-section bar are independent; document scrolling updates only the latter. Inactive selection is muted. Check both themes, cluster-safe truncation and source lines for repeated titles.
+10. At 80 columns the panes sit side by side; at 79 they become a full-page outline. Expansion restores selection and focus. Switching between short and long titles never inserts detail rows in the sidebar or changes page step. Wheel routing follows the pointer without changing focus. Opening the sidebar uses ordinary headings; closing restores requested large headings. Text never overwrites the separator.
+11. Help in outline/code views preserves selection and list scroll on return. Footers show only valid actions at 80x24 and 40x12. Shrink to 24 columns and 4x1, then restore: destinations and search remain valid.
+12. Empty-outline, jump and copy-success feedback disappears after three seconds; copy errors persist until another selection, retry or cancellation. Feedback never moves content or the IME cursor. On a 1,200-heading sample, navigate for 30 seconds and record stalls, artifacts or selection drift. PTY timing is not visual acceptance.
+13. Run `tmd help` directly and with stdin held open. It prints CLI help and exits without entering the reader. `--help` and `-h` remain supported; a file named `help` can be opened as `./help` or after `--`.
 
-1. 从窗口顶部、中间、底部运行 `target/debug/tmd fixtures/acceptance.md`，确认顶部有调用信息，下面是文章开头，没有切备用屏。
-2. 用滚轮连续上下阅读，Home/End 到首尾；不需要按空格才能加载后文。按 Shift 拖选并复制普通文字。短文档也保持打开；放大窗口不会退出。按 `?` 查看帮助，在帮助中滚动后按 q/Esc 回到原阅读位置；粘贴含 q 的文本不退出。
-3. 用 `--large-headings fixtures/large-headings.md` 检查大标题跨视口边界不会留下半行，滚动及缩放后正文不变大。
-4. 缩放至窄窗口及仅一行高，再恢复；检查段落定位与退出仍可用。q/Esc 后提示符正常，Ctrl-C 返回 130；输入后续命令确认回显正常。向上查看原会话历史仍在。
-5. 按 `/` 使用系统拼音输入中文查询，确认候选窗跟随输入位置，Enter 后显示匹配计数并定位命中行；n/N 循环跳转。查询中输入 q 不退出；Esc 取消，缩放后取消仍回原位置。检查跨软换行词、无结果、帮助与搜索状态的 Esc，以及搜索中 Ctrl-C 恢复。
-6. 按 `c` 选择含 Tab、中文和长行的代码块，明确执行复制后粘贴到纯文本文件，与代码内容比较；检查 CRLF 转 LF、嵌套代码、末尾换行、空块不改剪贴板。测试前确认个人剪贴板内容已妥善保存；自动测试只用假后端。取消、滚动、搜索、退出不应改剪贴板。代码选择中缩放和 Ctrl-C 后检查终端恢复。
-7. 配置文件、CLI 覆盖、错误配置分别检查。`--ansi`、文件重定向、纯文本和 Claude JSONL 管道维持原行为。
-8. 原生增强用仓库外临时 Kaku 配置先验收，不能覆盖个人配置：探测成功后全文输出并定位开头；未装适配器或历史容量不足时在全文输出前回退。复制和滚动由终端处理，结束后没有多余输入落入 shell。
-9. 按 `o` 检查 H1–H6、Setext、重复和空标题，引用/列表/代码中的示例不进入目录。选择移动时正文不动；宽窗口连续三次“↓ → Enter”应分别跳转并保留目录焦点，无需重新打开目录或按 Tab。Tab 切换焦点，Esc/q/o 关闭目录。整行背景和行首 `▎` 分别表示选择和当前阅读章节，正文滚动只更新后者；切到正文时选择弱化，返回目录后恢复背景。深色和浅色主题均无箭头、星号或下划线叠加，背景不越过侧栏。长中文/emoji 标题截断不拆字符，源码行号可以区分重复标题。
-10. 在 80 列及以上检查侧栏和正文并排；79 列及以下退回整页目录，扩大后恢复选择和焦点。侧栏中在短标题和长中文标题之间反复切换：列表始终从第 2 行开始，不插入额外预览行，标题栏更新源码行号；翻页步长不随标题长度改变。分别将鼠标放在两侧滚动，确认只有对应区域移动且焦点不变。开启大标题时打开侧栏应使用普通标题，关闭后恢复大标题；确认分隔线没有被长代码或标题覆盖。
-11. 在目录和代码列表中按 `?`，关闭帮助后原选择和列表位置不变。阅读、搜索、目录、复制、帮助的底栏只提示当前有效操作；80×24 和 40×12 下确认、返回方式清楚。缩至 24 列及 4×1 后再恢复，目标和搜索仍有效。
-12. 检查无标题、跳转、复制成功提示在三秒后消失；复制错误保持到改选、重试或取消。消息更新不移动视口或中文输入光标。对 1,200 个标题的样本连续按键/滚轮操作 30 秒，记录可见停顿、残影或选择错位，不能以 PTY 耗时代替真实视觉验收。
-
-连接失败或未安装适配器时，不将模拟握手记为原生增强通过。
+Do not report a simulated native handshake as real adapter acceptance when
+connection failed or the adapter was not installed.
