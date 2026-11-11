@@ -26,7 +26,8 @@ sidebar/help transitions and session-owned cleanup. These verify protocol output
 not actual Kaku rendering.
 
 Streaming probes cover split UTF-8, multiple frames, resize, normal completion and
-INT/TERM/HUP/QUIT exit status and restoration. Scenarios use observed output rather
+INT/TERM/HUP/QUIT termination by signal, restoration, and a shell loop stopping after
+keyboard Ctrl-C. Scenarios use observed output rather
 than fixed startup delays, for both Markdown and Claude JSONL. Failures return
 nonzero. Setting `TERM_PROGRAM=Kaku` selects protocol branches; it is not real
 Kaku acceptance.

@@ -60,7 +60,8 @@ fn main() -> ExitCode {
             move |width| make_source(cli.from, width, theme, cli.debug),
             cli.width,
         ) {
-            Ok(code) => ExitCode::from(code),
+            Ok(stream::Outcome::Finished) => ExitCode::SUCCESS,
+            Ok(stream::Outcome::Signalled(signal)) => terminal_io::terminate_by(signal),
             Err(err) => {
                 eprintln!("tmd: {err}");
                 ExitCode::FAILURE

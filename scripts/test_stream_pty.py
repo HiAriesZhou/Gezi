@@ -281,7 +281,9 @@ class StreamingSignals(unittest.TestCase):
                         while read_output():
                             self.assertLess(time.monotonic(), deadline, "signal did not interrupt input wait")
                         child.wait(timeout=2)
-                        self.assertEqual(child.returncode, 128 + signum)
+                        # Dying by the signal, not exiting with 128 + signal,
+                        # lets a calling shell stop its script as well.
+                        self.assertEqual(child.returncode, -signum)
                         self.assertGreater(received.rfind(b"\x1b[?25h"), received.rfind(b"\x1b[?25l"))
                         self.assertIn(b"UnicodeVersion=pop", received)
                         self.assertEqual(termios.tcgetattr(master), before)
@@ -292,6 +294,60 @@ class StreamingSignals(unittest.TestCase):
                         child.stdin.close()
                         os.close(slave)
                         os.close(master)
+
+    def test_keyboard_interrupt_stops_calling_shell_loop(self):
+        import pty
+        import select
+        import signal
+        import termios
+
+        # tmd is the only interrupted process: its input is a FIFO the shell
+        # keeps open. A shell continues its loop when that process exits
+        # normally after SIGINT, and stops only when it dies by SIGINT.
+        script = ('exec 3<>"$TMD_FIFO"; while :; do "$TMD" --theme default-dark <"$TMD_FIFO"; '
+                  'echo loop-continued; done')
+        with tempfile.TemporaryDirectory(prefix="tmd-shell-loop-") as directory:
+            fifo = Path(directory) / "input"
+            os.mkfifo(fifo)
+            pid, master = pty.fork()
+            if pid == 0:
+                os.environ.update(TMD=str(BINARY), TMD_FIFO=str(fifo),
+                                  TERM_PROGRAM="Kaku", TERM="kaku")
+                os.execvp("bash", ["bash", "-c", script])
+            received = bytearray()
+            status = None
+
+            def read_output(timeout):
+                if select.select([master], [], [], timeout)[0]:
+                    try:
+                        received.extend(os.read(master, 65536))
+                    except OSError:
+                        pass
+
+            try:
+                deadline = time.monotonic() + 5
+                while b"\x1b[?25l" not in received:
+                    self.assertLess(time.monotonic(), deadline, "renderer did not start")
+                    read_output(.05)
+                os.write(master, termios.tcgetattr(master)[6][termios.VINTR])
+                deadline = time.monotonic() + 3
+                while status is None and time.monotonic() < deadline:
+                    read_output(.05)
+                    done, waited = os.waitpid(pid, os.WNOHANG)
+                    if done:
+                        status = waited
+                read_output(0)
+                self.assertIsNotNone(status, "shell loop kept running after Ctrl-C")
+                self.assertTrue(os.WIFSIGNALED(status))
+                self.assertEqual(os.WTERMSIG(status), signal.SIGINT)
+                self.assertNotIn(b"loop-continued", received)
+                self.assertGreater(received.rfind(b"\x1b[?25h"), received.rfind(b"\x1b[?25l"))
+                self.assertIn(b"UnicodeVersion=pop", received)
+            finally:
+                if status is None:
+                    os.kill(pid, signal.SIGKILL)
+                    os.waitpid(pid, 0)
+                os.close(master)
 
 
 class StartupOrdering(unittest.TestCase):
