@@ -38,6 +38,37 @@ To choose a release or directory, set `GEZI_VERSION=v0.1.7` or
 [Releases](https://github.com/HiAriesZhou/Gezi/releases/latest).
 Packages are ad hoc signed, without Developer ID signing or notarization.
 
+### Install with a coding agent
+
+Copy the entire prompt below into your coding agent. On GitHub, use the copy
+button in the upper-right corner of the block:
+
+```text
+Install the latest stable Gezi release from
+https://github.com/HiAriesZhou/Gezi on this machine.
+
+1. Check that this is Apple Silicon macOS running in a native arm64 shell.
+   If it is unsupported, stop and explain.
+2. Check existing gezi and ge commands, including aliases, symlinks and their
+   installation method. Do not overwrite another tool or mix Cargo and
+   binary-package installations. If there is a conflict, explain it before
+   making changes.
+3. Download https://raw.githubusercontent.com/HiAriesZhou/Gezi/main/install.sh
+   to a temporary file, inspect it, and run it with sh. Use the default
+   ~/.local/bin destination, keep download checksum verification enabled,
+   and do not use sudo. Preserve existing configuration and unrelated files.
+4. Ensure ~/.local/bin is on PATH. If a shell startup change is needed,
+   explain it and add only the missing entry without replacing existing
+   settings.
+5. Verify gezi --version, ge --version, gezi help, and rendering a short
+   Markdown sample. Confirm that both commands resolve to this installation
+   and report the same version.
+6. Report the installed paths and version, show how to open a Markdown file
+   with gezi or ge, and explain that future updates use gezi update or
+   ge update. Stop and report any error rather than claiming installation
+   succeeded.
+```
+
 ## Update
 
 Update to the latest stable release:
