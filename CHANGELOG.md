@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+
+- Run `gezi update` or `ge update` to update a macOS binary-package installation to the latest stable release. Verify downloads, update both commands in the running executable’s directory, keep a backup and leave equal or newer installations unchanged.
+- Simplify the README around `gezi` and `ge`, with dedicated installation and update instructions.
+
 ## 0.1.7
 
 - Rename the product to Gezi (格子) and provide equivalent `gezi` and `ge` commands. The GitHub repository is now `Gezi`. Earlier releases retain their TMD names.
