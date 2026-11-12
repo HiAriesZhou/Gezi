@@ -158,13 +158,13 @@ class ReleaseTests(unittest.TestCase):
                 shutil.rmtree(assets)
             (self.root / "docs").mkdir(exist_ok=True)
             (self.root / "LICENSE").write_text("MIT License\n")
-            (self.root / "docs/binary-package.md").write_text("Run ./tmd --version\n")
-            binary = self.root / "tmd"
+            (self.root / "docs/binary-package.md").write_text("Run ./gezi --version\n")
+            binary = self.root / "gezi"
             binary.write_bytes(bytes.fromhex("cffaedfe") + (0x0100000c).to_bytes(4, "little")
                                + bytes(4) + (2).to_bytes(4, "little") + bytes(16))
             binary.chmod(0o755)
             with patch.object(package.subprocess, "run", return_value=
-                              subprocess.CompletedProcess([], 0, f"tmd {version}\n".encode(), b"")):
+                              subprocess.CompletedProcess([], 0, f"gezi {version}\n".encode(), b"")):
                 package.create_package(self.root, binary, assets, SHA)
 
     def test_creates_once_at_checked_commit_with_current_notes(self):
@@ -174,7 +174,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(created["tag_name"], "v0.0.1")
         self.assertEqual(created["target_commitish"], SHA)
         self.assertTrue(created["draft"])
-        self.assertTrue(created["body"].startswith("中文 release notes.\n\n<!-- tmd-release-owner:"))
+        self.assertTrue(created["body"].startswith("中文 release notes.\n\n<!-- gezi-release-owner:"))
         self.assertEqual(self.api.patches(), [{"draft": False, "body": "中文 release notes."}])
         self.assertEqual(len(self.api.assets), 2)
         self.assertFalse(self.api.release["draft"])
@@ -446,7 +446,7 @@ class TransportTests(unittest.TestCase):
     def test_post_method_json_headers_and_timeout(self):
         response = io.BytesIO(b'{"id":1}')
         with patch.object(release, "urlopen", return_value=response) as opened:
-            api = release.GitHub("HiAriesZhou/tmd", "test-placeholder")
+            api = release.GitHub("HiAriesZhou/Gezi", "test-placeholder")
             self.assertEqual(api.request("releases", {"tag_name": "v0.0.1"}), {"id": 1})
             request = opened.call_args.args[0]
             self.assertEqual(request.get_method(), "POST")
@@ -455,7 +455,7 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(opened.call_args.kwargs["timeout"], 30)
 
     def test_errors_are_redacted_and_only_expected_404_is_ignored(self):
-        api = release.GitHub("HiAriesZhou/tmd", "test-placeholder")
+        api = release.GitHub("HiAriesZhou/Gezi", "test-placeholder")
         error = HTTPError("https://api.github.com", 403, "secret-response", {}, io.BytesIO(b"secret-body"))
         with patch.object(release, "urlopen", side_effect=error):
             with self.assertRaises(release.ReleaseError) as caught:

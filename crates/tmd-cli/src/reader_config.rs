@@ -1,19 +1,19 @@
 //! Optional reader configuration; theme files keep their existing format.
-use std::{fs, io, path::Path};
+use std::path::Path;
 
-use crate::cli::ReaderMode;
+use crate::{cli::ReaderMode, config};
 
 pub fn load(explicit: Option<ReaderMode>, config_dir: Option<&Path>) -> Result<ReaderMode, String> {
     if let Some(mode) = explicit {
         return Ok(mode);
     }
-    let Some(path) = config_dir.map(|dir| dir.join("tmd/config.toml")) else {
+    let Some(base) = config_dir else {
         return Ok(ReaderMode::Inline);
     };
-    let source = match fs::read_to_string(&path) {
-        Ok(source) => source,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(ReaderMode::Inline),
-        Err(err) => return Err(format!("reader config {}: {err}", path.display())),
+    let Some((path, source)) =
+        config::read(base, "config.toml").map_err(|err| format!("reader config {err}"))?
+    else {
+        return Ok(ReaderMode::Inline);
     };
     parse(&source).map_err(|err| format!("reader config {}: {err}", path.display()))
 }

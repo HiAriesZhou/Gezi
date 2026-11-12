@@ -126,7 +126,7 @@ impl ClaudeStream {
             Err(err) if self.debug => {
                 // Never log the original record (it can contain private text).
                 self.diagnostics.push(format!(
-                    "tmd: JSONL line {}: invalid JSON ({:?}, column {})",
+                    "gezi: JSONL line {}: invalid JSON ({:?}, column {})",
                     self.line,
                     err.classify(),
                     err.column()

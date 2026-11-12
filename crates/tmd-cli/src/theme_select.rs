@@ -1,9 +1,9 @@
 //! Picking the theme for `--theme`: user theme files, built-in themes,
 //! and `auto`, which matches the terminal's background.
 
-use std::fs;
 use std::path::Path;
 
+use crate::config;
 use tmd_core::Theme;
 
 /// Theme name that follows the terminal's background.
@@ -35,8 +35,8 @@ fn colorfgbg_is_dark(value: &str) -> Option<bool> {
     }
 }
 
-/// Loads `name` from `<config>/tmd/themes/<name>.toml` when that file
-/// exists, otherwise from the built-in themes.
+/// Loads `name` from `<config>/gezi/themes/<name>.toml`, then the legacy
+/// `<config>/tmd/themes/<name>.toml`, otherwise from the built-in themes.
 pub fn load(name: &str, config_dir: Option<&Path>) -> Result<Theme, String> {
     // The name becomes a file name; keep it from reaching other folders.
     let valid = !name.is_empty()
@@ -48,11 +48,10 @@ pub fn load(name: &str, config_dir: Option<&Path>) -> Result<Theme, String> {
             "invalid theme name {name:?}: use letters, digits, - and _"
         ));
     }
-    if let Some(path) = config_dir.map(|dir| dir.join(format!("tmd/themes/{name}.toml")))
-        && path.is_file()
+    if let Some(base) = config_dir
+        && let Some((path, source)) = config::read(base, &format!("themes/{name}.toml"))
+            .map_err(|err| format!("theme file {err}"))?
     {
-        let source = fs::read_to_string(&path)
-            .map_err(|err| format!("theme file {}: {err}", path.display()))?;
         return Theme::from_toml(&source)
             .map_err(|err| format!("theme file {}: {err}", path.display()));
     }
@@ -68,7 +67,7 @@ pub fn load(name: &str, config_dir: Option<&Path>) -> Result<Theme, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn auto_does_not_query_when_stdout_is_not_a_terminal() {

@@ -1,3 +1,3 @@
-# TMD
+# Gezi
 
 @AGENTS.md

@@ -17,7 +17,7 @@ from unittest.mock import patch
 sys.dont_write_bytecode = True
 import check_stream_pty as probe
 
-BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
+BINARY = Path(__file__).resolve().parents[1] / "target/debug/gezi"
 
 
 def expected_status(signum):
@@ -452,7 +452,7 @@ class StartupOrdering(unittest.TestCase):
                     received.extend(os.read(master, 65536))
                     if b"\x1b[?2026l" in received:
                         # The debug case has two frames around stderr output.
-                        if record.startswith(b"broken") and b"tmd: JSONL" not in received:
+                        if record.startswith(b"broken") and b"gezi: JSONL" not in received:
                             continue
                         return bytes(received)
             self.fail("no diagnostic/draw frame received")
@@ -461,9 +461,9 @@ class StartupOrdering(unittest.TestCase):
             first = frame(b'{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"Hello"}}}\n')
             self.assertIn(b"Hello\r\n", first)
             bad = frame(b"broken\n")
-            self.assertIn(b"tmd: JSONL line 2", bad)
+            self.assertIn(b"gezi: JSONL line 2", bad)
             self.assertIn(b"\x1b[1F", bad)
-            self.assertLess(bad.index(b"\x1b[1F"), bad.index(b"tmd: JSONL"))
+            self.assertLess(bad.index(b"\x1b[1F"), bad.index(b"gezi: JSONL"))
             frame(b'{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}}\n')
             child.stdin.close()
             child.wait(timeout=5)
@@ -509,7 +509,7 @@ class StartupOrdering(unittest.TestCase):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path,
-                        default=Path(__file__).resolve().parents[1] / "target/debug/tmd")
+                        default=Path(__file__).resolve().parents[1] / "target/debug/gezi")
     args, remaining = parser.parse_known_args()
     BINARY = args.binary.resolve()
     if not BINARY.is_file():

@@ -20,7 +20,7 @@ unpublished historical candidates are not released versions.
 3. Open a PR, complete review and obtain maintainer confirmation before merging to `main`.
 4. After main's macOS CI passes, `Publish version` uploads and verifies the Apple Silicon package and SHA256, pins `v<version>` to that checked commit, then publishes the GitHub Release.
 
-The title is `tmd v<version>`; the body is only that version's changelog section.
+The title is `Gezi v<version>`; the body is only that version's changelog section.
 Versions such as `0.1.0-rc.1` are prereleases. An unchanged version that already
 has a published Release is skipped.
 
@@ -33,13 +33,13 @@ In a clean, committed checkout on Apple Silicon macOS:
 
 ```sh
 cargo build --release --locked
-python3 -B scripts/package_release.py --binary target/release/tmd --out-dir target/release-package
+python3 -B scripts/package_release.py --binary target/release/gezi --out-dir target/release-package
 python3 -B scripts/check_package.py --package-dir target/release-package
 ```
 
 Packaging verifies architecture and version, then creates
-`tmd-v<version>-aarch64-apple-darwin.tar.gz` and its checksum. The archive contains
-the executable, license, [package instructions](binary-package.md) and
+`gezi-v<version>-aarch64-apple-darwin.tar.gz` and its checksum. The archive contains
+both `gezi` and `ge` executables (identical bytes), license, [package instructions](binary-package.md) and
 version/commit/target metadata. Running it requires neither Rust nor Lua.
 Identical inputs use fixed archive metadata. Existing outputs are rejected;
 choose a new empty destination.

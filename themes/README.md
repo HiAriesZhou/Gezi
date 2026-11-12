@@ -13,10 +13,12 @@ then falls back to `COLORFGBG`, then dark. Non-terminal output uses dark directl
 
 ## Custom themes
 
-Save a file to `~/.config/tmd/themes/<name>.toml`, or
-`$XDG_CONFIG_HOME/tmd/themes/<name>.toml` when that variable is set. Select it with
-`tmd --theme <name>`. Names accept letters, digits, `-` and `_`. A user file with
-a built-in name overrides that palette.
+Save a file to `~/.config/gezi/themes/<name>.toml`, or
+`$XDG_CONFIG_HOME/gezi/themes/<name>.toml` when that variable is set. Select it with
+`gezi --theme <name>`. Names accept letters, digits, `-` and `_`. A user file with
+a built-in name overrides that palette. If a file is absent in `gezi/themes`,
+Gezi also checks the old `tmd/themes` location. An invalid or unreadable Gezi file
+is reported as an error rather than replaced by a legacy theme.
 
 Every field is optional. Missing fields use `default-dark`, or `default-light`
 when `dark = false`. A supplied style replaces the entire default style; its
@@ -32,7 +34,7 @@ h1 = { fg = "#ff007c", bold = true }
 Errors identify the file, line and cause:
 
 ```text
-tmd: theme file ~/.config/tmd/themes/mine.toml: line 3: invalid color "blu": ...
+gezi: theme file ~/.config/gezi/themes/mine.toml: line 3: invalid color "blu": ...
 ```
 
 ## Colors

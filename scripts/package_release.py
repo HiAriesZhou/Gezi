@@ -18,7 +18,7 @@ from release_metadata import SHA, VERSION, ReleaseError, version_and_notes
 
 TARGET = "aarch64-apple-darwin"
 MAX_BYTES = 64 * 1024 * 1024
-FILES = {"tmd": 0o755, "LICENSE": 0o644, "README.md": 0o644, "build-info.json": 0o644}
+FILES = {"gezi": 0o755, "ge": 0o755, "LICENSE": 0o644, "README.md": 0o644, "build-info.json": 0o644}
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class Asset:
 
 
 def package_name(version):
-    return f"tmd-v{version}-{TARGET}"
+    return f"gezi-v{version}-{TARGET}"
 
 
 def check_macho(data):
@@ -85,7 +85,9 @@ def verify_package(directory, version, sha):
                 raise ReleaseError("Package has unexpected trailing tar data")
         if set(contents) != set(FILES):
             raise ReleaseError("Package is missing required entries")
-        check_macho(contents["tmd"])
+        check_macho(contents["gezi"])
+        if contents["ge"] != contents["gezi"]:
+            raise ReleaseError("Package commands must be identical")
         info = json.loads(contents["build-info.json"])
         if info != {"version": version, "commit": sha, "target": TARGET}:
             raise ReleaseError("Package build metadata does not match the checked commit")
@@ -116,15 +118,15 @@ def create_package(root, binary, directory, sha):
         raise ReleaseError("Package output already exists; choose an empty output directory")
     # Check exactly the bytes that will be archived, even if a build replaces
     # the input path during validation. No user shell or config is loaded.
-    with tempfile.TemporaryDirectory(prefix="tmd-package-check-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="gezi-package-check-") as temporary:
         temporary = Path(temporary)
-        executable = temporary / "tmd"
+        executable = temporary / "gezi"
         executable.write_bytes(payload)
         executable.chmod(0o755)
         env = dict(os.environ, XDG_CONFIG_HOME=str(temporary / "config"), PATH="/usr/bin:/bin")
         result = subprocess.run([str(executable), "--version"], env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
-        if result.returncode or result.stdout.strip() != f"tmd {version}".encode():
+        if result.returncode or result.stdout.strip() != f"gezi {version}".encode():
             raise ReleaseError("Package executable version does not match Cargo")
     def document(path):
         if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
@@ -133,7 +135,8 @@ def create_package(root, binary, directory, sha):
         return path.read_bytes()
 
     contents = {
-        "tmd": payload,
+        "gezi": payload,
+        "ge": payload,
         "LICENSE": document(root / "LICENSE"),
         "README.md": document(root / "docs/binary-package.md"),
         "build-info.json": (json.dumps({"version": version, "commit": sha, "target": TARGET},

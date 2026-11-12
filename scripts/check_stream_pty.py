@@ -196,7 +196,7 @@ def check_case(binary, interrupt, input_format="text"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path,
-                        default=Path(__file__).resolve().parents[1] / "target/release/tmd")
+                        default=Path(__file__).resolve().parents[1] / "target/release/gezi")
     parser.add_argument("--produce", choices=("text", "claude-json"), help=argparse.SUPPRESS)
     parser.add_argument("--release-fd", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()

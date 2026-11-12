@@ -1,10 +1,10 @@
 # Reader guide
 
-`tmd article.md` opens the built-in reader when stdin and stdout are terminals.
+`gezi article.md` opens the built-in reader when stdin and stdout are terminals.
 It starts at the beginning, uses the main screen and preserves terminal history.
 Files are currently read-only. Nonempty documents stay open until you exit.
-Run `tmd help` for command-line options (`--help` and `-h` also work).
-To read a file named `help`, use `tmd ./help` or `tmd -- help`.
+`ge` is an equivalent short command. Run `gezi help` for command-line options (`--help` and `-h` also work).
+To read a file named `help`, use `gezi ./help` or `gezi -- help`.
 
 ## Navigation
 
@@ -69,15 +69,15 @@ not the shell's working directory. Formats are detected from content, so an
 extension is not required.
 
 ```sh
-tmd article.md                         # Local and remote images
-tmd --remote-images off article.md     # Local only
-tmd --images off article.md            # No image IO or graphics
+gezi article.md                         # Local and remote images
+gezi --remote-images off article.md     # Local only
+gezi --images off article.md            # No image IO or graphics
 ```
 
 Remote HTTP(S) images load in the background and contact the document's image
 hosts. A proxy is optional: existing `ALL_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY` and
 `NO_PROXY` settings are respected, including lowercase forms. `ALL_PROXY` takes
-precedence. tmd does not change proxy configuration.
+precedence. gezi does not change proxy configuration.
 
 Images keep their proportions and fit the document pane. Adjacent badges share
 rows when they fit. Scrolling and resizing crop placements to the document;
@@ -99,7 +99,7 @@ The default theme is `auto`. Built-in palettes and custom TOML files are describ
 in [Themes](../themes/README.md).
 
 No configuration is needed. To select a reading mode, use `--reader inline|native`
-or set `reader.mode` in `~/.config/tmd/config.toml` (under `$XDG_CONFIG_HOME` when
+or set `reader.mode` in `~/.config/gezi/config.toml` (under `$XDG_CONFIG_HOME` when
 set). The command-line option wins. Non-reader output ignores this file.
 
 ### Optional native Kaku mode
@@ -108,16 +108,20 @@ Native mode prints the whole document, scrolls back to its beginning and exits.
 The terminal handles scrolling and selection; interactive search, outline, code
 copying and images are available in inline mode instead.
 
-1. Copy [kaku-reader.lua](../contrib/kaku-reader.lua) to `~/.config/kaku/tmd-reader.lua`; compare before replacing an existing file.
+Existing TMD adapters remain compatible; do not register a second adapter if one
+is already installed. The `TMD_READER` variable and `tmd-reader-v1` protocol
+identifiers are retained for that compatibility.
+
+1. Copy [kaku-reader.lua](../contrib/kaku-reader.lua) to `~/.config/kaku/gezi-reader.lua`; compare before replacing an existing file.
 2. Add this line before `return config` in your Kaku configuration, preserving existing handlers:
 
    ```lua
-   dofile(require('wezterm').config_dir .. '/tmd-reader.lua').setup()
+   dofile(require('wezterm').config_dir .. '/gezi-reader.lua').setup()
    ```
 
-3. Reload Kaku and run `tmd --reader native article.md`.
+3. Reload Kaku and run `gezi --reader native article.md`.
 
 Native mode requires direct Kaku and enough terminal history. If the adapter is
-unavailable, tmd falls back to inline mode before printing. To undo the setup,
+unavailable, gezi falls back to inline mode before printing. To undo the setup,
 select inline mode and remove the registration line. The adapter never edits
 shell or terminal configuration itself.

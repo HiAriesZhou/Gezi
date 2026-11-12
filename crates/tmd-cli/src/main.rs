@@ -39,7 +39,7 @@ fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
             Err(err) => {
-                eprintln!("tmd: {err}");
+                eprintln!("gezi: {err}");
                 ExitCode::FAILURE
             }
         };
@@ -49,7 +49,7 @@ fn main() -> ExitCode {
     let theme = match pick_theme(&cli.theme) {
         Ok(theme) => theme,
         Err(err) => {
-            eprintln!("tmd: {err}");
+            eprintln!("gezi: {err}");
             return ExitCode::FAILURE;
         }
     };
@@ -63,7 +63,7 @@ fn main() -> ExitCode {
             Ok(stream::Outcome::Finished) => ExitCode::SUCCESS,
             Ok(stream::Outcome::Signalled(signal)) => terminal_io::terminate_by(signal),
             Err(err) => {
-                eprintln!("tmd: {err}");
+                eprintln!("gezi: {err}");
                 ExitCode::FAILURE
             }
         };
@@ -73,7 +73,7 @@ fn main() -> ExitCode {
         Some(path) => match open_file(path) {
             Ok(file) => Box::new(file),
             Err(err) => {
-                eprintln!("tmd: {}: {err}", path.display());
+                eprintln!("gezi: {}: {err}", path.display());
                 return ExitCode::FAILURE;
             }
         },
@@ -82,7 +82,7 @@ fn main() -> ExitCode {
     let md = match read_text(input) {
         Ok(md) => md,
         Err(err) => {
-            eprintln!("tmd: {err}");
+            eprintln!("gezi: {err}");
             return ExitCode::FAILURE;
         }
     };
@@ -91,14 +91,14 @@ fn main() -> ExitCode {
         let mode = match reader_config::load(cli.reader, config::config_dir().as_deref()) {
             Ok(mode) => mode,
             Err(err) => {
-                eprintln!("tmd: {err}");
+                eprintln!("gezi: {err}");
                 return ExitCode::FAILURE;
             }
         };
         return match reader::run(&cli, &md, &theme, mode) {
             Ok(code) => ExitCode::from(code),
             Err(err) => {
-                eprintln!("tmd: {err}");
+                eprintln!("gezi: {err}");
                 ExitCode::FAILURE
             }
         };
@@ -140,10 +140,10 @@ fn main() -> ExitCode {
         Err(err) if large && err.kind() == io::ErrorKind::Interrupted => {
             terminal_io::terminate_by(large_headings::interrupted_signal())
         }
-        // The reader went away (e.g. `tmd file | head`); nothing left to do.
+        // The reader went away (e.g. `gezi file | head`); nothing left to do.
         Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("tmd: {err}");
+            eprintln!("gezi: {err}");
             ExitCode::FAILURE
         }
     }

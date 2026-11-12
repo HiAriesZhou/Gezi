@@ -1,4 +1,4 @@
-//! Markdown rendering core for tmd.
+//! Markdown rendering core for Gezi.
 //!
 //! Turns markdown into styled lines. This crate must not depend on any
 //! terminal library; output backends live in `tmd-cli`.

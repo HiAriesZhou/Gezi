@@ -97,7 +97,7 @@ pub fn load(source: &Source) -> Result<Raster, String> {
             let agent: ureq::Agent = ureq::Agent::config_builder()
                 .timeout_global(Some(Duration::from_secs(8)))
                 .max_redirects(3)
-                .user_agent("tmd image reader")
+                .user_agent("gezi image reader")
                 .build()
                 .into();
             let mut response = agent.get(url).call().map_err(|e| e.to_string())?;
