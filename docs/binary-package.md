@@ -17,6 +17,11 @@ Press `/` to search, `o` for the outline, `c` to copy code, `?` for help and `q`
 to exit. Editing and saving are planned; this build reads files without changing
 them. Use `--remote-images off` for local images only, or `--images off` for text.
 
+Update both commands in this installation to the latest stable release with
+`./gezi update` or `./ge update`. Equal or older available versions leave the
+installation unchanged. The updater uses curl and the system archive/checksum
+tools supplied by macOS; it keeps a backup when replacing an older binary.
+
 For installation, updates and full usage, see the
 [Gezi repository](https://github.com/HiAriesZhou/Gezi).
 Packages are ad hoc signed and are not Developer ID signed or notarized.

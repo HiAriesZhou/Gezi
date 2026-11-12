@@ -20,6 +20,7 @@ mod stream;
 mod svg_limits;
 mod terminal_io;
 mod theme_select;
+mod update;
 
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
@@ -34,6 +35,15 @@ use crate::source::Source;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if matches!(cli.command, Some(cli::Command::Update)) {
+        return match update::run() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("gezi: {err}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if matches!(cli.command, Some(cli::Command::Help)) {
         return match Cli::command().print_long_help() {
             Ok(()) => ExitCode::SUCCESS,

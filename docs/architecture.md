@@ -71,7 +71,14 @@ Built-in and user TOML themes use the same layout. See the
 ## Input and output selection
 
 `gezi help` prints CLI help and exits before theme, terminal or input IO. The
-legacy `--help` and `-h` flags remain supported.
+legacy `--help` and `-h` flags remain supported. `gezi update` (also `ge update`)
+also bypasses rendering and never reads document input. It uses `curl` to resolve
+the latest stable tag from the fixed GitHub release address, validates the exact
+URL and numeric version, and skips equal or older versions. For a newer version,
+`update` runs the bundled installer with a pinned tag and the running executable's
+directory. Download verification, locking, command ownership and rollback remain
+in the installer. No remote shell script is downloaded or executed.
+To open files named `help` or `update`, use an explicit path or `--`.
 
 | Condition | Output |
 | --- | --- |
@@ -188,6 +195,20 @@ One-shot large-heading output retains canonical mode and ISIG, temporarily enabl
 echoed controls. On failure, clean up any unmatched half before restoring termios.
 This lifecycle differs from both raw reading and non-raw streaming; do not share
 a session guard across them.
+
+## Source installation
+
+The Cargo package name is `tmd-cli`; the installed commands are `gezi` and `ge`:
+
+```sh
+cargo install --git https://github.com/HiAriesZhou/Gezi.git --locked tmd-cli
+```
+
+Cargo installs both commands in `~/.cargo/bin`. Use `--force` to reinstall.
+The built-in `update` command replaces a binary-package installation beside the
+running executable; it does not update a Cargo installation. Use a separate
+directory when switching methods, because the installer refuses to overwrite a
+`ge` file it did not install.
 
 ## Verification
 

@@ -32,6 +32,14 @@ than fixed startup delays, for both Markdown and Claude JSONL. Failures return
 nonzero. Setting `TERM_PROGRAM=Kaku` selects protocol branches; it is not real
 Kaku acceptance.
 
+Updater integration tests run the real `gezi` and `ge` commands from isolated
+binary-package directories with a local download stub. They cover numeric version
+comparison, fixed tag downloads, actual replacement of both commands, installation
+environment overrides, unchanged current/newer versions, local help, open stdin,
+and network/checksum failure propagation. Never test updates against a personal
+installation. Check the live latest-release lookup using a build at least as new
+as the latest public release, so the check cannot downgrade it.
+
 CI runs the same checks on macOS. Installer tests use isolated destinations and
 mock downloads to verify failed checksums, backups, repeat installation and
 atomic replacement. After changing installation, also install an official Release
