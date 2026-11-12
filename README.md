@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/brand/og-image.svg">
-  <img src="assets/brand/og-image-light.svg" alt="Gezi (格子). Markdown, at home in your terminal." width="1200" height="630">
+  <img src="assets/brand/og-image-light.svg" alt="Gezi (格子). Markdown, at home in your terminal." width="1200">
 </picture>
 
 **Markdown, at home in your terminal.**
