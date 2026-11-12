@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
 
+# Only superseded PR runs share a group. Every main commit keeps its own run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -17,26 +22,65 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Classify PR changes
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          full=true
+          if [ "$EVENT_NAME" = pull_request ]; then
+            git diff --no-renames --name-only -z "$BASE_SHA"...HEAD > "$RUNNER_TEMP/changed-paths"
+            full=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                README.md|AGENTS.md|CLAUDE.md|docs/architecture.md|docs/reader.md|docs/terminal-testing.md|docs/release.md|themes/README.md|assets/brand/README.md) ;;
+                *) full=true; break ;;
+              esac
+            done < "$RUNNER_TEMP/changed-paths"
+          fi
+          printf 'full=%s\n' "$full" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.changes.outputs.full == 'true'
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        if: steps.changes.outputs.full == 'true'
+        with:
+          cache-workspace-crates: 'true'
+          # Cargo still checks source fingerprints; rotate snapshots as source changes.
+          key: ${{ hashFiles('crates/**', 'fixtures/**', 'themes/**') }}
       - run: cargo fmt --all --check
+        if: steps.changes.outputs.full == 'true'
       - run: cargo clippy --all-targets -- -D warnings
+        if: steps.changes.outputs.full == 'true'
       - run: cargo test
+        if: steps.changes.outputs.full == 'true'
       - run: cargo build --locked
+        if: steps.changes.outputs.full == 'true'
       - run: python3 scripts/check_stream_pty.py --binary target/debug/gezi
+        if: steps.changes.outputs.full == 'true'
       - run: python3 scripts/test_stream_pty.py --binary target/debug/gezi
+        if: steps.changes.outputs.full == 'true'
       - run: python3 -B scripts/test_reader_pty.py --binary target/debug/gezi
+        if: steps.changes.outputs.full == 'true'
       - run: python3 -B scripts/test_images_pty.py --binary target/debug/gezi
+        if: steps.changes.outputs.full == 'true'
       - run: python3 -B -m unittest discover -s scripts -p 'test_*release.py'
+        if: steps.changes.outputs.full == 'true'
       - name: Build and verify Apple Silicon package
+        if: steps.changes.outputs.full == 'true'
         run: |
           test "$(uname -m)" = arm64
           cargo build --release --locked --target aarch64-apple-darwin
           python3 -B scripts/package_release.py --binary target/aarch64-apple-darwin/release/gezi --out-dir "${{ runner.temp }}/gezi-release-package"
           python3 -B scripts/check_package.py --package-dir "${{ runner.temp }}/gezi-release-package"
       - name: Preserve checked macOS package
+        if: steps.changes.outputs.full == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gezi-macos-arm64
