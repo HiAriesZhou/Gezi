@@ -1,12 +1,13 @@
 # Architecture
 
-TMD converts Markdown to styled logical lines; CLI selects an output mode from
+Gezi converts Markdown to styled logical lines; CLI selects an output mode from
 the input and terminal capabilities. Current releases read documents without
 modifying them or changing terminal or shell configuration.
 
 ## Module boundaries
 
-The Cargo workspace has two crates:
+The Cargo workspace has two crates. Their internal `tmd-*` package names are
+retained; the public commands are `gezi` and `ge`:
 
 | Layer | Responsibility | Main modules |
 | --- | --- | --- |
@@ -27,7 +28,8 @@ cleanup. Plain and streaming rendering retain alt text. New image dimensions
 invalidate both reader layout caches and restore a text/source anchor. Positions
 inside an image preserve a row ratio. See [image usage](reader.md#images).
 
-`config` resolves the configuration directory; `theme_select` loads themes;
+`config` resolves the configuration directory and reads each file from `gezi/`
+before falling back to `tmd/` only when absent; `theme_select` loads themes;
 `reader_config` validates reading settings. `terminal_io` shares cancellable
 writes, reset sequences and direct-Kaku detection. Each output mode keeps its
 own lifecycle management.
@@ -68,7 +70,7 @@ Built-in and user TOML themes use the same layout. See the
 
 ## Input and output selection
 
-`tmd help` prints CLI help and exits before theme, terminal or input IO. The
+`gezi help` prints CLI help and exits before theme, terminal or input IO. The
 legacy `--help` and `-h` flags remain supported.
 
 | Condition | Output |

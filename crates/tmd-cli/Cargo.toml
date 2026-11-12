@@ -1,14 +1,21 @@
 [package]
 name = "tmd-cli"
-description = "Terminal markdown renderer"
+default-run = "gezi"
+description = "Gezi: a Kaku-first terminal Markdown editor with reading and rendering available today"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "tmd"
+name = "gezi"
 path = "src/main.rs"
+
+[[bin]]
+name = "ge"
+path = "src/ge.rs"
+test = false
+bench = false
 
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }

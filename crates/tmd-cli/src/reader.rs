@@ -113,7 +113,7 @@ fn header() -> String {
         .enumerate()
         .map(|(i, arg)| {
             let arg = if i == 0 {
-                std::ffi::OsString::from("tmd")
+                std::ffi::OsString::from("gezi")
             } else {
                 arg
             };
@@ -797,7 +797,7 @@ fn run_with_copy(
                 View::Outline if split.is_none() => {
                     let selected = &document.headings()[outline.selected];
                     chrome.title = format!(
-                        "tmd · 标题目录 · {}/{} · L{}",
+                        "Gezi · 标题目录 · {}/{} · L{}",
                         outline.selected + 1,
                         document.headings().len(),
                         selected.source_line
@@ -829,7 +829,7 @@ fn run_with_copy(
                 }
                 View::Copy => {
                     chrome.title = format!(
-                        "tmd · 代码块 · {}/{}",
+                        "Gezi · 代码块 · {}/{}",
                         picker.selected + 1,
                         document.code_blocks().len()
                     );
@@ -850,7 +850,7 @@ fn run_with_copy(
                     (&overlay, top, Some(picker.selected))
                 }
                 View::Help(pane) => {
-                    chrome.title = "tmd · 帮助".into();
+                    chrome.title = "Gezi · 帮助".into();
                     overlay = help_lines(size.0, pane, &fallback, &picker.notice);
                     help_start = help_start.min(last_start(&overlay, chrome.height(size.1)));
                     (&overlay, help_start, None)
@@ -1348,7 +1348,7 @@ mod tests {
             0,
             (40, 4),
             &Chrome {
-                title: "tmd test.md".into(),
+                title: "gezi test.md".into(),
                 ..Chrome::default()
             },
             None,
@@ -1360,7 +1360,7 @@ mod tests {
             1,
             (40, 4),
             &Chrome {
-                title: "tmd test.md".into(),
+                title: "gezi test.md".into(),
                 ..Chrome::default()
             },
             None,

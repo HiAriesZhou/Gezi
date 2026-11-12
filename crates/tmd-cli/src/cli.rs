@@ -8,7 +8,7 @@ pub const FALLBACK_WIDTH: u16 = 80;
 /// Render markdown in the terminal.
 #[derive(Debug, Parser)]
 #[command(
-    name = "tmd",
+    name = "gezi",
     version,
     about,
     disable_help_subcommand = true,
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn parses_all_options() {
         let cli = Cli::try_parse_from([
-            "tmd",
+            "gezi",
             "--ansi",
             "--large-headings",
             "--reader",
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn defaults() {
-        let cli = Cli::try_parse_from(["tmd"]).unwrap();
+        let cli = Cli::try_parse_from(["gezi"]).unwrap();
         assert!(!cli.ansi);
         assert!(!cli.large_headings);
         assert_eq!(cli.reader, None);
@@ -147,25 +147,25 @@ mod tests {
 
     #[test]
     fn rejects_zero_width() {
-        assert!(Cli::try_parse_from(["tmd", "--width", "0"]).is_err());
+        assert!(Cli::try_parse_from(["gezi", "--width", "0"]).is_err());
     }
 
     #[test]
     fn help_is_a_command_and_explicit_help_paths_remain_files() {
-        let cli = Cli::try_parse_from(["tmd", "help"]).unwrap();
+        let cli = Cli::try_parse_from(["gezi", "help"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Help)));
         assert!(cli.file.is_none());
         for arguments in [
-            vec!["tmd", "--", "help"],
-            vec!["tmd", "./help"],
-            vec!["tmd", "help.md"],
+            vec!["gezi", "--", "help"],
+            vec!["gezi", "./help"],
+            vec!["gezi", "help.md"],
         ] {
             let cli = Cli::try_parse_from(arguments.clone()).unwrap();
             assert!(cli.command.is_none());
             assert_eq!(cli.file, Some(PathBuf::from(arguments.last().unwrap())));
         }
-        assert!(Cli::try_parse_from(["tmd", "help", "README.md"]).is_err());
-        assert!(Cli::try_parse_from(["tmd", "README.md", "help"]).is_err());
+        assert!(Cli::try_parse_from(["gezi", "help", "README.md"]).is_err());
+        assert!(Cli::try_parse_from(["gezi", "README.md", "help"]).is_err());
     }
 
     #[test]

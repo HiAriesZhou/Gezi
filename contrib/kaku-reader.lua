@@ -1,4 +1,4 @@
--- Optional tmd native-reader adapter. Install by registering this module once
+-- Optional Gezi native-reader adapter. Install by registering this module once
 -- in your Kaku config. It does not modify key bindings or shell configuration.
 local wezterm = require 'wezterm'
 local M = {}

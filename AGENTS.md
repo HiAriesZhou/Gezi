@@ -1,6 +1,6 @@
-# TMD engineering rules
+# Gezi engineering rules
 
-TMD is a Kaku-first terminal Markdown editor project, invoked as `tmd`. Current
+Gezi is a Kaku-first terminal Markdown editor project, invoked as `gezi` or `ge`. Current
 releases provide read-only rendering and navigation. Editing, undo/redo and
 saving are planned; distinguish shipped behavior from plans in public copy.
 

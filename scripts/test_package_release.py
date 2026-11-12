@@ -20,7 +20,7 @@ VERSION = "0.4.0"
 
 class PackageTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="tmd-package-test-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="gezi-package-test-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         (self.root / "cli").mkdir()
@@ -31,14 +31,14 @@ class PackageTests(unittest.TestCase):
         (self.root / "Cargo.lock").write_text('[[package]]\nname="tmd-cli"\nversion="0.4.0"\n')
         (self.root / "CHANGELOG.md").write_text('## 0.4.0\n\nPackage test notes.\n')
         (self.root / "LICENSE").write_text('MIT License\n')
-        (self.root / "docs/binary-package.md").write_text('Run ./tmd --version\n')
-        self.binary = self.root / "tmd"
+        (self.root / "docs/binary-package.md").write_text('Run ./gezi --version\n')
+        self.binary = self.root / "gezi"
         self.payload = (bytes.fromhex('cffaedfe') + (0x0100000c).to_bytes(4, 'little')
                         + bytes(4) + (2).to_bytes(4, 'little') + bytes(16) + b'test payload')
         self.binary.write_bytes(self.payload)
         self.binary.chmod(0o755)
         self.native = patch.object(package.subprocess, 'run', return_value=
-                                   subprocess.CompletedProcess([], 0, b'tmd 0.4.0\n', b''))
+                                   subprocess.CompletedProcess([], 0, b'gezi 0.4.0\n', b''))
         self.run = self.native.start()
         self.addCleanup(self.native.stop)
 
@@ -68,11 +68,29 @@ class PackageTests(unittest.TestCase):
         with package.tarfile.open(first[0].path) as tar:
             self.assertEqual({member.name for member in tar},
                              {package.package_name(VERSION) + '/' + path for path in package.FILES})
+            self.assertEqual(tar.extractfile(package.package_name(VERSION) + '/ge').read(),
+                             tar.extractfile(package.package_name(VERSION) + '/gezi').read())
             info = json.load(tar.extractfile(package.package_name(VERSION) + '/build-info.json'))
             self.assertEqual(info, {'version': VERSION, 'commit': SHA, 'target': package.TARGET})
         command = self.run.call_args.args[0]
         self.assertEqual(command[1:], ['--version'])
         self.assertEqual(self.run.call_args.kwargs['env']['PATH'], '/usr/bin:/bin')
+
+    def test_short_command_cannot_be_missing_or_different(self) -> None:
+        def missing(entries):
+            return [(member, data) for member, data in entries if not member.name.endswith('/ge')]
+
+        def different(entries):
+            return [(member, b'other tool' if member.name.endswith('/ge') else data)
+                    for member, data in entries]
+
+        for name, transform, message in [('missing', missing, 'missing'),
+                                         ('different', different, 'identical')]:
+            with self.subTest(name=name):
+                directory = self.create(name)
+                self.rewrite(directory, transform)
+                with self.assertRaisesRegex(ReleaseError, message):
+                    package.verify_package(directory, VERSION, SHA)
 
     def test_invalid_input_architecture_mode_symlink_and_native_version(self):
         self.binary.chmod(0o644)
@@ -87,7 +105,7 @@ class PackageTests(unittest.TestCase):
         link.symlink_to(self.binary)
         with self.assertRaisesRegex(ReleaseError, 'regular executable'):
             package.create_package(self.root, link, self.root / 'link-out', SHA)
-        self.run.return_value = subprocess.CompletedProcess([], 0, b'tmd 0.0.0\n', b'')
+        self.run.return_value = subprocess.CompletedProcess([], 0, b'gezi 0.0.0\n', b'')
         with self.assertRaisesRegex(ReleaseError, 'version'):
             self.create()
 

@@ -9,10 +9,10 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo build --release --locked
-python3 scripts/check_stream_pty.py --binary target/release/tmd
-python3 scripts/test_stream_pty.py --binary target/release/tmd
-python3 -B scripts/test_reader_pty.py --binary target/release/tmd
-python3 -B scripts/test_images_pty.py --binary target/release/tmd
+python3 scripts/check_stream_pty.py --binary target/release/gezi
+python3 scripts/test_stream_pty.py --binary target/release/gezi
+python3 -B scripts/test_reader_pty.py --binary target/release/gezi
+python3 -B scripts/test_images_pty.py --binary target/release/gezi
 python3 -B -m unittest discover -s scripts -p 'test_*release.py'
 ```
 
@@ -46,7 +46,7 @@ behavior.
 Use a release build or an extracted download:
 
 ```sh
-python3 -B scripts/benchmark_reader.py --binary target/release/tmd > /tmp/tmd-reader-performance.json
+python3 -B scripts/benchmark_reader.py --binary target/release/gezi > /tmp/gezi-reader-performance.json
 ```
 
 The isolated 80x24 PTY uses a 1 MiB synthetic Chinese/English document and 1,000
@@ -65,8 +65,8 @@ PTY success does not prove smooth painting, font alignment or terminal
 compatibility. The current acceptance environment is Kaku on macOS:
 
 ```sh
-python3 scripts/slowcat.py fixtures/long.md | target/release/tmd
-target/release/tmd --width 80 fixtures/cjk-table.md
+python3 scripts/slowcat.py fixtures/long.md | target/release/gezi
+target/release/gezi --width 80 fixtures/cjk-table.md
 ```
 
 Check flicker, Chinese/emoji table alignment, progressive code output and active
@@ -82,9 +82,9 @@ These noninteractive-stdin commands exercise one-shot output. Test the interacti
 reader separately below. Use direct Kaku with at least 40 columns and 10 rows:
 
 ```sh
-target/release/tmd --large-headings fixtures/large-headings.md < /dev/null
-target/release/tmd fixtures/large-headings.md < /dev/null
-target/release/tmd --large-headings --width 20 fixtures/large-headings.md < /dev/null
+target/release/gezi --large-headings fixtures/large-headings.md < /dev/null
+target/release/gezi fixtures/large-headings.md < /dev/null
+target/release/gezi --large-headings --width 20 fixtures/large-headings.md < /dev/null
 ```
 
 Keep screenshots and acceptance records outside the repository.
@@ -107,7 +107,7 @@ prove lifecycle/protocol behavior; Kaku visuals and copying need separate checks
 
 Use the candidate binary for every scenario:
 
-1. Launch `tmd fixtures/acceptance.md` from the top, middle and bottom of a window. Invocation context appears above the beginning of the document; no alternate screen is used.
+1. Launch `gezi fixtures/acceptance.md` from the top, middle and bottom of a window. Invocation context appears above the beginning of the document; no alternate screen is used.
 2. Scroll continuously without loading more pages. Check Home/End, Shift-drag selection, persistent short documents and enlargement. Help can scroll and returns to the old position. Pasting text containing `q` does not exit.
 3. With `--large-headings fixtures/large-headings.md`, scroll across viewport edges and resize. No half-heading remains and body text never becomes large.
 4. Shrink to a narrow or one-row window, then expand. Anchors and exit remain usable. `q`/Esc restores the prompt; Ctrl-C returns 130. Run another command to check echo and inspect preserved shell history.
@@ -119,7 +119,7 @@ Use the candidate binary for every scenario:
 10. At 80 columns the panes sit side by side; at 79 they become a full-page outline. Expansion restores selection and focus. Switching between short and long titles never inserts detail rows in the sidebar or changes page step. Wheel routing follows the pointer without changing focus. Opening the sidebar uses ordinary headings; closing restores requested large headings. Text never overwrites the separator.
 11. Help in outline/code views preserves selection and list scroll on return. Footers show only valid actions at 80x24 and 40x12. Shrink to 24 columns and 4x1, then restore: destinations and search remain valid.
 12. Empty-outline, jump and copy-success feedback disappears after three seconds; copy errors persist until another selection, retry or cancellation. Feedback never moves content or the IME cursor. On a 1,200-heading sample, navigate for 30 seconds and record stalls, artifacts or selection drift. PTY timing is not visual acceptance.
-13. Run `tmd help` directly and with stdin held open. It prints CLI help and exits without entering the reader. `--help` and `-h` remain supported; a file named `help` can be opened as `./help` or after `--`.
+13. Run `gezi help` directly and with stdin held open. It prints CLI help and exits without entering the reader. `--help` and `-h` remain supported; a file named `help` can be opened as `./help` or after `--`.
 
 Do not report a simulated native handshake as real adapter acceptance when
 connection failed or the adapter was not installed.

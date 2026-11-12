@@ -21,23 +21,24 @@ import time
 import unittest
 from unittest.mock import patch
 
-BINARY = Path(__file__).resolve().parents[1] / "target/debug/tmd"
+BINARY = Path(__file__).resolve().parents[1] / "target/debug/gezi"
 END = b"\x1b[?2026l"
 
 
 class Terminal:
     def __init__(self, options=(), *, row=12, config=None, native=False, capacity=10000,
                  wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False,
-                 cursor_prefix=b"", cols=80):
+                 cursor_prefix=b"", cols=80, legacy_config=None):
         self.temp = tempfile.TemporaryDirectory(prefix="tmd-reader-")
         root = Path(self.temp.name)
         path = root / "article.md"
         path.write_text(text if text is not None else
                         "# Heading 中 é 👩‍💻\n\n" +
                         "\n\n".join(f"Row {i:03} 中文" for i in range(1, 81)))
-        if config is not None:
-            (root / "tmd").mkdir()
-            (root / "tmd/config.toml").write_text(config)
+        for name, source in (("gezi", config), ("tmd", legacy_config)):
+            if source is not None:
+                (root / name).mkdir()
+                (root / name / "config.toml").write_text(source)
         ready_read, ready_write = os.pipe()
         self.pid, self.master = pty.fork()
         if self.pid == 0:
@@ -917,6 +918,15 @@ class ReaderTests(unittest.TestCase):
         self.assert_restored(t)
         print(f"\nOutline 1200 headings / 50 cycles: max={max(durations):.3f}s "
               f"mean={sum(durations)/len(durations):.3f}s (PTY protocol only)", file=sys.stderr)
+
+    def test_gezi_config_wins_and_legacy_config_remains_supported(self):
+        gezi = self.terminal(config="[reader]\nmode='inline'",
+                             legacy_config="[reader]\nmode='native'", native=True)
+        self.assertNotIn(b"SetUserVar", gezi.until(END))
+        self.assertEqual(gezi.finish(b"q"), 0)
+        legacy = self.terminal(legacy_config="[reader]\nmode='native'", native=True)
+        self.assertIn(b"SetUserVar=TMD_READER=", legacy.until(END))
+        self.assertEqual(legacy.finish(b"q"), 0)
 
     def test_cli_override_and_invalid_config(self):
         t = self.terminal(("--reader", "inline"), config="[reader]\nmode='native'")

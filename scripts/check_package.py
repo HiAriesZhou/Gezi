@@ -18,16 +18,21 @@ def smoke(root, directory):
         raise ReleaseError("Package smoke needs a native Apple Silicon macOS runner")
     version, _ = version_and_notes(root)
     assets = verify_package(directory, version, checked_commit(root))
-    with tempfile.TemporaryDirectory(prefix="tmd-installed-package-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="gezi-installed-package-") as temporary:
         temporary = Path(temporary)
         with tarfile.open(assets[0].path) as archive:
             archive.extractall(temporary, filter="data")
-        binary = temporary / package_name(version) / "tmd"
+        binary = temporary / package_name(version) / "gezi"
         env = dict(os.environ, XDG_CONFIG_HOME=str(temporary / "config"), PATH="/usr/bin:/bin")
         def output(*arguments):
             return subprocess.check_output([str(binary), *arguments], env=env, timeout=30)
-        if output("--version").strip() != f"tmd {version}".encode():
+        if output("--version").strip() != f"gezi {version}".encode():
             raise ReleaseError("Installed executable version does not match the package")
+        short = binary.with_name("ge")
+        for argument in ("--version", "help"):
+            alias_output = subprocess.check_output([str(short), argument], env=env, timeout=30)
+            if alias_output != output(argument):
+                raise ReleaseError("Installed commands do not behave identically")
         if b"Usage:" not in output("help"):
             raise ReleaseError("Installed executable help is missing")
         rendered = output("--ansi", "--theme", "default-dark", str(root / "fixtures/acceptance.md"))

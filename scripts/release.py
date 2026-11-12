@@ -159,7 +159,7 @@ def verify_asset(api, remote, expected):
 def verified_release(api, tag, sha, release, expected_id, assets, notes):
     if (release is None or release.get("draft") is not False
             or release.get("tag_name") != tag or release.get("id") != expected_id
-            or release.get("body") != notes or release.get("name") != f"tmd {tag}"
+            or release.get("body") != notes or release.get("name") != f"Gezi {tag}"
             or release.get("prerelease") is not ("-" in tag.partition("+")[0])
             or tag_commit(api, tag) != sha):
         raise ReleaseError(f"Could not verify published {tag} at the checked commit; inspect GitHub before rerunning")
@@ -202,12 +202,12 @@ def publish(root, api, sha):
     if current != sha:
         return "Skipped release: main has advanced beyond this CI run"
     assets = verify_package(root / ASSET_DIRECTORY, version, sha)
-    marker = "<!-- tmd-release-owner:" + uuid.uuid4().hex + " -->"
+    marker = "<!-- gezi-release-owner:" + uuid.uuid4().hex + " -->"
     draft_body = notes + "\n\n" + marker
     payload = {
         "tag_name": tag,
         "target_commitish": sha,
-        "name": f"tmd {tag}",
+        "name": f"Gezi {tag}",
         "body": draft_body,
         "draft": True,
         "prerelease": "-" in version.partition("+")[0],

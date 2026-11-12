@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 fn help_command_and_flags_exit_without_waiting_for_stdin() {
     let mut expected = None;
     for argument in ["help", "--help", "-h"] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_tmd"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_gezi"))
             .arg(argument)
             .env("NO_COLOR", "1")
             .env_remove("CLICOLOR_FORCE")
@@ -30,7 +30,7 @@ fn help_command_and_flags_exit_without_waiting_for_stdin() {
         assert!(output.status.success());
         assert!(output.stderr.is_empty());
         let text = String::from_utf8(output.stdout).unwrap();
-        assert!(text.contains("Usage: tmd"));
+        assert!(text.contains("Usage: gezi"));
         assert!(text.contains("--remote-images"));
         assert!(!text.contains('\x1b'));
         if let Some(expected) = &expected {
