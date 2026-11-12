@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7
+
+- Rename the product to Gezi (格子) and provide equivalent `gezi` and `ge` commands. The GitHub repository is now `Gezi`. Earlier releases retain their TMD names.
+- Ship both commands in macOS packages and the installer. Preserve an existing `tmd` binary, refuse to overwrite another tool’s `ge`, and continue to accept legacy installer environment variables.
+- Read configuration and themes from `gezi/` first, with a per-file fallback to `tmd/`. Existing Kaku native-reader adapters remain compatible.
+
 ## 0.1.6
 
 - Pressing Ctrl-C or sending TERM or HUP while streaming or printing large headings now ends tmd by that signal after the terminal is restored, so a shell script or loop around tmd stops as well. QUIT still exits with status 131.
