@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+<title id="title">Gezi mark</title>
+<desc id="desc">An open square G built on a terminal character grid.</desc>
+<g transform="translate(0 0) scale(1)"><path d="M48 16H16V48H48V32H32" fill="none" stroke="#BE3F2E" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter"/></g>
+</svg>
