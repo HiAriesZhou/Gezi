@@ -1,5 +1,12 @@
 # Gezi
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/og-image.svg">
+  <img src="assets/brand/og-image-light.svg" alt="Gezi (格子). Markdown, at home in your terminal." width="1200" height="630">
+</picture>
+
+**Markdown, at home in your terminal.**
+
 A Kaku-first Markdown editor for the terminal, built for developer and AI workflows.
 
 Gezi (格子, “grid” in Chinese) takes its name from manuscript paper and the
@@ -102,6 +109,7 @@ Editing is planned; these capabilities are not in the current release. In order:
 - [Reader guide](docs/reader.md): navigation, images and optional Kaku integration.
 - [Themes](themes/README.md): built-in palettes and custom themes.
 - [Changelog](CHANGELOG.md): changes by release.
+- [Brand assets](assets/brand/README.md): logos, slogans, social images and usage guidelines.
 
 For contributors: [architecture](docs/architecture.md),
 [testing](docs/terminal-testing.md), [release maintenance](docs/release.md)
