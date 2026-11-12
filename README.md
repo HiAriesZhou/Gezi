@@ -10,7 +10,7 @@ Editing, undo/redo and saving files are next. macOS Apple Silicon is supported.
 
 ## Install
 
-Install the latest release, or run the same command to update:
+Install the latest release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HiAriesZhou/Gezi/main/install.sh | sh
@@ -31,39 +31,24 @@ To choose a release or directory, set `GEZI_VERSION=v0.1.7` or
 [Releases](https://github.com/HiAriesZhou/Gezi/releases/latest).
 Packages are ad hoc signed, without Developer ID signing or notarization.
 
-<details>
-<summary>Build from source</summary>
+## Update
 
-With Git and a stable Rust toolchain:
-
-```sh
-cargo install --git https://github.com/HiAriesZhou/Gezi.git --locked tmd-cli
-```
-
-Cargo installs both `gezi` and `ge` in `~/.cargo/bin`. Use `--force` to reinstall.
-If you also use the binary installer, check `command -v gezi` to see which copy
-runs.
-
-</details>
-
-## Renaming from TMD
-
-Gezi replaces the TMD name starting with version 0.1.7. Earlier releases retain
-their original `tmd` command and package names. Use a release tag’s own installer
-and explicitly select that version when installing version 0.1.6 or earlier:
+Update to the latest stable release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/HiAriesZhou/Gezi/v0.1.6/install.sh | TMD_VERSION=v0.1.6 sh
+gezi update
+# Equivalent short command:
+ge update
 ```
 
-The installer provides both `gezi` and `ge` and leaves any existing `tmd` binary
-in place. It refuses to overwrite a `ge` file it did not install; choose
-another `GEZI_INSTALL_DIR` in that case. This includes a Cargo build in the same
-directory: run `cargo uninstall tmd-cli` before switching to the installer.
-`GEZI_VERSION` and `GEZI_INSTALL_DIR` take precedence over the legacy `TMD_VERSION`
-and `TMD_INSTALL_DIR` variables.
-Configuration files are read from `~/.config/gezi` first, with a per-file fallback
-to `~/.config/tmd`. No files are moved. Existing Kaku adapters continue to work.
+The updater verifies SHA256, backs up the previous binary and updates both
+commands beside the running executable. It does nothing when the installed
+version is already current or newer. It does not require sudo.
+
+The built-in updater supports macOS binary-package installations. For Cargo
+source builds, use the [source installation command](docs/architecture.md#source-installation)
+with `--force`. To switch installation methods, use a separate directory or
+uninstall the Cargo package first.
 
 ## Quick start
 

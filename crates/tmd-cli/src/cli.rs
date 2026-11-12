@@ -62,6 +62,8 @@ pub struct Cli {
 pub enum Command {
     /// Show command-line help
     Help,
+    /// Update this binary-package installation to the latest stable release
+    Update,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -166,6 +168,25 @@ mod tests {
         }
         assert!(Cli::try_parse_from(["gezi", "help", "README.md"]).is_err());
         assert!(Cli::try_parse_from(["gezi", "README.md", "help"]).is_err());
+    }
+
+    #[test]
+    fn update_is_a_command_and_explicit_update_paths_remain_files() {
+        for name in ["gezi", "ge"] {
+            let cli = Cli::try_parse_from([name, "update"]).unwrap();
+            assert!(matches!(cli.command, Some(Command::Update)));
+            for arguments in [vec![name, "--", "update"], vec![name, "./update"]] {
+                let cli = Cli::try_parse_from(arguments.clone()).unwrap();
+                assert!(cli.command.is_none());
+                assert_eq!(cli.file, Some(PathBuf::from(arguments.last().unwrap())));
+            }
+            for arguments in [
+                vec![name, "update", "notes.md"],
+                vec![name, "update", "--ansi"],
+            ] {
+                assert!(Cli::try_parse_from(arguments).is_err());
+            }
+        }
     }
 
     #[test]
