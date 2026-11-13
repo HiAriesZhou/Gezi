@@ -98,7 +98,20 @@ headings through the terminal can duplicate text.
 The default theme is `auto`. Built-in palettes and custom TOML files are described
 in [Themes](../themes/README.md).
 
-No configuration is needed. To select a reading mode, use `--reader inline|native`
+No configuration is needed. The inline reader defaults to a content width of at
+most 100 columns, centered within the document pane, including when the outline
+is open. It reserves at least two margin columns per side when space permits;
+tiny windows reduce the margin to keep content visible. Use
+`gezi --width 120 article.md` for a wider column, or choose a smaller width. The
+window still limits the result. `--width` does not change the terminal font.
+Images share the text column's left edge. One-shot and streaming output retain
+their existing width selection.
+
+Code blocks reserve up to two columns on each side, reducing that inset in narrow
+panes. Language labels align with code content. Level-two headings have extra
+separation above them.
+
+To select a reading mode, use `--reader inline|native`
 or set `reader.mode` in `~/.config/gezi/config.toml` (under `$XDG_CONFIG_HOME` when
 set). The command-line option wins. Non-reader output ignores this file.
 

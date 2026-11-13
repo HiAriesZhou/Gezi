@@ -61,7 +61,8 @@ controls. Layout converts blocks to `Vec<Line>`.
 
 - `Span` carries text and style. `Line` carries spans, a source range and `LineSize`.
 - `Line::width()` counts terminal columns; `physical_height()` counts rows. Ordinary lines occupy one row; large lines double both dimensions.
-- Wrapped lines in a block share its source range. Top-level code retains per-line ranges for streaming commitment. Inter-block blank lines belong to the following block.
+- Wrapped lines in a block share its source range. Top-level code retains per-line ranges for streaming commitment. Inter-block blank lines belong to the following block; noninitial H2 headings have two, other blocks one. Tight nested lists retain compact spacing.
+- Code wraps inside an inset of up to two columns on each side, reduced to preserve at least two content columns when possible. Labels align with that inset. Decorations do not enter semantic text or copied code.
 - `width` owns cluster handling, measurement and truncation using Unicode `width()` semantics. Wrapping never splits recognized combining-character or emoji clusters.
 - Tables are measured before allocating widths and drawing. Syntect highlights code. Its process-local locked cache reuses prefixes; a single large code block may exceed the target cached line count, so this is not a strict memory bound.
 
@@ -92,8 +93,9 @@ results are separate output; scrollback is immutable. `--debug` diagnostics omit
 raw records and pass through the output driver.
 
 One-shot width is `--width`, otherwise terminal width, otherwise 80. Reader width
-is bounded by the window. Invalid UTF-8 becomes replacement characters. Redirected
-stdout has no OSC 8 links. A consumer closing a pipe early is normal termination.
+is `--width`, otherwise 100, bounded by the document pane. Invalid UTF-8 becomes
+replacement characters. Redirected stdout has no OSC 8 links. A consumer closing
+a pipe early is normal termination.
 
 ## Streaming commitment
 
@@ -154,6 +156,14 @@ Clipping respects character clusters.
 background and leading bar. `reader_ui` shares list viewports, width-aware footers
 and timed feedback. Temporary views preserve document and list positions. Tiny
 window states retain the original anchor for later expansion.
+
+The inline reader defaults to at most 100 content columns, bounded by the document
+pane with two margin columns per side when space permits. `--width` overrides the
+default, including wider columns, within that bound. The content is centered in
+the pane. Tiny windows reduce the margin. CLI-only, unmapped prefix spans position
+text and images together; separators stay empty so heading destinations remain
+distinguishable. Double-size lines use half as many prefix cells and an even
+physical inset. One-shot and streaming layouts do not receive these margins.
 
 Cache at most full-width and sidebar layouts for one window size, moving ownership
 rather than cloning the document. Resize invalidates them. The document, theme
