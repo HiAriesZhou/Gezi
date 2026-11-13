@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- Center the file reader's content at a default width of up to 100 terminal columns, keeping text and images together when the outline is open; use `--width` to choose another width.
+- Add adaptive padding inside code blocks, align language labels with code and add more space before level-two headings.
+- Move Quick start ahead of detailed installation instructions in the README and remove the heading repeated by its brand image.
+
 ## 0.1.8
 
 - Run `gezi update` or `ge update` to update a macOS binary-package installation to the latest stable release. Verify downloads, update both commands in the running executable’s directory, keep a backup and leave equal or newer installations unchanged.
