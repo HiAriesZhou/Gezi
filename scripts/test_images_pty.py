@@ -161,6 +161,50 @@ class ImagesTests(unittest.TestCase):
         self.assertIn(b"a=d,d=I,i=" + image_id, terminal.data)
         self.assert_restored(terminal)
 
+    def test_explicit_width_centers_text_and_images_after_sidebar_and_resize(self) -> None:
+        marker = b"CENTER-MARKER"
+        terminal = self.terminal(
+            "# Start\n\nCENTER-MARKER\n\n![local](asset.svg)",
+            ("--width", "40"),
+        )
+        Path(terminal.temp.name, "asset.svg").write_bytes(SVG)
+        self.placement(terminal)
+        self.settled(terminal)
+
+        def assert_columns(output: bytes, expected: int) -> None:
+            text_columns = []
+            for match in re.finditer(
+                rb"\x1b\[\d+;(\d+)H(.*?)(?=\x1b\[\d+;\d+H|$)", output, re.S
+            ):
+                text = re.sub(rb"\x1b\[[0-9;?]*[a-zA-Z]|\x1b#[0-9]", b"", match[2])
+                if marker in text:
+                    text_columns.append(int(match[1]) + text.index(marker))
+            image_columns = re.findall(rb"\x1b\[\d+;(\d+)H\x1b_Ga=p,", output)
+            self.assertTrue(text_columns, "body marker must be painted")
+            self.assertTrue(image_columns, "image must be placed in this frame")
+            with self.subTest(content="text"):
+                self.assertEqual(text_columns[-1], expected)
+            with self.subTest(content="image"):
+                self.assertEqual(int(image_columns[-1]), expected)
+
+        with self.subTest(view="full", cols=100):
+            assert_columns(bytes(terminal.data), 31)
+        offset = len(terminal.data)
+        terminal.frame(b"o")
+        self.settled(terminal)
+        with self.subTest(view="sidebar", cols=100):
+            # Sidebar is 25 columns; ANSI columns 27 through 100 remain for the body.
+            assert_columns(bytes(terminal.data[offset:]), 27 + (74 - 40) // 2)
+        offset = len(terminal.data)
+        terminal.resize(120, 24)
+        terminal.until(reader.END, offset)
+        self.settled(terminal)
+        with self.subTest(view="sidebar", cols=120):
+            assert_columns(bytes(terminal.data[offset:]), 32 + (89 - 40) // 2)
+        terminal.frame(b"o")
+        self.assertEqual(terminal.finish(b"q"), 0)
+        self.assert_restored(terminal)
+
     @contextlib.contextmanager
     def server(self, delay=0, socks=False):
         # Keep the PTY-forking parent single-threaded. The local server runs in

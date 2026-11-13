@@ -42,6 +42,8 @@ fn reader_layout(cli: &Cli, document: &Document, size: (u16, u16), open: bool) -
     reader_image_layout(cli, document, size, open, None)
 }
 
+const DEFAULT_READING_WIDTH: u16 = 100;
+
 fn reader_image_layout(
     cli: &Cli,
     document: &Document,
@@ -50,17 +52,49 @@ fn reader_image_layout(
     images: Option<&tmd_core::ImageLayout<'_>>,
 ) -> Vec<Line> {
     let sidebar = sidebar_width(size.0, open);
-    let size = (size.0.saturating_sub(sidebar.map_or(0, |w| w + 2)), size.1);
-    let width = cli.width.unwrap_or(size.0).min(size.0).max(1);
+    let available = size.0.saturating_sub(sidebar.map_or(0, |w| w + 1));
+    let gutter = 2.min(available.saturating_sub(2) / 2);
+    let width = cli
+        .width
+        .unwrap_or(DEFAULT_READING_WIDTH)
+        .min(available.saturating_sub(2 * gutter))
+        .max(1);
     let large =
         sidebar.is_none() && size.1 >= 4 && large_headings::enabled(cli, true, Some(size), width);
     let options = RenderOptions {
         large_headings: large,
     };
-    match images {
+    let lines = match images {
         Some(images) => document.layout_with_images(width, options, images),
         None => document.layout(width, options),
-    }
+    };
+    let inset = available.saturating_sub(width) / 2;
+    inset_lines(lines, if large { inset / 2 * 2 } else { inset })
+}
+
+fn inset_lines(lines: Vec<Line>, inset: u16) -> Vec<Line> {
+    lines
+        .into_iter()
+        .map(|line| {
+            if inset == 0 || line.spans.is_empty() {
+                return line;
+            }
+            let columns = if line.size == LineSize::Double {
+                inset / 2
+            } else {
+                inset
+            };
+            Line {
+                spans: std::iter::once(tmd_core::Span::new(
+                    " ".repeat(columns as usize),
+                    tmd_core::Style::default(),
+                ))
+                .chain(line.spans)
+                .collect(),
+                ..line
+            }
+        })
+        .collect()
 }
 
 struct LayoutCache {
@@ -198,9 +232,12 @@ fn paint(
             let mut text = String::new();
             if highlight == Some(start + index) {
                 let mut marked = line.clone();
+                let mapped = marked.spans.iter().any(|span| !span.text_ranges.is_empty());
                 for span in &mut marked.spans {
-                    span.style.bold = true;
-                    span.style.underline = true;
+                    if !mapped || !span.text_ranges.is_empty() {
+                        span.style.bold = true;
+                        span.style.underline = true;
+                    }
                 }
                 ansi::write_line(&mut text, &marked, true);
             } else {
@@ -235,6 +272,10 @@ fn paint(
 /// oversized code/table row overwrite the divider or wrap the terminal.
 fn pane_line(out: &mut String, line: &Line, width: usize, selected: bool) {
     let mut clipped = line.clone();
+    let mapped = clipped
+        .spans
+        .iter()
+        .any(|span| !span.text_ranges.is_empty());
     let mut remaining = width;
     for span in &mut clipped.spans {
         let part = truncate(&span.text, remaining).to_owned();
@@ -243,7 +284,7 @@ fn pane_line(out: &mut String, line: &Line, width: usize, selected: bool) {
             remaining = 0;
         }
         span.text = part;
-        if selected {
+        if selected && (!mapped || !span.text_ranges.is_empty()) {
             span.style.bold = true;
             span.style.underline = true;
         }
@@ -1245,6 +1286,70 @@ mod tests {
             size,
         }
     }
+    #[test]
+    fn reading_column_is_centered_inside_the_document_pane() {
+        use clap::Parser;
+        for (cols, open, width, expected_inset) in [
+            (160, false, Some(100), 30),
+            (160, false, None, 30),
+            (200, false, None, 50),
+            (200, true, None, 31),
+            (160, false, Some(120), 20),
+            (100, false, Some(40), 30),
+            (100, true, Some(40), 17),
+            (80, false, None, 2),
+            (40, false, Some(100), 2),
+            (4, false, None, 1),
+            (2, false, None, 0),
+        ] {
+            let mut args = vec!["gezi".to_owned()];
+            if let Some(width) = width {
+                args.extend(["--width".into(), width.to_string()]);
+            }
+            let cli = Cli::parse_from(args);
+            let doc = Document::new("中\n\n## Next", Theme::default());
+            let lines = reader_layout(&cli, &doc, (cols, 24), open);
+            let first = &lines[0];
+            assert_eq!(
+                first.plain_text().len() - first.plain_text().trim_start().len(),
+                expected_inset
+            );
+            let matched = Document::match_line(&lines, &doc.find("中")[0]).unwrap();
+            assert_eq!(matched, 0);
+            if expected_inset > 0 {
+                assert!(first.spans[0].text_ranges.is_empty());
+            }
+            let heading = Document::heading_line(&lines, &doc.headings()[0]).unwrap();
+            assert_eq!(heading, 3);
+            assert!(lines[1].spans.is_empty() && lines[2].spans.is_empty());
+            let available = cols - sidebar_width(cols, open).map_or(0, |w| w + 1);
+            assert!(lines.iter().all(|line| line.width() <= available as usize));
+        }
+    }
+
+    #[test]
+    fn reader_insets_preserve_line_sizes_and_keep_highlights_inside_content() {
+        let empty = Line {
+            spans: Vec::new(),
+            ..row(LineSize::Normal)
+        };
+        let lines = inset_lines(vec![row(LineSize::Normal), row(LineSize::Double), empty], 4);
+        assert_eq!(lines[0].spans[0].width(), 4);
+        assert_eq!(lines[1].spans[0].width(), 2);
+        assert_eq!(lines[1].size, LineSize::Double);
+        assert!(lines[2].spans.is_empty());
+        assert!(lines.iter().all(|line| line.src == (0..20)));
+        use clap::Parser;
+        let cli = Cli::parse_from(["gezi", "--width", "40"]);
+        let doc = Document::new("needle", Theme::default());
+        let lines = reader_layout(&cli, &doc, (100, 24), false);
+        let (frame, _) = paint(&lines, 0, (100, 24), &Chrome::default(), Some(0));
+        assert!(frame.contains(&format!("\x1b[2;1H{}\x1b[1;4mneedle", " ".repeat(30))));
+        let mut split = String::new();
+        pane_line(&mut split, &lines[0], 100, true);
+        assert!(split.starts_with(&format!("{}\x1b[1;4mneedle", " ".repeat(30))));
+    }
+
     #[test]
     fn layout_cache_reuses_both_views_and_invalidates_on_resize() {
         let mut layouts = LayoutCache::new((80, 24));

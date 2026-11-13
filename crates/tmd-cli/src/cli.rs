@@ -45,7 +45,8 @@ pub struct Cli {
     #[arg(long, value_name = "NAME", default_value = "auto")]
     pub theme: String,
 
-    /// Output width in columns [default: terminal width, or 80 when not a terminal]
+    /// Content width in columns [default: up to 100 in the interactive reader;
+    /// otherwise terminal width, or 80 when not a terminal]
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
     pub width: Option<u16>,
 
