@@ -82,12 +82,13 @@ impl Document {
     /// Exact source ranges also locate empty titles and repeated heading text.
     pub fn heading_line(lines: &[Line], heading: &Heading) -> Option<usize> {
         let first = lines.iter().position(|line| line.src == heading.source)?;
+        let gap = crate::layout::heading_gap(heading.level);
         let separator = first > 0
             && lines[first].spans.is_empty()
             && lines
-                .get(first + 1)
+                .get(first + gap)
                 .is_some_and(|line| line.src == heading.source);
-        Some(first + usize::from(separator))
+        Some(first + if separator { gap } else { 0 })
     }
 
     pub fn layout(&self, width: u16, options: RenderOptions) -> Vec<Line> {
@@ -316,6 +317,74 @@ mod tests {
             ),
             Some(0)
         );
+    }
+
+    #[test]
+    fn h2_destinations_skip_both_separators_but_keep_empty_titles() {
+        for rule in ["─", ""] {
+            let theme = Theme {
+                symbols: crate::theme::Symbols {
+                    h2_rule: rule.into(),
+                    ..Theme::default().symbols
+                },
+                ..Theme::default()
+            };
+            for md in [
+                "## First\n\n##\n\n## Last",
+                "intro\n\n## First\n\n##\n\n## Last",
+            ] {
+                let doc = Document::new(md, theme.clone());
+                for width in [1, 4, 12, 80] {
+                    let lines = doc.layout(width, RenderOptions::default());
+                    for heading in doc.headings() {
+                        let first = lines
+                            .iter()
+                            .position(|line| line.src == heading.source)
+                            .unwrap();
+                        let row = Document::heading_line(&lines, heading).unwrap();
+                        assert_eq!(row, first + if first == 0 { 0 } else { 2 });
+                        assert_eq!(lines[row].src, heading.source);
+                        if !heading.title.is_empty() {
+                            assert!(!lines[row].spans.is_empty());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn code_insets_and_labels_do_not_enter_search_or_copy_text() {
+        for language in ["text", "rust"] {
+            let doc = Document::new(
+                &format!("```{language}\n  abneedlecd\n```"),
+                Theme::default(),
+            );
+            assert_eq!(doc.code_blocks()[0].text, "  abneedlecd\n");
+            assert!(doc.find(language).is_empty());
+            for width in [5, 8, 80] {
+                let lines = doc.layout(width, RenderOptions::default());
+                assert!(
+                    lines[0]
+                        .spans
+                        .iter()
+                        .all(|span| span.text_ranges.is_empty())
+                );
+                let row = Document::match_line(&lines, &doc.find("needle")[0]).unwrap();
+                assert!(row > 0);
+                for line in &lines[1..] {
+                    assert!(line.spans[0].text_ranges.is_empty());
+                    assert!(line.spans.iter().any(|span| span.code_block == Some(0)));
+                }
+                let mapped: String = lines
+                    .iter()
+                    .flat_map(|line| &line.spans)
+                    .filter(|span| !span.text_ranges.is_empty())
+                    .map(|span| span.text.as_str())
+                    .collect();
+                assert_eq!(mapped, "  abneedlecd");
+            }
+        }
     }
 
     #[test]

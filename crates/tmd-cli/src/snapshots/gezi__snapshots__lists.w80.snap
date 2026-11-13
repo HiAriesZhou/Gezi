@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 42
+assertion_line: 43
 expression: plain(&lines)
 ---
 列表
@@ -25,6 +25,7 @@ expression: plain(&lines)
 7. 从 7 开始编号
 8. 下一个是 8
 
+
 任务列表
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ expression: plain(&lines)
 ☑ 写实现
 ☐ 跑 cargo test
   ☑ 嵌套的任务
+
 
 松散列表
 ────────────────────────────────────────────────────────────────────────────────
@@ -42,6 +44,7 @@ expression: plain(&lines)
 
 • 第二项。
 
+
 列表里的其他块
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -51,5 +54,5 @@ expression: plain(&lines)
 
 • 代码：
 
-                                                                              sh
-  cargo run -- fixtures/lists.md
+    sh                                                                          
+    cargo run -- fixtures/lists.md

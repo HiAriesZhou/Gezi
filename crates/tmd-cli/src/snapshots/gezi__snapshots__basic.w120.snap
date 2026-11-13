@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 42
+assertion_line: 43
 expression: plain(&lines)
 ---
 TMD 基本元素
@@ -11,6 +11,7 @@ TMD 基本元素
 
 A long English paragraph that should wrap at the terminal width without breaking words in the middle, unless a single
 word like Supercalifragilisticexpialidocious_and_then_some_more_letters_to_overflow is wider than the line.
+
 
 二级标题
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

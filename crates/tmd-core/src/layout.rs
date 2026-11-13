@@ -20,12 +20,23 @@ pub(crate) struct Ctx<'t> {
     pub images: Option<&'t crate::ImageLayout<'t>>,
 }
 
-/// Lays out sibling blocks, with a blank row between them unless `tight`.
+pub(crate) fn heading_gap(level: u8) -> usize {
+    if level == 2 { 2 } else { 1 }
+}
+
+pub(crate) fn block_gap(block: &Block) -> usize {
+    match block {
+        Block::Heading { level, .. } => heading_gap(*level),
+        _ => 1,
+    }
+}
+
+/// Lays out sibling blocks, with extra separation before level-two headings.
 pub(crate) fn blocks(ctx: &Ctx, items: &[Block], width: usize, tight: bool) -> Vec<Row> {
     let mut rows = Vec::new();
     for (i, item) in items.iter().enumerate() {
         if i > 0 && !tight {
-            rows.push(Row::new());
+            rows.extend((0..block_gap(item)).map(|_| Row::new()));
         }
         rows.extend(block(ctx, item, width));
     }

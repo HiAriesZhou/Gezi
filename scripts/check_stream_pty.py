@@ -52,10 +52,10 @@ def produce(input_format, release_fd):
 ANSI = re.compile(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))")
 
 
-def row_widths(output):
+def row_widths(output: bytes | bytearray) -> list[int]:
     plain = ANSI.sub(b"", bytes(output)).replace(b"\r", b"")
     return sorted({len(line) for line in plain.splitlines()
-                   if line.startswith(b"TMD_PTY_") and line.isascii()})
+                   if line.lstrip(b" ").startswith(b"TMD_PTY_") and line.isascii()})
 
 
 def stop_child(pid, master):

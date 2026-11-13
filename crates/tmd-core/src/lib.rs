@@ -124,11 +124,11 @@ fn render_blocks_with_images(
                 .collect()
         };
         if let (false, Some(first)) = (lines.is_empty(), rows.first()) {
-            lines.push(Line {
+            lines.extend((0..layout::block_gap(&top_block.block)).map(|_| Line {
                 spans: Vec::new(),
                 src: first.src.clone(),
                 size: LineSize::Normal,
-            });
+            }));
         }
         lines.extend(rows);
     }

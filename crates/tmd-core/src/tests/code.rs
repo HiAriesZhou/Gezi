@@ -5,10 +5,35 @@ use super::{lines, plain, style_of};
 use crate::{Color, Theme, render};
 
 #[test]
+fn code_insets_adapt_without_losing_wide_characters() {
+    for (width, inset) in [(1, 0), (2, 0), (3, 0), (4, 1), (5, 1), (6, 2), (10, 2)] {
+        let out = lines("```text\n中e\u{301}👩‍💻\n```", width);
+        for line in &out {
+            assert_eq!(line.width(), usize::from(width));
+            assert!(line.plain_text().starts_with(&" ".repeat(inset)));
+        }
+        if width >= 2 {
+            let text: String = out[1..].iter().map(|line| line.plain_text()).collect();
+            assert!(text.contains('中') && text.contains("e\u{301}") && text.contains("👩‍💻"));
+        }
+    }
+}
+
+#[test]
+fn code_labels_and_content_share_an_inset() {
+    let md = "```text\nabcdef\n\n```";
+    assert_eq!(
+        plain(md, 8),
+        ["  text  ", "  abcd  ", "  ef    ", "        "]
+    );
+    assert_eq!(plain("```text\n```", 8), ["  text  ", "        "]);
+}
+
+#[test]
 fn each_code_row_points_at_its_source_line() {
     let md = "```rust\nab\ncd\n```\n";
     let out = lines(md, 10);
-    assert_eq!(plain(md, 10), ["      rust", "ab        ", "cd        "]);
+    assert_eq!(plain(md, 10), ["  rust    ", "  ab      ", "  cd      "]);
     assert_eq!(
         &md[out[0].src.clone()],
         "```rust\n",
@@ -21,8 +46,8 @@ fn each_code_row_points_at_its_source_line() {
 #[test]
 fn wrapped_code_rows_share_their_line_source() {
     let md = "```\nabcdef\nx\n```";
-    let out = lines(md, 4);
-    assert_eq!(plain(md, 4), ["abcd", "ef  ", "x   "]);
+    let out = lines(md, 8);
+    assert_eq!(plain(md, 8), ["  abcd  ", "  ef    ", "  x     "]);
     assert_eq!(&md[out[0].src.clone()], "abcdef\n");
     assert_eq!(out[1].src, out[0].src);
     assert_eq!(&md[out[2].src.clone()], "x\n");

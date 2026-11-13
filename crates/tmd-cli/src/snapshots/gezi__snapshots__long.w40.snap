@@ -12,6 +12,7 @@ Each section mixes Chinese and English
 so wrapping and width are exercised
 together.
 
+
 第 1 节：段落与列表
 ────────────────────────────────────────
 
@@ -36,6 +37,7 @@ while English words stay whole.
 │ 第 1 节的引用：引用里的文字也按宽度换
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
+
 
 第 2 节：段落与列表
 ────────────────────────────────────────
@@ -62,6 +64,7 @@ while English words stay whole.
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
 
+
 第 3 节：段落与列表
 ────────────────────────────────────────
 
@@ -86,6 +89,7 @@ while English words stay whole.
 │ 第 3 节的引用：引用里的文字也按宽度换
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
+
 
 第 4 节：段落与列表
 ────────────────────────────────────────
@@ -112,6 +116,7 @@ while English words stay whole.
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
 
+
 第 5 节：段落与列表
 ────────────────────────────────────────
 
@@ -136,6 +141,7 @@ while English words stay whole.
 │ 第 5 节的引用：引用里的文字也按宽度换
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
+
 
 第 6 节：段落与列表
 ────────────────────────────────────────
@@ -162,6 +168,7 @@ while English words stay whole.
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
 
+
 第 7 节：段落与列表
 ────────────────────────────────────────
 
@@ -186,6 +193,7 @@ while English words stay whole.
 │ 第 7 节的引用：引用里的文字也按宽度换
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
+
 
 第 8 节：段落与列表
 ────────────────────────────────────────
@@ -212,6 +220,7 @@ while English words stay whole.
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
 
+
 第 9 节：段落与列表
 ────────────────────────────────────────
 
@@ -237,128 +246,130 @@ while English words stay whole.
 │ 行，each wrapped line keeps the quote
 │ bar on the left.
 
+
 长代码块
 ────────────────────────────────────────
 
 下面的代码块超过 80 行，流式输出时应该一
 行一行出现：
 
-                                    rust
-use std::collections::HashMap;          
+  rust                                  
+  use std::collections::HashMap;        
                                         
-/// 统计单词出现的次数。                
-pub fn word_count(text: &str) -> HashMap
-<String, usize> {                       
-    let mut counts = HashMap::new();    
-    for word in text.split_whitespace() 
-{                                       
-        *counts.entry(word.to_lowercase(
-)).or_insert(0) += 1;                   
-    }                                   
-    counts                              
-}                                       
+  /// 统计单词出现的次数。              
+  pub fn word_count(text: &str) -> Has  
+  hMap<String, usize> {                 
+      let mut counts = HashMap::new();  
+      for word in text.split_whitespac  
+  e() {                                 
+          *counts.entry(word.to_lowerc  
+  ase()).or_insert(0) += 1;             
+      }                                 
+      counts                            
+  }                                     
                                         
-fn step_1(input: &[i64]) -> i64 {       
-    // 第 1 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 2 == 0
-).map(|x| x * 1).sum()                  
-}                                       
+  fn step_1(input: &[i64]) -> i64 {     
+      // 第 1 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 2   
+  == 0).map(|x| x * 1).sum()            
+  }                                     
                                         
-fn step_2(input: &[i64]) -> i64 {       
-    // 第 2 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 3 == 0
-).map(|x| x * 2).sum()                  
-}                                       
+  fn step_2(input: &[i64]) -> i64 {     
+      // 第 2 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 3   
+  == 0).map(|x| x * 2).sum()            
+  }                                     
                                         
-fn step_3(input: &[i64]) -> i64 {       
-    // 第 3 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 4 == 0
-).map(|x| x * 3).sum()                  
-}                                       
+  fn step_3(input: &[i64]) -> i64 {     
+      // 第 3 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 4   
+  == 0).map(|x| x * 3).sum()            
+  }                                     
                                         
-fn step_4(input: &[i64]) -> i64 {       
-    // 第 4 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 5 == 0
-).map(|x| x * 4).sum()                  
-}                                       
+  fn step_4(input: &[i64]) -> i64 {     
+      // 第 4 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 5   
+  == 0).map(|x| x * 4).sum()            
+  }                                     
                                         
-fn step_5(input: &[i64]) -> i64 {       
-    // 第 5 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 6 == 0
-).map(|x| x * 5).sum()                  
-}                                       
+  fn step_5(input: &[i64]) -> i64 {     
+      // 第 5 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 6   
+  == 0).map(|x| x * 5).sum()            
+  }                                     
                                         
-fn step_6(input: &[i64]) -> i64 {       
-    // 第 6 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 7 == 0
-).map(|x| x * 6).sum()                  
-}                                       
+  fn step_6(input: &[i64]) -> i64 {     
+      // 第 6 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 7   
+  == 0).map(|x| x * 6).sum()            
+  }                                     
                                         
-fn step_7(input: &[i64]) -> i64 {       
-    // 第 7 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 8 == 0
-).map(|x| x * 7).sum()                  
-}                                       
+  fn step_7(input: &[i64]) -> i64 {     
+      // 第 7 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 8   
+  == 0).map(|x| x * 7).sum()            
+  }                                     
                                         
-fn step_8(input: &[i64]) -> i64 {       
-    // 第 8 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 9 == 0
-).map(|x| x * 8).sum()                  
-}                                       
+  fn step_8(input: &[i64]) -> i64 {     
+      // 第 8 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 9   
+  == 0).map(|x| x * 8).sum()            
+  }                                     
                                         
-fn step_9(input: &[i64]) -> i64 {       
-    // 第 9 步：过滤、映射再求和        
-    input.iter().filter(|x| **x % 10 == 
-0).map(|x| x * 9).sum()                 
-}                                       
+  fn step_9(input: &[i64]) -> i64 {     
+      // 第 9 步：过滤、映射再求和      
+      input.iter().filter(|x| **x % 10  
+   == 0).map(|x| x * 9).sum()           
+  }                                     
                                         
-fn step_10(input: &[i64]) -> i64 {      
-    // 第 10 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 11 == 
-0).map(|x| x * 10).sum()                
-}                                       
+  fn step_10(input: &[i64]) -> i64 {    
+      // 第 10 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 11  
+   == 0).map(|x| x * 10).sum()          
+  }                                     
                                         
-fn step_11(input: &[i64]) -> i64 {      
-    // 第 11 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 12 == 
-0).map(|x| x * 11).sum()                
-}                                       
+  fn step_11(input: &[i64]) -> i64 {    
+      // 第 11 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 12  
+   == 0).map(|x| x * 11).sum()          
+  }                                     
                                         
-fn step_12(input: &[i64]) -> i64 {      
-    // 第 12 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 13 == 
-0).map(|x| x * 12).sum()                
-}                                       
+  fn step_12(input: &[i64]) -> i64 {    
+      // 第 12 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 13  
+   == 0).map(|x| x * 12).sum()          
+  }                                     
                                         
-fn step_13(input: &[i64]) -> i64 {      
-    // 第 13 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 14 == 
-0).map(|x| x * 13).sum()                
-}                                       
+  fn step_13(input: &[i64]) -> i64 {    
+      // 第 13 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 14  
+   == 0).map(|x| x * 13).sum()          
+  }                                     
                                         
-fn step_14(input: &[i64]) -> i64 {      
-    // 第 14 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 15 == 
-0).map(|x| x * 14).sum()                
-}                                       
+  fn step_14(input: &[i64]) -> i64 {    
+      // 第 14 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 15  
+   == 0).map(|x| x * 14).sum()          
+  }                                     
                                         
-fn step_15(input: &[i64]) -> i64 {      
-    // 第 15 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 16 == 
-0).map(|x| x * 15).sum()                
-}                                       
+  fn step_15(input: &[i64]) -> i64 {    
+      // 第 15 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 16  
+   == 0).map(|x| x * 15).sum()          
+  }                                     
                                         
-fn step_16(input: &[i64]) -> i64 {      
-    // 第 16 步：过滤、映射再求和       
-    input.iter().filter(|x| **x % 17 == 
-0).map(|x| x * 16).sum()                
-}                                       
+  fn step_16(input: &[i64]) -> i64 {    
+      // 第 16 步：过滤、映射再求和     
+      input.iter().filter(|x| **x % 17  
+   == 0).map(|x| x * 16).sum()          
+  }                                     
                                         
-fn main() {                             
-    let counts = word_count("tmd renders
- markdown in the terminal");            
-    println!("{counts:?}");             
-}                                       
+  fn main() {                           
+      let counts = word_count("tmd ren  
+  ders markdown in the terminal");      
+      println!("{counts:?}");           
+  }                                     
+
 
 长表格
 ────────────────────────────────────────
@@ -490,6 +501,7 @@ fn main() {
 │      │         │ 明，mixed 中 │      │
 │      │         │ 英文 text    │      │
 └──────┴─────────┴──────────────┴──────┘
+
 
 结尾
 ────────────────────────────────────────
