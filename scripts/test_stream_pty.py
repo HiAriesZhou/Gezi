@@ -477,6 +477,15 @@ class StartupOrdering(unittest.TestCase):
             os.close(slave)
             os.close(master)
 
+    def test_padded_probe_rows_keep_the_full_background_width(self) -> None:
+        rows = b"".join(
+            b"\x1b[100m  \x1b[0m\x1b[100m"
+            + b"TMD_PTY_0000 x".ljust(width - 2, b" ")
+            + b"\x1b[0m\r\n"
+            for width in (80, 60)
+        )
+        self.assertEqual(probe.row_widths(rows), [60, 80])
+
     def test_producer_waits_for_resize_even_when_renderer_starts_late(self):
         with tempfile.TemporaryDirectory(prefix="tmd-pty-delayed-") as directory:
             wrapper = Path(directory) / "tmd-delayed"

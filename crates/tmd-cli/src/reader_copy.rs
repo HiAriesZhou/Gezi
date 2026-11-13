@@ -188,7 +188,13 @@ mod tests {
                 for (label, expected) in [("empty", 1), ("control", 2)] {
                     let row = lines
                         .iter()
-                        .position(|line| line.plain_text().ends_with(label))
+                        .position(|line| {
+                            line.spans.iter().any(|span| span.style.dim)
+                                && line
+                                    .spans
+                                    .iter()
+                                    .any(|span| span.code_block == Some(expected))
+                        })
                         .expect("code language label is visible");
                     for visible in [&lines[row..=row], &lines[row + 1..=row + 1]] {
                         let mut picker = CodePicker::default();

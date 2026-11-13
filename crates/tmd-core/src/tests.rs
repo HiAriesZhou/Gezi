@@ -40,6 +40,7 @@ fn headings_hide_markers_and_use_theme_styles() {
             "One",
             "━".repeat(20).as_str(),
             "",
+            "",
             "Two",
             "─".repeat(20).as_str(),
             "",
@@ -94,6 +95,31 @@ fn paragraphs_wrap_to_width() {
 fn soft_breaks_join_and_hard_breaks_split() {
     assert_eq!(plain("a\nb", 80), ["a b"]);
     assert_eq!(plain("a  \nb", 80), ["a", "b"]);
+}
+
+#[test]
+fn h2_has_more_space_above_than_below() {
+    for md in [
+        "intro\n\n## Section\n\nbody",
+        "intro\n\nSection\n---\n\nbody",
+    ] {
+        let out = lines(md, 8);
+        assert_eq!(
+            out.iter().map(Line::plain_text).collect::<Vec<_>>(),
+            ["intro", "", "", "Section", "────────", "", "body"]
+        );
+        assert_eq!(out[1].src, out[3].src);
+        assert_eq!(out[2].src, out[3].src);
+    }
+    assert_eq!(plain("## First", 8), ["First", "────────"]);
+    assert_eq!(
+        plain("<!-- hidden -->\n\n## First", 8),
+        ["First", "────────"]
+    );
+    assert_eq!(
+        plain("> intro\n>\n> ## Next", 8),
+        ["│ intro", "│", "│", "│ Next", "│ ──────"]
+    );
 }
 
 #[test]
@@ -158,7 +184,7 @@ fn code_block_has_background_and_language_label() {
     let theme = Theme::default();
     let out = lines("```rust\nfn main() {}\n```", 16);
     let text: Vec<String> = out.iter().map(Line::plain_text).collect();
-    assert_eq!(text, ["            rust", "fn main() {}    "]);
+    assert_eq!(text, ["  rust          ", "  fn main() {}  "]);
     for line in &out {
         assert_eq!(line.width(), 16);
         assert!(line.spans.iter().all(|s| s.style.bg == theme.code_block.bg));
@@ -168,20 +194,20 @@ fn code_block_has_background_and_language_label() {
 
 #[test]
 fn code_block_without_language_has_no_label_row() {
-    assert_eq!(plain("```\nx\n```", 4), ["x   "]);
+    assert_eq!(plain("```\nx\n```", 4), [" x  "]);
 }
 
 #[test]
 fn code_block_keeps_markdown_markers_and_expands_tabs() {
     assert_eq!(
-        plain("```\n# **x**\n\ty\n```", 10),
-        ["# **x**   ", "    y     "]
+        plain("```\n# **x**\n\ty\n```", 12),
+        ["  # **x**   ", "      y     "]
     );
 }
 
 #[test]
 fn long_code_lines_wrap_inside_the_block() {
-    assert_eq!(plain("```\nabcdef\n```", 4), ["abcd", "ef  "]);
+    assert_eq!(plain("```\nabcdef\n```", 4), [" ab ", " cd ", " ef "]);
 }
 
 #[test]

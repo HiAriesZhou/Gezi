@@ -136,7 +136,7 @@ fn heading_levels_are_distinguishable() {
         let out = render("# one\n\n## two\n\n### three", 10, &theme);
         let rows: Vec<String> = out.iter().map(|l| l.plain_text()).collect();
         assert_eq!(rows[1], "━".repeat(10), "{name}: thick line under level 1");
-        assert_eq!(rows[4], "─".repeat(10), "{name}: thin line under level 2");
+        assert_eq!(rows[5], "─".repeat(10), "{name}: thin line under level 2");
         assert!(theme.h3.bold && theme.h3.fg != theme.h2.fg, "{name}");
     }
 }

@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 42
+assertion_line: 43
 expression: plain(&lines)
 ---
 引用
@@ -26,4 +26,4 @@ expression: plain(&lines)
 │
 │ 引用里的代码：
 │
-│ let x = 1;
+│   let x = 1;

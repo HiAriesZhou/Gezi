@@ -57,6 +57,47 @@ fn texts(lines: &[Line]) -> Vec<String> {
 }
 
 #[test]
+fn code_and_h2_spacing_match_full_render_at_every_split() {
+    for md in [
+        "intro\n\n```text\n中文abcdef\n```\n\n## Next\n\nbody\n",
+        "intro\n\nNext\n---\n\nbody\n",
+    ] {
+        for width in [4, 8, 20] {
+            let expected = render(md, width, &Theme::default());
+            for at in (0..=md.len()).filter(|at| md.is_char_boundary(*at)) {
+                assert_eq!(
+                    stream(&[&md[..at], &md[at..]], width).0,
+                    expected,
+                    "width={width}, at={at}"
+                );
+            }
+            assert_eq!(stream(&chunks(md, &[1]), width).0, expected);
+        }
+    }
+}
+
+#[test]
+fn resizing_code_reflows_only_uncommitted_rows() {
+    let mut streamer = Streamer::new(10, Theme::default());
+    let first = streamer.push("```text\nabcdefghi\n中xyz");
+    assert_eq!(
+        texts(&first.committed),
+        ["  text    ", "  abcdef  ", "  ghi     "]
+    );
+    let boundary = first.committed.last().unwrap().src.end;
+    streamer.set_width(4);
+    let narrow = streamer.push("");
+    assert!(narrow.committed.is_empty());
+    assert_eq!(texts(&narrow.active), [" 中 ", " xy ", " z  "]);
+    streamer.set_width(10);
+    let wide = streamer.push("\n```\n\n## Next\n");
+    assert!(wide.committed.iter().all(|line| line.src.start >= boundary));
+    assert_eq!(texts(&wide.active), ["", "", "Next", "──────────"]);
+    let last = streamer.finish();
+    assert_eq!(last.committed, wide.active);
+}
+
+#[test]
 fn code_blocks_commit_line_by_line() {
     let mut s = Streamer::new(20, Theme::default());
     let frame = s.push("```rust\nfn a()");
@@ -68,8 +109,8 @@ fn code_blocks_commit_line_by_line() {
         2,
         "label row and the first line"
     );
-    assert!(frame.committed[1].plain_text().starts_with("fn a() {}"));
-    assert!(texts(&frame.active)[0].starts_with("let"));
+    assert!(frame.committed[1].plain_text().starts_with("  fn a() {}"));
+    assert!(texts(&frame.active)[0].starts_with("  let"));
 }
 
 #[test]

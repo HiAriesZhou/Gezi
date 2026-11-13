@@ -8,28 +8,36 @@ use crate::line::Span;
 use crate::parse::CodeBlock;
 use crate::style::Style;
 use crate::theme::Theme;
-use crate::width::{text_width, truncate};
+use crate::width::truncate;
 use crate::wrap::{Row, hard_wrap_spans, push_text};
+
+const CODE_INSET: usize = 2;
 
 /// Rows with the source range each comes from: the label row maps to the
 /// opening fence, code rows to their source line.
 pub(crate) fn rows(theme: &Theme, code: &CodeBlock, width: usize) -> Vec<(Row, Range<usize>)> {
     let style = &theme.code_block;
+    let width = width.max(1);
+    let inset = CODE_INSET.min(width.saturating_sub(2) / 2);
+    let content_width = width - 2 * inset;
     let mut rows = Vec::new();
     if let Some(lang) = &code.lang {
         let fence_end = code
             .lines
             .first()
             .map_or(code.src.end, |line| line.src.start);
-        rows.push((label_row(style, lang, width), code.src.start..fence_end));
+        rows.push((
+            label_row(style, lang, width, inset),
+            code.src.start..fence_end,
+        ));
     }
     for (line, spans) in code.lines.iter().zip(styled_lines(theme, code)) {
-        for row in hard_wrap_spans(&spans, width) {
-            rows.push((padded(style, row, width), line.src.clone()));
+        for row in hard_wrap_spans(&spans, content_width) {
+            rows.push((padded(style, row, width, inset), line.src.clone()));
         }
     }
     if code.lines.is_empty() {
-        rows.push((padded(style, Row::new(), width), code.src.clone()));
+        rows.push((padded(style, Row::new(), width, inset), code.src.clone()));
     }
     for (row, _) in &mut rows {
         if let Some(span) = row.first_mut() {
@@ -39,16 +47,13 @@ pub(crate) fn rows(theme: &Theme, code: &CodeBlock, width: usize) -> Vec<(Row, R
     rows
 }
 
-fn label_row(style: &Style, lang: &str, width: usize) -> Row {
-    let label = truncate(lang, width);
+fn label_row(style: &Style, lang: &str, width: usize, inset: usize) -> Row {
+    let label = truncate(lang, width - 2 * inset);
     let label_style = Style {
         dim: true,
         ..style.clone()
     };
-    let mut row = Row::new();
-    push_text(&mut row, &" ".repeat(width - text_width(label)), style);
-    push_text(&mut row, label, &label_style);
-    row
+    padded(style, vec![Span::new(label, label_style)], width, inset)
 }
 
 /// Each line as spans on the block background: highlighted when the
@@ -88,8 +93,11 @@ fn styled_lines(theme: &Theme, code: &CodeBlock) -> Vec<Vec<Span>> {
 }
 
 /// `row` filled to `width` with the block background.
-fn padded(style: &Style, mut row: Row, width: usize) -> Row {
-    let used: usize = row.iter().map(Span::width).sum();
-    push_text(&mut row, &" ".repeat(width.saturating_sub(used)), style);
-    row
+fn padded(style: &Style, row: Row, width: usize, inset: usize) -> Row {
+    let mut padded = Row::new();
+    push_text(&mut padded, &" ".repeat(inset), style);
+    padded.extend(row);
+    let used: usize = padded.iter().map(Span::width).sum();
+    push_text(&mut padded, &" ".repeat(width.saturating_sub(used)), style);
+    padded
 }

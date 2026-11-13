@@ -1,6 +1,6 @@
 ---
 source: crates/tmd-cli/src/snapshots.rs
-assertion_line: 47
+assertion_line: 48
 expression: ansi
 ---
 \e[1;95mTMD 基本元素\e[0m
@@ -13,6 +13,7 @@ A long English paragraph that should wrap at the terminal width without breaking
 words in the middle, unless a single word like
 Supercalifragilisticexpialidocious_and_then_some_more_letters_to_overflow is
 wider than the line.
+
 
 \e[1;94m二级标题\e[0m
 \e[90m────────────────────────────────────────────────────────────────────────────────\e[0m
