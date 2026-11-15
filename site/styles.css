@@ -64,14 +64,43 @@ h3 { font-size: 17px; line-height: 1.4; font-weight: 500; }
 .install-links { display: flex; flex-wrap: wrap; gap: 0 24px; margin-top: 6px; }
 .install-links a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; }
 .copy-status { min-height: 48px; color: var(--muted); margin-top: 6px; }
-.colophon { border-top: 1px solid var(--ink); padding-block: 24px; display: grid; grid-template-columns: 1fr 1fr auto; align-items: start; gap: 24px; }
-.maker { display: flex; gap: 12px; align-items: center; font-size: 13px; }
-.maker img { border-radius: 50%; }
-.maker a { display: inline-flex; align-items: center; min-height: 44px; }
-.maker-note { display: block; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.colophon-brand { font-size: 12px; line-height: 1.9; color: var(--muted); padding-top: 10px; }
-.colophon nav { display: flex; gap: 18px; flex-wrap: wrap; }
-.colophon nav a { display: inline-flex; min-height: 44px; align-items: center; gap: 6px; font-size: 12px; }
+.colophon { border-top: 1px solid var(--ink); padding-block: 36px 24px; }
+.footer-intro { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
+.footer-label { font: 12px/1.5 var(--mono); color: var(--rust); }
+.maker-profile { display: inline-flex; align-items: center; gap: 16px; margin-top: 20px; text-decoration: none; }
+.maker-profile img { border-radius: 50%; flex: none; }
+.maker-byline { display: block; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.maker-name { display: block; font-size: 24px; font-weight: 500; line-height: 1.4; }
+.maker-name > span { font-size: 16px; color: var(--rust); }
+.maker-profile:hover .maker-name { text-decoration: underline; text-underline-offset: 5px; }
+.maker-note { color: var(--muted); font-size: 14px; line-height: 1.7; margin-top: 14px; max-width: 39ch; }
+.maker-links h2 { font-size: 18px; font-weight: 500; line-height: 1.5; margin-bottom: 12px; }
+.maker-links a { display: grid; grid-template-columns: minmax(max-content, 5em) minmax(0, 1fr) 1.25em; gap: 12px; align-items: center; min-height: 54px; padding-block: 10px; border-top: 1px solid var(--line); text-decoration: none; }
+.social-name { font-size: 15px; font-weight: 500; }
+.social-handle { font: 12px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.maker-links a:hover .social-name { text-decoration: underline; }
+.maker-links a > span:last-child { color: var(--rust); text-align: right; }
+.maker-products { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
+.products-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.products-heading h2 { font-size: 18px; line-height: 1.5; font-weight: 500; }
+.products-heading > a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; }
+.product-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 18px 0 0; padding: 0; list-style: none; }
+.product-list > li { min-width: 0; padding-inline: 24px; border-left: 1px solid var(--line); }
+.product-list > li:first-child { padding-left: 0; border-left: 0; }
+.product-list > li:last-child { padding-right: 0; }
+.product-link { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; height: 100%; padding-block: 8px; text-decoration: none; }
+.product-link > img { display: block; width: 44px; height: 44px; object-fit: contain; border-radius: 10px; }
+.product-mark-xtoc { background: #fff; padding: 4px; }
+.product-copy { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; }
+.product-name { font-size: 18px; font-weight: 500; line-height: 1.4; }
+.product-name > span { color: var(--rust); font-size: 14px; margin-left: 4px; }
+.product-link:hover .product-name { text-decoration: underline; text-underline-offset: 5px; }
+.product-description { font-size: 14px; line-height: 1.6; color: var(--muted); max-width: 34ch; }
+.product-platform { font: 11px/1.5 var(--mono); color: var(--muted); margin-top: 4px; }
+.footer-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; border-top: 1px solid var(--line); padding-top: 24px; margin-top: 32px; }
+.colophon-brand { font-size: 12px; line-height: 1.9; color: var(--muted); }
+.project-links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.project-links a { display: inline-flex; align-items: center; min-height: 44px; gap: 6px; font-size: 12px; }
 .exploration-nav { border-top: 1px solid var(--line); display: flex; justify-content: space-between; padding-block: 10px; font: 12px var(--mono); }
 .exploration-nav a { display: inline-flex; min-height: 44px; align-items: center; }
 
@@ -136,10 +165,16 @@ kbd { display: inline-flex; justify-content: center; align-items: center; border
   .workflow, .installation, .design-a .workflow, .design-a .installation { grid-template-columns: 220px minmax(0, 1fr); gap: 32px; }
   .command-row { grid-template-columns: 24px minmax(0, 1fr); gap: 12px; }
   .command-row code { grid-column: 2; }
-  .colophon { grid-template-columns: 1fr 1fr; }
-  .colophon nav { grid-column: 1 / -1; }
+  .footer-intro { gap: 36px; }
+  .product-list > li { padding-inline: 18px; }
+  .product-link { gap: 12px; }
 }
 @media (max-width: 850px) {
+  .product-list { grid-template-columns: 1fr; margin-top: 8px; }
+  .product-list > li, .product-list > li:first-child, .product-list > li:last-child { padding: 16px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+  .product-list > li:last-child { padding-bottom: 0; border-bottom: 0; }
+  .product-link { gap: 16px; }
+  .product-description { max-width: 52ch; }
   .header-note { margin-right: 12px; }
   .design-a .hero { grid-template-columns: 96px minmax(0, 1fr); gap: 20px; padding-top: 28px; }
   .marginalia { padding-right: 12px; }
@@ -197,10 +232,13 @@ kbd { display: inline-flex; justify-content: center; align-items: center; border
   .workflow-body, .install-body { margin-top: 24px; }
   .command-row { padding-block: 18px; }
   .command-row code { font-size: 12px; }
-  .colophon { grid-template-columns: 1fr; gap: 18px; padding-block: 20px; }
-  .colophon-brand { padding-top: 0; }
-  .colophon nav { gap: 22px; }
-  .maker-note { max-width: 30ch; }
+  .colophon { padding-block: 28px 20px; }
+  .footer-intro { grid-template-columns: 1fr; gap: 28px; }
+  .maker-products { margin-top: 28px; padding-top: 20px; }
+  .maker-links a { grid-template-columns: minmax(max-content, 3.75em) minmax(0, 1fr) 1.25em; }
+  .social-handle { font-size: 11px; }
+  .products-heading { gap: 0 16px; }
+  .footer-bottom { margin-top: 24px; padding-top: 20px; }
   .exploration-nav { font-size: 10px; gap: 16px; }
 }
 @media (min-width: 851px) and (max-width: 900px) {
