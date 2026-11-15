@@ -1,4 +1,5 @@
 /target
+/.vercel
 
 # Local plans, handoffs and discussion records belong outside this repository.
 /docs/HANDOFF.md
