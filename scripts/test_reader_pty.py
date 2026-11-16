@@ -887,7 +887,7 @@ class ReaderTests(unittest.TestCase):
         self.assertNotIn(b"\x1b[1;4m", selected)
         help_frame = t.frame(b"?")
         self.assertIn("目录帮助".encode(), help_frame)
-        self.assertIn("背景为选中项".encode(), help_frame)
+        self.assertIn("选中项".encode(), help_frame)
         self.assertNotIn("> 为选中项".encode(), help_frame)
         self.assertNotIn("Enter 跳转", self.footer(help_frame))
         returned = t.frame(b"q")
@@ -901,6 +901,35 @@ class ReaderTests(unittest.TestCase):
         self.assertIn(b"Paragraph 0", t.frame(b"\x1b"))
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
+
+    def test_grouped_help_scrolls_resizes_and_returns_to_document(self):
+        for language, search, navigation in (("zh", "搜索", "导航"), ("en", "Search", "Navigation")):
+            with self.subTest(language=language):
+                t = self.terminal(language=language, cols=100)
+                t.until(END)
+                opening = t.frame(b"?")
+                text = re.sub(rb"\x1b\[[0-9;]*m", b"", opening).decode()
+                self.assertIn(search, text)
+                self.assertIn(navigation, text)
+                self.assertIn("1–", self.footer(opening))
+                self.assertIn(b"\x1b[1m", opening)
+                bottom = t.frame(b"\x1b[F")
+                self.assertIn(b"Ctrl-C", bottom)
+                self.assertNotEqual(self.footer(opening), self.footer(bottom))
+                for cols, rows in ((39, 8), (20, 5), (100, 2), (80, 24)):
+                    offset = len(t.data)
+                    t.resize(cols, rows)
+                    frame = t.until(END, offset)
+                    self.assertIn("Esc", self.footer(frame))
+                    if rows == 2:
+                        self.assertTrue(self.footer(frame).startswith("0 /"))
+                top = t.frame(b"\x1b[H")
+                self.assertIn("1–", self.footer(top))
+                t.frame(b"L")
+                returned = t.frame(b"q")
+                self.assertIn(b"Row 001", returned)
+                self.assertEqual(t.finish(b"q"), 0)
+                self.assert_restored(t)
 
     def test_narrow_footer_search_semantics_and_cancelled_outline(self):
         text = "# Start\n\n" + "\n\n".join(f"Needle {i:02}" for i in range(40))

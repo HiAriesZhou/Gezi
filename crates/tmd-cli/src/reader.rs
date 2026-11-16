@@ -501,94 +501,6 @@ fn native_fallback() -> &'static str {
     )
 }
 
-fn help_lines(width: u16, pane: Pane, fallback: &str) -> Vec<Line> {
-    let common = [
-        crate::i18n::text(
-            "L / F2: switch English/Chinese (F2 while typing a search); this session only",
-            "L / F2：切换中英文（搜索输入时用 F2）；仅影响当前会话",
-        ),
-        crate::i18n::text(
-            "↑↓ / j k / wheel: scroll; PageUp/b, PageDown/Space: page; Home/End: start/end",
-            "↑↓ / j k / 滚轮：移动；PageUp/b、PageDown/空格：翻页；Home/End：首尾",
-        ),
-        crate::i18n::text(
-            "? / Esc / q: close help and return to the previous view",
-            "? / Esc / q：关闭帮助，返回打开帮助前的界面",
-        ),
-        crate::i18n::text(
-            "Ctrl-C: interrupt, restore the terminal and return to the shell",
-            "Ctrl-C：中断，恢复终端并返回命令行",
-        ),
-        crate::i18n::text(
-            "Click Copy at the top right of a code block to copy its original text in place",
-            "点击代码块右上角“复制”复制完整代码；不离开正文",
-        ),
-        crate::i18n::text(
-            "Drag document text and release to copy; a click alone does not copy",
-            "正文中直接拖选文字，松开左键复制；单击不复制",
-        ),
-    ];
-    let specific: &[&str] = match pane {
-        Pane::Reading => &[
-            crate::i18n::text("Reading help", "阅读帮助"),
-            crate::i18n::text(
-                "/: search document text (case-sensitive, Enter confirms); n/N: next/previous match",
-                "/：搜索正文（区分大小写，Enter 确认）；n/N：下一处/上一处匹配",
-            ),
-            crate::i18n::text(
-                "Search input: Esc cancels, Ctrl-U clears; letters including L remain query text",
-                "搜索输入中 Esc 取消；Ctrl-U 清空；q、o、c、L 等作为查询文字",
-            ),
-            crate::i18n::text(
-                "o: toggle outline; Tab: switch sidebar/document focus; ?: help",
-                "o：开关标题目录；Tab：侧栏与正文切换焦点；?：帮助",
-            ),
-            crate::i18n::text(
-                "q quits reading; Esc clears search, then closes the sidebar, then quits",
-                "阅读时 q 直接退出；Esc 依次清除搜索、关闭侧栏、退出",
-            ),
-        ],
-        Pane::Outline => &[
-            crate::i18n::text("Outline help", "目录帮助"),
-            crate::i18n::text(
-                "Background: selected heading; ▎: current section; L: source line number",
-                "背景为选中项；▎ 为当前阅读章节；L 为源码行号",
-            ),
-            crate::i18n::text(
-                "Enter: jump while keeping outline focus; Tab: focus the document",
-                "Enter：跳转并保留目录焦点，可连续选择跳转；Tab：切换到正文",
-            ),
-            crate::i18n::text(
-                "In narrow windows, Enter jumps and closes the outline",
-                "窄窗口中 Enter 跳转后关闭目录",
-            ),
-            crate::i18n::text(
-                "Esc / q / o: close outline; wheel scrolls the pane under the pointer",
-                "Esc / q / o：关闭目录；滚轮只移动指针所在区域",
-            ),
-            crate::i18n::text(
-                "At 80+ columns, use a sidebar and normal headings; narrower windows use a full-page outline",
-                "80 列起显示侧栏并使用普通标题，窄窗口使用整页目录",
-            ),
-            crate::i18n::text(
-                "Selecting does not move the document. Duplicate and untitled headings have separate destinations",
-                "选择不会移动正文。重复和空标题按各自源码位置跳转",
-            ),
-            crate::i18n::text(
-                "Outline jumps retain the search; n/N resumes from the selected match",
-                "目录跳转保留搜索；n/N 仍从原先选中的匹配继续",
-            ),
-        ],
-    };
-    specific
-        .iter()
-        .chain(common.iter())
-        .copied()
-        .chain(std::iter::once(fallback).filter(|s| !s.is_empty()))
-        .flat_map(|text| reader_ui::wrapped(text, width.saturating_sub(1) as usize, usize::MAX))
-        .collect()
-}
-
 /// Keep an anchor across zero-height/very narrow layouts instead of repeatedly
 /// capturing the clamped temporary viewport during a resize sequence.
 #[derive(Clone, Default)]
@@ -898,7 +810,7 @@ fn run_with_copy(
             session.exit_row = size.1.saturating_sub(1);
             session.incomplete = true;
             let mut chrome = Chrome::default();
-            let mut state = String::new();
+            let mut state;
             let transient = notice.text(Instant::now());
             let overlay;
             let (display, position, highlight) = match active_view {
@@ -965,10 +877,20 @@ fn run_with_copy(
                     (&lines, start, None)
                 }
                 View::Help(pane) => {
-                    chrome.title = crate::i18n::text("Gezi · Help", "Gezi · 帮助").into();
-                    overlay =
-                        help_lines(size.0, pane, if fallback { native_fallback() } else { "" });
+                    chrome.title = format!("Gezi · {}", crate::reader_help::title(pane));
+                    overlay = crate::reader_help::lines(
+                        size.0,
+                        pane,
+                        theme,
+                        if fallback { native_fallback() } else { "" },
+                    );
                     help_start = help_start.min(last_start(&overlay, chrome.height(size.1)));
+                    let help_end = visible_end(&overlay, help_start, chrome.height(size.1));
+                    state = if help_end > help_start {
+                        format!("{}–{} / {}", help_start + 1, help_end, overlay.len())
+                    } else {
+                        format!("0 / {}", overlay.len())
+                    };
                     (&overlay, help_start, None)
                 }
             };

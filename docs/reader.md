@@ -26,6 +26,14 @@ Drag directly in the document to select and copy text; no modifier key is needed
 The footer shows shortcuts for the focused view; it is
 not clickable. Resizing preserves a text/source anchor, not an exact screen row.
 
+## Help
+
+Press `?` for the current view's shortcut reference. Actions are grouped by task,
+with bold shortcut labels and aligned descriptions. Narrow windows stack each
+shortcut above its description; text wraps without splitting character clusters.
+The footer shows the visible line range. Scroll with the wheel or navigation keys;
+`?`, Esc or `q` returns to the view you came from, keeping its position and state.
+
 ## Interface language
 
 The interface supports English and Simplified Chinese. Automatic selection uses:
