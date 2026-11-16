@@ -22,12 +22,15 @@ release as already providing editing, undo/redo or saving.
 
 ## Files
 
-All SVG files are self-contained vectors. Their lettering is outlined, so they
+The original SVG files are self-contained vectors. Their lettering is outlined, so they
 need no installed fonts, network requests or external images. PNG exports use
 sRGB. Use PNG for social previews; many crawlers do not accept SVG.
 
 | Asset | Dimensions | Use |
 | --- | --- | --- |
+| [reader.webp](reader.webp) | 756 × 1003 | Transparent reading character; keep the official logo as the primary identity |
+| [readme-light.png](readme-light.png), [readme-dark.png](readme-dark.png) | 1200 × 320 | Compact README banners for light and dark backgrounds |
+| [Website sharing image](../../site/og-image.png) | 1200 × 630 | Current website social preview with reading character |
 | [logo.svg](logo.svg), [logo.png](logo.png) | SVG 304 × 96; PNG 608 × 192 | Transparent primary logo, for light surfaces |
 | [logo-on-dark.svg](logo-on-dark.svg), [logo-on-dark.png](logo-on-dark.png) | SVG 304 × 96; PNG 608 × 192 | Paper-white logo, for dark surfaces |
 | [logo-mono.svg](logo-mono.svg), [logo-mono.png](logo-mono.png) | SVG 304 × 96; PNG 608 × 192 | Single-color ink logo |
@@ -53,6 +56,14 @@ Suggested alternative text: "Gezi (格子). Markdown, at home in your terminal.
 A Kaku-first terminal Markdown project."
 
 ## Color and type
+
+The reading character adds warmth to the website and README. It is decorative,
+not an application screenshot or the maker's avatar. The transparent master is
+also copied to `site/assets/reader.webp`; keep both files identical. Its book
+uses the official paper-white mark. Keep the backdrop separate from the character
+so the surrounding page has no rectangular seams. The website and new raster
+banners use paper `#F3EEE4`, ink `#202522`, and restrained rust accents.
+The older vector sharing cards remain available as alternatives.
 
 | Token | Value | Role |
 | --- | --- | --- |

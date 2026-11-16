@@ -1,17 +1,18 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/og-image.svg">
-  <img src="assets/brand/og-image-light.svg" alt="Gezi (格子). Markdown, at home in your terminal." width="1200">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/readme-dark.png">
+  <img src="assets/brand/readme-light.png" alt="Gezi (格子). Markdown, at home in your terminal." width="1200">
 </picture>
 
 **Markdown, at home in your terminal.**
 
-A Kaku-first Markdown editor for the terminal, built for developer and AI workflows.
+A lightweight, terminal-native Markdown reader for macOS Apple Silicon, designed
+for Kaku and developer workflows.
 
 Gezi (格子, “grid” in Chinese) takes its name from manuscript paper and the
-terminal’s character grid. Use `gezi` or the shorter `ge`; both run the same editor.
+terminal’s character grid. Use `gezi` or the shorter `ge`; both run the same reader.
 
-**In development:** current releases deliver the reading and rendering foundation.
-Editing, undo/redo and saving files are next. macOS Apple Silicon is supported.
+Read files, search text, navigate headings, and read Markdown from a pipe.
+Editing, undo/redo and saving files are planned, not yet available.
 
 ## Install
 
