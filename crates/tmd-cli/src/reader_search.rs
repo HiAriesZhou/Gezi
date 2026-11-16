@@ -10,27 +10,56 @@ pub(crate) struct Search {
     pub selected: usize,
     pub input: Option<Query>,
     pub saved_start: usize,
+    saved: Option<(String, Vec<Range<usize>>, usize)>,
 }
 
 impl Search {
     pub fn open(&mut self, start: usize) {
         self.saved_start = start;
+        self.saved = Some((self.query.clone(), self.matches.clone(), self.selected));
         self.input = Some(Query {
             text: self.query.clone(),
             cursor: self.query.len(),
         });
     }
-    pub fn confirm(&mut self, doc: &Document) -> bool {
-        let Some(input) = self.input.take() else {
+    pub fn preview(&mut self, doc: &Document) -> bool {
+        let Some(input) = &self.input else {
             return false;
         };
-        if input.text.trim().is_empty() {
+        if input.text == self.query {
             return false;
         }
-        self.query = input.text;
+        self.query = input.text.clone();
         self.matches = doc.find(&self.query);
         self.selected = 0;
         true
+    }
+    pub fn cancel(&mut self) {
+        self.input = None;
+        if let Some((query, matches, selected)) = self.saved.take() {
+            self.query = query;
+            self.matches = matches;
+            self.selected = selected;
+        }
+    }
+    pub fn confirm(&mut self, doc: &Document) -> bool {
+        if self.input.as_ref().is_none_or(|q| q.text.trim().is_empty()) {
+            self.cancel();
+            return false;
+        }
+        self.preview(doc);
+        self.input = None;
+        self.saved = None;
+        true
+    }
+    pub fn highlight(&self, line: &tmd_core::Line) -> tmd_core::Line {
+        use tmd_core::{Color, Style};
+        let normal = Style::fg(Color::Ansi(0)).on(Color::Ansi(11));
+        let active = Style::fg(Color::Ansi(0))
+            .on(Color::Ansi(14))
+            .bold()
+            .underline();
+        line.highlight_matches(&self.matches, self.current(), &normal, &active)
     }
     pub fn current(&self) -> Option<&Range<usize>> {
         self.matches.get(self.selected)
@@ -57,9 +86,14 @@ impl Search {
             " · 未找到匹配".into()
         } else {
             format!(
-                " · 匹配 {}/{} · n/N 前后",
+                " · 匹配 {}/{}{}",
                 self.selected + 1,
-                self.matches.len()
+                self.matches.len(),
+                if self.input.is_some() {
+                    ""
+                } else {
+                    " · n/N 前后"
+                }
             )
         }
     }
@@ -168,6 +202,39 @@ impl Query {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn live_preview_cancel_and_empty_confirm_restore_selection() {
+        let doc = Document::new("one one 中文", tmd_core::Theme::default());
+        let mut s = Search::default();
+        s.open(3);
+        s.input.as_mut().unwrap().insert("one");
+        assert!(s.preview(&doc));
+        assert_eq!(s.matches.len(), 2);
+        assert!(s.notice().contains("匹配 1/2"));
+        assert!(!s.notice().contains("n/N"));
+        assert!(!s.preview(&doc));
+        assert!(s.confirm(&doc));
+        assert!(s.notice().contains("n/N"));
+        s.advance(false);
+        for empty_confirm in [false, true] {
+            s.open(7);
+            s.input.as_mut().unwrap().text = "中文".into();
+            assert!(s.preview(&doc));
+            assert_eq!(s.matches.len(), 1);
+            if empty_confirm {
+                s.input.as_mut().unwrap().text.clear();
+                s.preview(&doc);
+                assert!(!s.confirm(&doc));
+            } else {
+                s.cancel();
+            }
+            assert_eq!(s.query, "one");
+            assert_eq!(s.selected, 1);
+            assert_eq!(s.matches.len(), 2);
+            assert_eq!(s.saved_start, 7);
+        }
+    }
+
     #[test]
     fn query_edits_whole_clusters_and_paste_is_text() {
         let mut q = Query {

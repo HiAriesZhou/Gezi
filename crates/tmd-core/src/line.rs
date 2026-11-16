@@ -77,6 +77,61 @@ pub struct Line {
 }
 
 impl Line {
+    /// Apply search styles to semantic matches without changing layout or clusters.
+    /// `matches` must be ordered, non-overlapping ranges from `Document::find`.
+    pub fn highlight_matches(
+        &self,
+        matches: &[Range<usize>],
+        selected: Option<&Range<usize>>,
+        normal: &Style,
+        active: &Style,
+    ) -> Self {
+        let intersects = |range: &Range<usize>| {
+            let index = matches.partition_point(|m| m.end <= range.start);
+            matches.get(index).is_some_and(|m| m.start < range.end)
+        };
+        let mut marked = self.clone();
+        marked.spans.clear();
+        for span in &self.spans {
+            if !span.text_ranges.iter().any(&intersects) {
+                marked.spans.push(span.clone());
+                continue;
+            }
+            let mut offset = 0;
+            for cluster in crate::clusters(&span.text) {
+                let end = offset + cluster.len();
+                let mut piece = span.slice(offset..end);
+                if piece.text_ranges.iter().any(&intersects) {
+                    let current = selected.is_some_and(|m| {
+                        piece
+                            .text_ranges
+                            .iter()
+                            .any(|r| r.start < m.end && r.end > m.start)
+                    });
+                    piece.style = piece.style.patch(if current { active } else { normal });
+                    piece.style.dim = false;
+                }
+                // Merge adjacent pieces of the same style to keep ANSI output compact.
+                if let Some(previous) = marked.spans.last_mut()
+                    && previous.style == piece.style
+                    && previous.code_block == piece.code_block
+                    && previous.image == piece.image
+                    && previous.image_cell == piece.image_cell
+                    && previous.text_ranges.len() == 1
+                    && piece.text_ranges.len() == 1
+                    && previous.text_ranges[0].end == piece.text_ranges[0].start
+                {
+                    previous.text.push_str(&piece.text);
+                    previous.text_ranges[0].end = piece.text_ranges[0].end;
+                } else {
+                    marked.spans.push(piece);
+                }
+                offset = end;
+            }
+        }
+        marked
+    }
+
     /// The row's text without styling.
     pub fn plain_text(&self) -> String {
         self.spans.iter().map(|span| span.text.as_str()).collect()
@@ -91,5 +146,78 @@ impl Line {
             LineSize::Normal => 1,
             LineSize::Double => 2,
         }
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+    use crate::{Color, Document, RenderOptions, Theme};
+
+    #[test]
+    fn highlights_exact_matches_across_styles_wraps_and_unicode() {
+        for (md, query) in [
+            ("needle needle", "needle"),
+            ("nee**dl**e", "needle"),
+            ("中文中文", "中文"),
+            ("é 👩‍💻 é 👩‍💻", "👩"),
+            ("```rust\nlet needle = 1;\n```", "needle"),
+            ("# needle", "needle"),
+        ] {
+            for width in [6, 80] {
+                let doc = Document::new(md, Theme::default());
+                let matches = doc.find(query);
+                assert!(!matches.is_empty());
+                let normal = Style::fg(Color::Ansi(0)).on(Color::Ansi(11));
+                let active = normal.clone().bold().underline();
+                let lines = doc.layout(
+                    width,
+                    RenderOptions {
+                        large_headings: true,
+                    },
+                );
+                let mut highlighted = String::new();
+                for line in lines {
+                    let marked =
+                        line.highlight_matches(&matches, matches.first(), &normal, &active);
+                    assert_eq!(marked.plain_text(), line.plain_text());
+                    assert_eq!(marked.width(), line.width());
+                    assert_eq!(marked.size, line.size);
+                    for span in marked.spans {
+                        if span.style.bg == Color::Ansi(11) {
+                            highlighted.push_str(&span.text);
+                        }
+                    }
+                }
+                let expected = if query == "👩" {
+                    "👩‍💻"
+                } else {
+                    query
+                };
+                assert_eq!(highlighted, expected.repeat(matches.len()));
+            }
+        }
+    }
+
+    #[test]
+    fn clipped_table_match_highlights_ellipsis_only_and_keeps_metadata() {
+        let doc = Document::new(
+            "| column |\n|---|\n| prefix needle suffix |",
+            Theme::default(),
+        );
+        let matches = doc.find("needle");
+        let style = Style::fg(Color::Ansi(0)).on(Color::Ansi(11));
+        let lines = doc.layout(10, RenderOptions::default());
+        let row = Document::match_line(&lines, &matches[0]).unwrap();
+        let marked = lines[row].highlight_matches(&matches, None, &style, &style);
+        assert_eq!(marked.plain_text(), lines[row].plain_text());
+        assert!(marked.spans.iter().any(|s| s.style.bg == style.bg));
+        assert!(
+            marked
+                .spans
+                .iter()
+                .filter(|s| s.style.bg == style.bg)
+                .all(|s| !s.text_ranges.is_empty())
+        );
     }
 }

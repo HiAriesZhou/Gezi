@@ -36,6 +36,7 @@ def main():
     samples = {name: [] for name in (
         "outline_open_reflow", "outline_confirm", "sidebar_focus",
         "search_unique", "search_common", "search_missing", "search_next",
+        "preview_unique", "preview_common", "preview_missing",
         "outline_close_reflow",
     )}
     terminal = harness.Terminal(("--large-headings",), text=text, cols=80)
@@ -64,7 +65,9 @@ def main():
             ):
                 terminal.frame(b"/")
                 terminal.frame(b"\x15")
-                terminal.frame(b"\x1b[200~" + query.encode() + b"\x1b[201~")
+                preview = measure(kind.replace("search_", "preview_"),
+                                  b"\x1b[200~" + query.encode() + b"\x1b[201~")
+                assert status.encode() in preview
                 frame = measure(kind, b"\r")
                 assert status.encode() in frame and "标题目录".encode() in frame
                 if kind == "search_common":

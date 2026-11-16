@@ -190,13 +190,14 @@ fn last_start(lines: &[Line], height: usize) -> usize {
 }
 
 #[derive(Default)]
-struct Chrome {
+struct Chrome<'a> {
+    search: Option<&'a Search>,
     title: String,
     details: Vec<Line>,
     footer: String,
 }
 
-impl Chrome {
+impl Chrome<'_> {
     fn height(&self, rows: u16) -> usize {
         rows.saturating_sub(2 + self.details.len() as u16) as usize
     }
@@ -229,6 +230,8 @@ fn paint(
             row += 1;
         }
         for (index, line) in lines[start..end].iter().enumerate() {
+            let marked = chrome.search.map(|search| search.highlight(line));
+            let line = marked.as_ref().unwrap_or(line);
             let mut text = String::new();
             if highlight == Some(start + index) {
                 let mut marked = line.clone();
@@ -365,7 +368,13 @@ fn paint_split(
         }
         for (index, line) in lines.iter().enumerate().take(end).skip(start) {
             out.push_str(&format!("\x1b[{};{right}H", 2 + index - start));
-            pane_line(&mut out, line, body_width, highlight == Some(index));
+            let marked = chrome.search.map(|search| search.highlight(line));
+            pane_line(
+                &mut out,
+                marked.as_ref().unwrap_or(line),
+                body_width,
+                highlight == Some(index),
+            );
         }
     }
     out.push_str("\x1b[?2026l");
@@ -800,7 +809,7 @@ fn run_with_copy(
                     chrome.title = if view == View::Search {
                         reader_ui::footer(
                             View::Search,
-                            "搜索",
+                            &format!("搜索{}", search.notice()),
                             false,
                             split.map_or(size.0, |w| size.0 - w - 1),
                         )
@@ -823,17 +832,7 @@ fn run_with_copy(
                     if let Some(message) = transient {
                         state = message.into();
                     }
-                    (
-                        &lines,
-                        start,
-                        if view == View::Search {
-                            None
-                        } else {
-                            search
-                                .current()
-                                .and_then(|m| Document::match_line(&lines, m))
-                        },
-                    )
+                    (&lines, start, None)
                 }
                 View::Outline if split.is_none() => {
                     let selected = &document.headings()[outline.selected];
@@ -860,13 +859,7 @@ fn run_with_copy(
                         outline.selected + 1,
                         document.headings().len()
                     );
-                    (
-                        &lines,
-                        start,
-                        search
-                            .current()
-                            .and_then(|m| Document::match_line(&lines, m)),
-                    )
+                    (&lines, start, None)
                 }
                 View::Copy => {
                     chrome.title = format!(
@@ -899,6 +892,11 @@ fn run_with_copy(
             };
             chrome.footer =
                 reader_ui::footer(active_view, &state, !search.query.is_empty(), size.0);
+            if matches!(active_view, View::Reading | View::Search)
+                || (active_view == View::Outline && split.is_some())
+            {
+                chrome.search = Some(&search);
+            }
             let (mut frame, end) = if let Some(width) = split {
                 if active_view == View::Reading {
                     chrome.title = format!("正文 · {title}");
@@ -1058,44 +1056,60 @@ fn run_with_copy(
                 }
             }
             match active_view {
-                View::Search => match input {
-                    Event::Key(key) if key.kind != KeyEventKind::Release => {
-                        match (key.code, action) {
-                            (KeyCode::Esc, Some(Action::Exit)) => {
-                                search.input = None;
-                                anchor = search_anchor.clone();
-                                // Resize already remaps saved_start. Without a
-                                // resize, preserve even a decorative top row
-                                // that shares its source range with the block.
-                                start = search.saved_start;
-                                view = View::Reading;
-                            }
-                            (KeyCode::Enter, Some(Action::Confirm)) => {
-                                if search.confirm(&document)
-                                    && let Some(row) = search
-                                        .current()
-                                        .and_then(|m| Document::match_line(&lines, m))
-                                {
-                                    anchor = Anchor::at(&lines, row);
-                                    start = row
-                                        .min(last_start(&lines, size.1.saturating_sub(2) as usize));
+                View::Search => {
+                    match input {
+                        Event::Key(key) if key.kind != KeyEventKind::Release => {
+                            match (key.code, action) {
+                                (KeyCode::Esc, Some(Action::Exit)) => {
+                                    search.cancel();
+                                    anchor = search_anchor.clone();
+                                    // Resize already remaps saved_start. Without a
+                                    // resize, preserve even a decorative top row
+                                    // that shares its source range with the block.
+                                    start = search.saved_start;
+                                    view = View::Reading;
                                 }
-                                view = View::Reading;
+                                (KeyCode::Enter, Some(Action::Confirm)) => {
+                                    if search.confirm(&document)
+                                        && let Some(row) = search
+                                            .current()
+                                            .and_then(|m| Document::match_line(&lines, m))
+                                    {
+                                        anchor = Anchor::at(&lines, row);
+                                        start = row.min(last_start(
+                                            &lines,
+                                            size.1.saturating_sub(2) as usize,
+                                        ));
+                                    }
+                                    view = View::Reading;
+                                }
+                                _ => search
+                                    .input
+                                    .as_mut()
+                                    .expect("search view has input")
+                                    .key(key),
                             }
-                            _ => search
-                                .input
-                                .as_mut()
-                                .expect("search view has input")
-                                .key(key),
+                        }
+                        Event::Paste(text) => search
+                            .input
+                            .as_mut()
+                            .expect("search view has input")
+                            .insert(&text),
+                        _ => {}
+                    }
+                    if view == View::Search && search.preview(&document) {
+                        if let Some(row) = search
+                            .current()
+                            .and_then(|m| Document::match_line(&lines, m))
+                        {
+                            start = row.min(last_start(&lines, size.1.saturating_sub(2) as usize));
+                            anchor = Anchor::at(&lines, start);
+                        } else {
+                            start = search.saved_start;
+                            anchor = search_anchor.clone();
                         }
                     }
-                    Event::Paste(text) => search
-                        .input
-                        .as_mut()
-                        .expect("search view has input")
-                        .insert(&text),
-                    _ => {}
-                },
+                }
                 View::Outline | View::Copy => {
                     let pane = if active_view == View::Outline {
                         Pane::Outline
