@@ -142,6 +142,14 @@ without changing its width. CLI owns clipboard IO and test doubles.
 `Span.code_block` associates code rows with their snippets. Ordinary rendering and
 streaming do not opt into controls or carry indexed code metadata.
 
+The inline reader owns direct drag selection and copies on left-button release.
+Selection uses logical columns and whole character clusters across style spans;
+Copy controls are excluded from both selected text and selection highlighting.
+The press location gives a gesture to either text selection or a Copy button.
+Keyboard/paste input, scrolling, modifiers and layout changes cancel selection.
+This provides copy-on-release without requiring Kaku configuration or a terminal
+update; it does not invoke Kaku's native selection engine.
+
 `Document.headings()` indexes top-level H1-H6 with level, semantic title, source
 range and line number. Repeated and empty titles retain distinct identities.
 `heading_line` maps ranges to layout lines, skipping preceding separators rather

@@ -125,9 +125,20 @@ Use the candidate binary for every scenario:
 8. Use temporary Kaku configuration outside the repository for native integration; never overwrite personal settings. Successful preflight prints and positions at the beginning. Missing adapters or insufficient history fall back before output. Terminal scrolling/copying work and no extra input reaches the shell.
 9. Open the outline with `o`. Include H1-H6, Setext, duplicate and empty headings; omit examples in quotes, lists and code. Moving selection leaves the document still. Repeat Down/Enter three times in a wide window without reopening or switching focus. Tab changes focus; Esc/q/o closes the focused outline. Selection background and current-section bar are independent; document scrolling updates only the latter. Inactive selection is muted. Check both themes, cluster-safe truncation and source lines for repeated titles.
 10. At 80 columns the panes sit side by side; at 79 they become a full-page outline. Expansion restores selection and focus. Switching between short and long titles never inserts detail rows in the sidebar or changes page step. Wheel routing follows the pointer without changing focus. Opening the sidebar uses ordinary headings; closing restores requested large headings. Text never overwrites the separator.
-11. Help in outline/code views preserves selection and list scroll on return. Footers show only valid actions at 80x24 and 40x12. Shrink to 24 columns and 4x1, then restore: destinations and search remain valid.
-12. Empty-outline, jump and copy-success feedback disappears after three seconds; copy errors persist until another selection, retry or cancellation. Feedback never moves content or the IME cursor. On a 1,200-heading sample, navigate for 30 seconds and record stalls, artifacts or selection drift. PTY timing is not visual acceptance.
+11. Help in outline views preserves selection and list scroll on return. Footers show only valid actions at 80x24 and 40x12. Shrink to 24 columns and 4x1, then restore: destinations and search remain valid.
+12. Empty-outline, jump and copy-success feedback disappears after three seconds; copy errors also expire after three seconds. Feedback never moves content or the IME cursor. On a 1,200-heading sample, navigate for 30 seconds and record stalls, artifacts or selection drift. PTY timing is not visual acceptance.
 13. Run `gezi help` directly and with stdin held open. It prints CLI help and exits without entering the reader. `--help` and `-h` remain supported; a file named `help` can be opened as `./help` or after `--`.
 
 Do not report a simulated native handshake as real adapter acceptance when
 connection failed or the adapter was not installed.
+
+## Direct text selection
+
+Drag in the document without modifiers, in both directions and across lines.
+Check Chinese, combining marks, emoji, large H1 rows, code and tables, with the
+outline open and closed. The blue selection must match the copied displayed text;
+mouse release copies once. A click, cancelled drag or resize must not copy. Wheel
+and keyboard navigation must remain usable. Use disposable clipboard content for
+manual acceptance; automated selection tests inject a fake backend and PTY tests
+cancel before release or use an unsupported remote environment. Check that Copy button gestures never start text selection and selecting across a header excludes button labels. Verify light/dark themes in real Kaku separately from PTY
+protocol checks. Terminal-native selection shortcuts are not reader selection.

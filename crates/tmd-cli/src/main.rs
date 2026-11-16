@@ -12,6 +12,7 @@ mod reader_images;
 mod reader_native;
 mod reader_outline;
 mod reader_search;
+mod reader_selection;
 mod reader_ui;
 #[cfg(test)]
 mod snapshots;

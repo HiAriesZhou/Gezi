@@ -136,6 +136,58 @@ impl Line {
         marked
     }
 
+    /// Select logical columns, expanding partial wide characters to whole clusters.
+    /// Returns both the styled line and the selected displayed text.
+    pub fn select_columns(&self, columns: Range<usize>, style: &Style) -> (Self, String) {
+        let plain = self.plain_text();
+        let mut bytes = None::<Range<usize>>;
+        let (mut offset, mut column) = (0, 0);
+        // A grapheme can cross a style boundary, e.g. **a** followed by an accent.
+        for cluster in crate::clusters(&plain) {
+            let end = offset + cluster.len();
+            let next = column + crate::text_width(cluster);
+            if columns.start < columns.end && column < columns.end && next > columns.start {
+                match &mut bytes {
+                    Some(range) => range.end = end,
+                    None => bytes = Some(offset..end),
+                }
+            }
+            offset = end;
+            column = next;
+        }
+        let Some(bytes) = bytes else {
+            return (self.clone(), String::new());
+        };
+        let mut marked = Self {
+            spans: Vec::new(),
+            src: self.src.clone(),
+            size: self.size,
+        };
+        let mut selected_text = String::new();
+        offset = 0;
+        for span in &self.spans {
+            let left = bytes.start.saturating_sub(offset).min(span.text.len());
+            let right = bytes.end.saturating_sub(offset).min(span.text.len());
+            if left >= right || span.code_copy.is_some() {
+                marked.spans.push(span.clone());
+            } else {
+                if left > 0 {
+                    marked.spans.push(span.slice(0..left));
+                }
+                let mut piece = span.slice(left..right);
+                selected_text.push_str(&piece.text);
+                piece.style = piece.style.patch(style);
+                piece.style.dim = false;
+                marked.spans.push(piece);
+                if right < span.text.len() {
+                    marked.spans.push(span.slice(right..span.text.len()));
+                }
+            }
+            offset += span.text.len();
+        }
+        (marked, selected_text)
+    }
+
     /// The row's text without styling.
     pub fn plain_text(&self) -> String {
         self.spans.iter().map(|span| span.text.as_str()).collect()
@@ -157,6 +209,18 @@ impl Line {
 mod search_tests {
     use super::*;
     use crate::{Color, Document, RenderOptions, Theme};
+
+    #[test]
+    fn selection_preserves_combining_characters_across_styles() {
+        let doc = Document::new("**a**́b", Theme::default());
+        let line = doc.layout(80, RenderOptions::default()).remove(0);
+        let style = Style::fg(Color::Ansi(15)).on(Color::Ansi(4));
+        let (marked, selected) = line.select_columns(0..1, &style);
+        assert_eq!(selected, "á");
+        assert_eq!(marked.plain_text(), line.plain_text());
+        assert_eq!(marked.width(), line.width());
+        assert_eq!(line.select_columns(1..1, &style).1, "");
+    }
 
     #[test]
     fn highlights_exact_matches_across_styles_wraps_and_unicode() {
