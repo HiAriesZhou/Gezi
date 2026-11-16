@@ -30,11 +30,15 @@ not clickable. Resizing preserves a text/source anchor, not an exact screen row.
 Search is literal and case-sensitive, including Chinese and emoji. It covers
 rendered text, headings and code, including offscreen content. Hidden link URLs,
 decorations, regular expressions and cross-paragraph matches are excluded.
-`n` / `N` wrap around the results. An empty query keeps the previous search;
-a query with no matches keeps the reading position.
+Typing previews matches immediately and moves to the first result. All visible
+matches have a yellow background; the current match uses cyan, bold and underline.
+Highlights follow text across styles and wrapped lines without changing layout.
+Enter keeps the preview; `n` / `N` wrap around the results. An empty query keeps
+the previous search; a query with no matches keeps the reading position.
 
-While entering a query, letters are text, Esc cancels, and Ctrl-U clears the
-input. Arrow keys, Home/End and Backspace/Delete edit it. The visible cursor
+While entering a query, letters are text. Esc restores the previous search,
+selected match and reading position; Ctrl-U clears the input. Arrow keys,
+Home/End and Backspace/Delete edit it. The visible cursor
 anchors the system input method. Narrow tables may show a match at an ellipsis;
 widen the window to see the text.
 
