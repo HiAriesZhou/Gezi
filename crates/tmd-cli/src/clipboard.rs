@@ -8,8 +8,8 @@ pub(crate) enum CopyError {
 impl std::fmt::Display for CopyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Empty => "代码块为空，未修改剪贴板",
-            Self::Unsupported => "此环境暂不支持代码复制（仅本机 macOS）",
+            Self::Empty => "内容为空，未修改剪贴板",
+            Self::Unsupported => "此环境暂不支持复制（仅本机 macOS）",
             Self::Backend(message) => message,
         })
     }
@@ -45,7 +45,7 @@ fn write_system(text: &str) -> Result<(), &'static str> {
 }
 #[cfg(not(target_os = "macos"))]
 fn write_system(_: &str) -> Result<(), &'static str> {
-    Err("此环境暂不支持代码复制")
+    Err("此环境暂不支持复制")
 }
 
 #[cfg(test)]

@@ -21,11 +21,11 @@ To read a file named `help`, use `gezi ./help` or `gezi -- help`.
 | Esc | Cancel input or close a list/help; while reading, clear search, then close the sidebar, then exit |
 | Ctrl-C | Exit from any view with status 130 |
 
-Kaku normally lets you hold Shift while dragging to select text. Custom terminal
-bindings can change this. The footer shows shortcuts for the focused view; it is
+Drag directly in the document to select and copy text; no modifier key is needed.
+The footer shows shortcuts for the focused view; it is
 not clickable. Resizing preserves a text/source anchor, not an exact screen row.
 
-## Search and code copying
+## Search and copying
 
 Search is literal and case-sensitive, including Chinese and emoji. It covers
 rendered text, headings and code, including offscreen content. Hidden link URLs,
@@ -42,6 +42,18 @@ Home/End and Backspace/Delete edit it. The visible cursor
 anchors the system input method. Narrow tables may show a match at an ellipsis;
 widen the window to see the text.
 
+In the document pane, drag with the left mouse button to select text directly;
+no modifier key is needed. The selection has a blue background and is copied
+when you release the button. A click without a drag leaves the clipboard alone.
+Dragging can span visible lines in either direction, including Chinese and emoji.
+The reader owns this selection so wheel scrolling and the outline remain available
+without terminal configuration changes. Keyboard actions, scrolling and resize
+clear the selection. Dragging outside the document clamps to its visible edge.
+
+Drag-copy uses displayed text and line breaks, including rendered decorations but excluding Copy controls;
+it trims trailing display spaces. For code without wrapping or decorations, use
+the code block’s `Copy` button. Clipboard writes use the same local macOS backend.
+
 Click `Copy` at the top right of a code block to copy its complete original text.
 The button briefly shows `Copied` on success. Failures show `Retry` and a status
 message; the document and reading position stay in place. `c` no longer opens a
@@ -54,7 +66,7 @@ excluded. Empty blocks leave the clipboard unchanged. A click requires pressing
 and releasing on the same button; dragging, scrolling, resizing or a keyboard
 action cancels it. Clipboard writes are supported only on local macOS, not SSH.
 Buttons appear only in the interactive reader, not plain, streaming or native
-terminal output. This control does not implement ordinary text selection.
+terminal output.
 
 ## Heading outline
 

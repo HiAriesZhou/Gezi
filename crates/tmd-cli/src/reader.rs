@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use crossterm::{cursor, event, terminal};
-use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind};
 use tmd_core::{Document, Line, LineSize, RenderOptions, Theme, truncate};
 
 use crate::cli::{Cli, InputFormat, ReaderMode};
@@ -15,6 +15,7 @@ use crate::clipboard::{self, CopyError};
 use crate::reader_copy::{self, CopyButtons};
 use crate::reader_outline::Outline;
 use crate::reader_search::Search;
+use crate::reader_selection::{self, Selection};
 use crate::reader_ui::{self, Notice, Pane, View};
 use crate::terminal_io::{RESET, direct_kaku, write_all_cancelled};
 use crate::{ansi, large_headings, reader_native};
@@ -195,6 +196,7 @@ fn last_start(lines: &[Line], height: usize) -> usize {
 struct Chrome<'a> {
     search: Option<&'a Search>,
     copy_buttons: Option<&'a CopyButtons>,
+    selection: Option<&'a Selection>,
     title: String,
     details: Vec<Line>,
     footer: String,
@@ -239,6 +241,10 @@ fn paint(
                 .copy_buttons
                 .and_then(|c| c.decorate(line, Instant::now()));
             let line = copied.as_ref().unwrap_or(line);
+            let selected = chrome
+                .selection
+                .and_then(|selection| selection.highlight(line, start + index));
+            let line = selected.as_ref().unwrap_or(line);
             let mut text = String::new();
             if highlight == Some(start + index) {
                 let mut marked = line.clone();
@@ -380,9 +386,13 @@ fn paint_split(
             let copied = chrome
                 .copy_buttons
                 .and_then(|c| c.decorate(line, Instant::now()));
+            let line = copied.as_ref().unwrap_or(line);
+            let selected = chrome
+                .selection
+                .and_then(|selection| selection.highlight(line, index));
             pane_line(
                 &mut out,
-                copied.as_ref().unwrap_or(line),
+                selected.as_ref().unwrap_or(line),
                 body_width,
                 highlight == Some(index),
             );
@@ -488,6 +498,7 @@ fn help_lines(width: u16, pane: Pane, fallback: &str) -> Vec<Line> {
         "? / Esc / q：关闭帮助，返回打开帮助前的界面",
         "Ctrl-C：中断，恢复终端并返回命令行",
         "点击代码块右上角 Copy 复制完整代码；不离开正文",
+        "正文中直接拖选文字，松开左键复制；单击不复制",
     ];
     let specific: &[&str] = match pane {
         Pane::Reading => &[
@@ -771,6 +782,7 @@ fn run_with_copy(
         let mut help_start = 0;
         let mut search = Search::default();
         let mut copy_buttons = CopyButtons::default();
+        let mut selection = Selection::default();
         let mut outline = Outline::default();
         let fallback = notice;
         let mut notice = Notice::default();
@@ -796,6 +808,7 @@ fn run_with_copy(
                     true,
                 )
             }) {
+                selection.clear();
                 start = anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
                 search.saved_start =
                     search_anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
@@ -898,6 +911,7 @@ fn run_with_copy(
             {
                 chrome.search = Some(&search);
                 chrome.copy_buttons = Some(&copy_buttons);
+                chrome.selection = Some(&selection);
             }
             let (mut frame, end) = if let Some(width) = split {
                 if active_view == View::Reading {
@@ -1022,13 +1036,38 @@ fn run_with_copy(
                 &mut copy,
                 Instant::now(),
             ) {
+                selection.clear();
                 notice.show(message, Instant::now());
                 continue;
             }
-            if matches!(input, Event::Mouse(mouse) if matches!(mouse.kind,
-                MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved))
-            {
-                continue;
+            let document_view = matches!(active_view, View::Reading | View::Search)
+                || (active_view == View::Outline && split.is_some());
+            if document_view {
+                let viewport = reader_selection::Viewport {
+                    lines: &lines,
+                    start,
+                    end,
+                    origin: split.map_or(0, |width| width + 1),
+                    size,
+                };
+                let (handled, result) = selection.event(&input, &viewport, &buttons, &mut copy);
+                if let Some(result) = result {
+                    notice.show(
+                        match result {
+                            Ok(()) => "已复制所选文字".into(),
+                            Err(error) => error.to_string(),
+                        },
+                        Instant::now(),
+                    );
+                }
+                if handled {
+                    if active_view == View::Outline && selection.dragging {
+                        view = View::Reading;
+                    }
+                    continue;
+                }
+            } else {
+                selection.clear();
             }
             let action = match input {
                 Event::Key(key) => key_action(key),
