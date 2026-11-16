@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Preview literal search as you type, highlight all visible matches and distinguish the current match. Enter keeps the search; Esc restores the previous search and reading position.
+
 ## 0.1.9
 
 - Center the file reader's content at a default width of up to 100 terminal columns, keeping text and images together when the outline is open; use `--width` to choose another width.
