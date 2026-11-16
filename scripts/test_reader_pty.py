@@ -28,7 +28,7 @@ END = b"\x1b[?2026l"
 class Terminal:
     def __init__(self, options=(), *, row=12, config=None, native=False, capacity=10000,
                  wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False,
-                 cursor_prefix=b"", cols=80, legacy_config=None):
+                 cursor_prefix=b"", cols=80, legacy_config=None, ssh=False):
         self.temp = tempfile.TemporaryDirectory(prefix="tmd-reader-")
         root = Path(self.temp.name)
         path = root / "article.md"
@@ -49,6 +49,8 @@ class Terminal:
                        XDG_CONFIG_HOME=str(root))
             for key in ("TMUX", "STY"):
                 env.pop(key, None)
+            if ssh:
+                env["SSH_CONNECTION"] = "gezi-test"
             args = [str(BINARY), "--theme", "default-dark", *options, str(path)]
             os.execve(str(BINARY), args, env)
         os.close(ready_read)
@@ -371,6 +373,59 @@ class ReaderTests(unittest.TestCase):
     def test_empty_document_preserves_interrupt_during_cursor_query(self):
         t = self.terminal(text="", cursor_prefix=b"\x03")
         self.assertEqual(t.finish(), 130)
+        self.assert_restored(t)
+
+    def test_direct_drag_highlights_without_modifiers_and_cancel_does_not_copy(self):
+        t = self.terminal(text="alpha 中文 emoji 👩‍💻 omega\n\nsecond line")
+        t.until(END)
+        # SGR mouse reports: left down, drag, then cancel before release.
+        # This integration test never writes the system clipboard.
+        t.frame(b"\x1b[<0;3;2M")
+        selected = t.frame(b"\x1b[<32;15;2M")
+        self.assertIn(b";44m", selected)
+        self.assertNotIn("已复制".encode(), selected)
+        cancelled = t.frame(b"j")
+        self.assertNotIn(b";44m", cancelled)
+        released = t.frame(b"\x1b[<0;15;2m")
+        self.assertNotIn("已复制".encode(), released)
+        t.frame(b"\x1b[<0;3;2M")
+        self.assertIn(b";44m", t.frame(b"\x1b[<32;10;2M"))
+        offset = len(t.data)
+        t.resize(40, 12)
+        self.assertNotIn(b";44m", t.until(END, offset))
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_drag_release_reports_failure_in_search_without_touching_clipboard(self):
+        # The production remote guard blocks clipboard IO, while the real event
+        # loop still exercises release and failure feedback during search input.
+        t = self.terminal(text="alpha 中文 emoji 👩‍💻 omega", ssh=True)
+        t.until(END)
+        t.frame(b"/")
+        t.frame(b"\x1b[<0;3;2M")
+        self.assertIn(b";44m", t.frame(b"\x1b[<32;15;2M"))
+        released = t.frame(b"\x1b[<0;15;2m")
+        self.assertIn("暂不支持复制", self.pane_rows(released, 1, 1, 1)[0])
+        self.assertIn(b";44m", released)
+        self.assertIn(b"\x1b[24;1H\x1b#5\x1b[0m\x1b[2K/", released)
+        self.assertEqual(t.finish(b""), 130)
+        self.assert_restored(t)
+
+    def test_copy_button_drag_does_not_become_text_selection(self):
+        t = self.terminal(text="```\ncode\n```", ssh=True)
+        initial = t.until(END)
+        row = self.pane_rows(initial, 1, 2, 2)[0]
+        x = row.index("Copy") + 1
+        t.frame(f"\x1b[<0;{x};2M".encode())
+        self.assertNotIn(b";44m", t.frame(b"\x1b[<32;6;3M"))
+        released = t.frame(b"\x1b[<0;6;3m")
+        self.assertNotIn("暂不支持复制".encode(), released)
+        self.assertIn(b"Copy", released)
+        t.frame(f"\x1b[<0;{x};2M".encode())
+        failed = t.frame(f"\x1b[<0;{x};2m".encode())
+        self.assertIn("暂不支持复制".encode(), failed)
+        self.assertIn(b"Retry", failed)
+        self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
     def test_visible_text_search_counts_navigation_and_cancel(self):
