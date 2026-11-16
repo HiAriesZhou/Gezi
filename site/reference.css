@@ -11,7 +11,11 @@ body.design-a {
 .design-a .marginalia { border: 0; padding: 10px 0 0; }
 .design-a .folio, .design-a .margin-bottom { color: var(--rust); font: 14px/1.4 var(--sans); }
 .design-a .marginalia p { font: 14px/1.4 var(--sans); margin-top: 12px; }
-.design-a .a-heading { display: block; margin-bottom: 22px; }
+.design-a .a-heading { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 0 32px; margin-bottom: 22px; }
+.design-a .a-heading > .eyebrow, .design-a .a-heading > h1, .design-a .a-intro { grid-column: 1; }
+.design-a .reader-art { grid-column: 2; grid-row: 1 / 4; position: relative; align-self: center; width: 100%; max-width: 240px; justify-self: center; }
+.design-a .reader-art::before { content: ""; position: absolute; inset: 16% 0 15%; background: #dfaa89; border-radius: 50%; }
+.design-a .reader-art img { display: block; position: relative; width: 100%; height: auto; }
 .design-a .eyebrow { font: 13px/1.5 var(--sans); text-transform: uppercase; letter-spacing: .035em; }
 .design-a h1 { font: 400 42px/1.28 var(--sans); letter-spacing: -.025em; margin-top: 20px; }
 .design-a h1 em { font-weight: 400; color: inherit; }
@@ -38,6 +42,9 @@ body.design-a {
 .design-a .command-row p { max-width: 32ch; }
 .design-a .section-label h2 { font-family: var(--sans); }
 @media(max-width: 1050px) {
+  .design-a .a-heading { grid-template-columns: minmax(0, 1fr) 220px; column-gap: 24px; }
+  .design-a .a-intro { grid-column: 1 / -1; }
+  .design-a .reader-art { grid-row: 1 / 3; max-width: 145px; }
   .design-a .hero { grid-template-columns: 88px minmax(0,1fr); gap: 20px; }
   .design-a h1 { font-size: 38px; }
   .design-a .terminal-output pre { font-size: 12px; }
@@ -50,6 +57,9 @@ body.design-a {
   .design-a .command-row code { font-size: 11px; overflow-wrap: anywhere; }
 }
 @media(max-width: 620px) {
+  .design-a .a-heading { grid-template-columns: minmax(0, 1fr) 100px; column-gap: 8px; }
+  .design-a .a-heading > .eyebrow { grid-column: 1 / -1; }
+  .design-a .reader-art { grid-row: 2; max-width: 100px; align-self: end; }
   .design-a .page { padding-inline: 28px; }
   .design-a .site-header { min-height: 78px; }
   .design-a .hero { display: block; padding-block: 24px; }
@@ -68,6 +78,8 @@ body.design-a {
   .design-a .command-row { border-bottom: 1px solid var(--line); padding-bottom: 20px; }
 }
 @media(max-width: 370px) {
+  .design-a .a-heading { grid-template-columns: minmax(0, 1fr); }
+  .design-a .reader-art { display: none; }
   .design-a .page { padding-inline: 24px; }
   .design-a .terminal-output { padding-inline: 12px; }
   .design-a .terminal-output pre { font-size: 10.5px; }
