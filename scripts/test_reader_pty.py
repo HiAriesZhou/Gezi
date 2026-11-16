@@ -1058,7 +1058,10 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(gezi.finish(b"q"), 0)
         legacy = self.terminal(legacy_config="[reader]\nmode='native'", native=True)
         self.assertIn(b"SetUserVar=TMD_READER=", legacy.until(END))
-        self.assertEqual(legacy.finish(b"q"), 0)
+        # Native output exits on its own. Writing after its final frame races
+        # PTY closure; make that mistake fail even when the process is slower.
+        with patch.object(os, "write", side_effect=AssertionError("native output must exit without input")):
+            self.assertEqual(legacy.finish(), 0)
 
     def test_cli_override_and_invalid_config(self):
         t = self.terminal(("--reader", "inline"), config="[reader]\nmode='native'")
