@@ -126,7 +126,7 @@ impl Outline {
 
 pub(crate) fn title(heading: &Heading) -> &str {
     if heading.title.is_empty() {
-        "（空标题）"
+        crate::i18n::text("(Untitled)", "（空标题）")
     } else {
         &heading.title
     }
@@ -139,6 +139,7 @@ mod tests {
 
     #[test]
     fn current_section_and_selection_are_independent() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let doc = Document::new(
             "intro\n\n# Same\n\nbody\n\n## Same\n\n###\n",
             Theme::default(),
@@ -166,6 +167,7 @@ mod tests {
 
     #[test]
     fn long_titles_keep_source_line_and_details() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let doc = Document::new(&format!("###### {}", "中文👩‍💻".repeat(50)), Theme::default());
         let mut outline = Outline::default();
         outline.show(doc.headings(), 0);
@@ -178,6 +180,7 @@ mod tests {
 
     #[test]
     fn selection_fills_the_row_and_current_marker_survives_focus_changes() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         for name in Theme::builtin_names() {
             let theme = Theme::builtin(name).unwrap();
             let doc = Document::new("# 中文👩‍💻\n\n## Other\n", theme.clone());

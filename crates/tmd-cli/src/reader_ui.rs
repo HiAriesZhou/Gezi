@@ -106,28 +106,54 @@ pub(crate) fn footer(view: View, state: &str, query: bool, cols: u16) -> String 
     let width = cols.saturating_sub(1) as usize;
     let variants: &[&str] = match view {
         View::Reading if query => &[
-            "n 下一处  N 上一处  Esc 清除  ? 帮助  q 退出",
-            "n/N 跳转  Esc 清除  q 退出",
-            "Esc 清除  q 退出",
+            crate::i18n::text(
+                "n Next  N Previous  Esc Clear  L Language  ? Help  q Quit",
+                "n 下一处  N 上一处  Esc 清除  L 语言  ? 帮助  q 退出",
+            ),
+            crate::i18n::text("n/N Match  Esc Clear  q Quit", "n/N 跳转  Esc 清除  q 退出"),
+            crate::i18n::text("Esc Clear  q Quit", "Esc 清除  q 退出"),
             "Esc  q",
             "q",
         ],
         View::Reading => &[
-            "/ 搜索  o 目录  ? 帮助  q 退出",
-            "o 目录  ? 帮助  q 退出",
-            "? 帮助  q 退出",
+            crate::i18n::text(
+                "/ Search  o Outline  L Language  ? Help  q Quit",
+                "/ 搜索  o 目录  L 语言  ? 帮助  q 退出",
+            ),
+            crate::i18n::text("o Outline  ? Help  q Quit", "o 目录  ? 帮助  q 退出"),
+            crate::i18n::text("? Help  q Quit", "? 帮助  q 退出"),
             "?  q",
             "q",
         ],
         View::Outline => &[
-            "↑↓ 选择  Enter 跳转  Esc 返回  ? 帮助",
-            "Enter 跳转  Esc 返回  ? 帮助",
-            "Enter 跳转  Esc 返回",
+            crate::i18n::text(
+                "↑↓ Select  Enter Jump  Esc Back  L Language  ? Help",
+                "↑↓ 选择  Enter 跳转  Esc 返回  L 语言  ? 帮助",
+            ),
+            crate::i18n::text(
+                "Enter Jump  Esc Back  ? Help",
+                "Enter 跳转  Esc 返回  ? 帮助",
+            ),
+            crate::i18n::text("Enter Jump  Esc Back", "Enter 跳转  Esc 返回"),
             "Enter  Esc",
             "Esc",
         ],
-        View::Help(_) => &["↑↓ 滚动  Esc 返回", "Esc 返回", "Esc"],
-        View::Search => &["Enter 搜索  Esc 取消", "Enter  Esc", "Esc"],
+        View::Help(_) => &[
+            crate::i18n::text(
+                "↑↓ Scroll  Esc Back  L Language",
+                "↑↓ 滚动  Esc 返回  L 语言",
+            ),
+            crate::i18n::text("Esc Back", "Esc 返回"),
+            "Esc",
+        ],
+        View::Search => &[
+            crate::i18n::text(
+                "Enter Search  Esc Cancel  F2 Language",
+                "Enter 搜索  Esc 取消  F2 语言",
+            ),
+            "Enter  Esc",
+            "Esc",
+        ],
     };
     let skip = if view == View::Search {
         usize::from(cols < 40)
@@ -160,9 +186,18 @@ pub(crate) fn footer(view: View, state: &str, query: bool, cols: u16) -> String 
 /// Split panes only appear at >=80 columns, leaving room for focus controls.
 pub(crate) fn sidebar_footer(view: View, state: &str, query: bool, cols: u16) -> String {
     let actions = match view {
-        View::Outline => "↑↓ 选择  Enter 跳转  Tab 正文  Esc 关闭  ? 帮助",
-        View::Reading if query => "n/N 跳转  Esc 清除  Tab 目录  o 关闭  ? 帮助  q 退出",
-        _ => "↑↓ 滚动  Tab 目录  / 搜索  o 关闭  ? 帮助  q 退出",
+        View::Outline => crate::i18n::text(
+            "↑↓ Select  Enter Jump  Tab Document  Esc Close  L Language  ? Help",
+            "↑↓ 选择  Enter 跳转  Tab 正文  Esc 关闭  L 语言  ? 帮助",
+        ),
+        View::Reading if query => crate::i18n::text(
+            "n/N Match  Esc Clear  Tab Outline  o Close  L Language  ? Help  q Quit",
+            "n/N 跳转  Esc 清除  Tab 目录  o 关闭  L 语言  ? 帮助  q 退出",
+        ),
+        _ => crate::i18n::text(
+            "↑↓ Scroll  Tab Outline  / Search  o Close  L Language  ? Help  q Quit",
+            "↑↓ 滚动  Tab 目录  / 搜索  o 关闭  L 语言  ? 帮助  q 退出",
+        ),
     };
     let width = cols.saturating_sub(1) as usize;
     let remaining = width.saturating_sub(text_width(actions));
@@ -210,6 +245,7 @@ mod tests {
 
     #[test]
     fn selection_moves_without_scrolling_inside_viewport() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let mut list = ListViewport::default();
         list.reset();
         assert_eq!(list.top(50, 100, 10), 45);
@@ -225,6 +261,7 @@ mod tests {
 
     #[test]
     fn footer_keeps_actions_whole_and_only_advertises_active_commands() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         for cols in [0, 1, 4, 20, 24, 40, 60, 80, 120] {
             for view in [View::Reading, View::Outline, View::Help(Pane::Reading)] {
                 let text = footer(view, &"很长的状态👩‍💻é".repeat(20), false, cols);
@@ -250,6 +287,7 @@ mod tests {
 
     #[test]
     fn sidebar_footer_reserves_focus_and_close_actions() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         for width in [80, 100, 120, 200] {
             for query in [false, true] {
                 for view in [View::Reading, View::Outline] {
@@ -266,6 +304,7 @@ mod tests {
 
     #[test]
     fn messages_expire_without_an_input_event() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let now = Instant::now();
         let mut notice = Notice::default();
         notice.show("已复制", now);
@@ -280,6 +319,7 @@ mod tests {
 
     #[test]
     fn details_wrap_without_splitting_clusters() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let text = "中é👩‍💻尾";
         let rows = wrapped(text, 3, 10);
         assert_eq!(rows.iter().map(Line::plain_text).collect::<String>(), text);
@@ -289,6 +329,7 @@ mod tests {
 
     #[test]
     fn search_instructions_reserve_both_actions_in_the_header() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         for cols in [20, 24, 40, 80, 120] {
             let text = footer(View::Search, "搜索", false, cols);
             assert!(text.contains("Enter") && text.contains("Esc"));

@@ -3,6 +3,7 @@ mod claude;
 mod cli;
 mod clipboard;
 mod config;
+mod i18n;
 mod image_loader;
 mod large_headings;
 mod reader;
@@ -28,14 +29,13 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::{CommandFactory, Parser};
 use tmd_core::{RenderOptions, Streamer, Theme, render_with_options};
 
 use crate::cli::{Cli, InputFormat, resolve_width};
 use crate::source::Source;
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = Cli::parse_localized();
     if matches!(cli.command, Some(cli::Command::Update)) {
         return match update::run() {
             Ok(()) => ExitCode::SUCCESS,
@@ -46,7 +46,7 @@ fn main() -> ExitCode {
         };
     }
     if matches!(cli.command, Some(cli::Command::Help)) {
-        return match Cli::command().print_long_help() {
+        return match Cli::localized_command().print_long_help() {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
             Err(err) => {

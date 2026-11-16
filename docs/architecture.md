@@ -237,3 +237,16 @@ Rust tests, snapshots, PTY protocol checks and real-terminal acceptance provide
 different evidence. See [testing](terminal-testing.md) and [releases](release.md).
 This document describes current implementation; plans and review records stay
 outside the repository.
+
+## Interface language
+
+Language detection and UI text belong to `tmd-cli::i18n`; core layout stays
+locale-independent. The CLI reads exact macOS preference domains through
+CoreFoundation so a global preference is not mistaken for a Kaku override.
+Explicit `--language` wins, followed by Kaku app preferences, system preferences,
+locale environment and English. Only English and Simplified Chinese are supported.
+
+The current language is local to the UI thread. Reader redraws resolve labels
+at paint time, including code-copy feedback, without relaying out document text.
+Copy label translations keep the core's four/six-column geometry. Input worker
+threads transport bytes only; the UI thread formats stream status and diagnostics.
