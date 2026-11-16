@@ -7,6 +7,7 @@ fn large(md: &str, width: u16) -> Vec<Line> {
         &Theme::default(),
         RenderOptions {
             large_headings: true,
+            ..RenderOptions::default()
         },
     )
 }

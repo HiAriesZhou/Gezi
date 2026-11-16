@@ -134,17 +134,20 @@ Raw mode, mouse reporting and bracketed paste are temporary. Pasted text does
 not execute reader shortcuts.
 
 `Document.code_blocks()` retains original code text only for static reading.
-Chooser previews sanitize controls and truncate; confirmed copying uses full
-text. CLI owns clipboard IO, with a local macOS backend and test doubles.
-`Span.code_block` associates code lines, labels and blank lines with chooser
-entries, including nested code. Ordinary and streaming rendering omit it.
+The interactive reader opts into `RenderOptions.code_copy_buttons`; core reserves
+header space and emits `Span.code_copy` controls, including unlabelled and nested
+blocks. CLI derives click rectangles from visible spans and copies full original
+text only after a press/release on the same button. Feedback replaces the control
+without changing its width. CLI owns clipboard IO and test doubles.
+`Span.code_block` associates code rows with their snippets. Ordinary rendering and
+streaming do not opt into controls or carry indexed code metadata.
 
 `Document.headings()` indexes top-level H1-H6 with level, semantic title, source
 range and line number. Repeated and empty titles retain distinct identities.
 `heading_line` maps ranges to layout lines, skipping preceding separators rather
 than searching by title.
 
-CLI `View` separates reading, query input, outline, code chooser and help with
+CLI `View` separates reading, query input, outline and help with
 its return origin. Sidebar visibility and keyboard focus are independent. At 80
 columns, outline and ordinary-size text use separate column ranges; narrower
 windows temporarily show a full-page outline without losing split-view focus.

@@ -45,7 +45,7 @@ exit. Use `--reader inline` if you previously configured native output.
 | Scroll wheel, ↑ / ↓, `j` / `k` | Scroll |
 | `/`, then Enter; `n` / `N` | Search; next / previous match |
 | `o`; Tab | Toggle the outline; switch panes |
-| `c` | Choose and copy a code block |
+| Click `Copy` | Copy a complete code block in place |
 | `?` | Help for the current view |
 
 ## Update

@@ -15,19 +15,31 @@ const CODE_INSET: usize = 2;
 
 /// Rows with the source range each comes from: the label row maps to the
 /// opening fence, code rows to their source line.
-pub(crate) fn rows(theme: &Theme, code: &CodeBlock, width: usize) -> Vec<(Row, Range<usize>)> {
+pub(crate) fn rows(
+    theme: &Theme,
+    code: &CodeBlock,
+    width: usize,
+    copy_buttons: bool,
+) -> Vec<(Row, Range<usize>)> {
     let style = &theme.code_block;
     let width = width.max(1);
     let inset = CODE_INSET.min(width.saturating_sub(2) / 2);
     let content_width = width - 2 * inset;
     let mut rows = Vec::new();
-    if let Some(lang) = &code.lang {
+    let button = code.index.filter(|_| copy_buttons && width >= 4);
+    if code.lang.is_some() || button.is_some() {
         let fence_end = code
             .lines
             .first()
             .map_or(code.src.end, |line| line.src.start);
         rows.push((
-            label_row(style, lang, width, inset),
+            label_row(
+                style,
+                code.lang.as_deref().unwrap_or(""),
+                width,
+                inset,
+                button,
+            ),
             code.src.start..fence_end,
         ));
     }
@@ -47,13 +59,35 @@ pub(crate) fn rows(theme: &Theme, code: &CodeBlock, width: usize) -> Vec<(Row, R
     rows
 }
 
-fn label_row(style: &Style, lang: &str, width: usize, inset: usize) -> Row {
-    let label = truncate(lang, width - 2 * inset);
+fn label_row(style: &Style, lang: &str, width: usize, inset: usize, button: Option<usize>) -> Row {
     let label_style = Style {
         dim: true,
         ..style.clone()
     };
-    padded(style, vec![Span::new(label, label_style)], width, inset)
+    let Some(index) = button else {
+        return padded(
+            style,
+            vec![Span::new(truncate(lang, width - 2 * inset), label_style)],
+            width,
+            inset,
+        );
+    };
+    let button_text = if width >= 6 { " Copy " } else { "Copy" };
+    let right = inset.min(width - button_text.len());
+    let available = width - right - button_text.len();
+    let left = inset.min(available);
+    let label = truncate(lang, available.saturating_sub(left + 1));
+    let mut row = vec![
+        Span::new(" ".repeat(left), style.clone()),
+        Span::new(label, label_style),
+    ];
+    let used: usize = row.iter().map(Span::width).sum();
+    row.push(Span::new(" ".repeat(available - used), style.clone()));
+    let mut control = Span::new(button_text, style.clone().bold().underline());
+    control.code_copy = Some(index);
+    row.push(control);
+    row.push(Span::new(" ".repeat(right), style.clone()));
+    row
 }
 
 /// Each line as spans on the block background: highlighted when the
@@ -100,4 +134,74 @@ fn padded(style: &Style, row: Row, width: usize, inset: usize) -> Row {
     let used: usize = padded.iter().map(Span::width).sum();
     push_text(&mut padded, &" ".repeat(width.saturating_sub(used)), style);
     padded
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Document, RenderOptions, Theme, render};
+
+    #[test]
+    fn copy_controls_are_opt_in_and_not_searchable() {
+        let source = "```rust\nlet x = 1;\n```\n\n```\n```\n\n> ```\n> nested\n> ```\n\n- item\n\n  ```\n  listed\n  ```";
+        let doc = Document::new(source, Theme::default());
+        assert_eq!(doc.code_blocks().len(), 4);
+        assert!(doc.find("Copy").is_empty());
+        for lines in [
+            render(source, 60, &Theme::default()),
+            doc.layout(60, RenderOptions::default()),
+        ] {
+            assert!(
+                lines
+                    .iter()
+                    .flat_map(|l| &l.spans)
+                    .all(|s| s.code_copy.is_none())
+            );
+        }
+        let lines = doc.layout(
+            60,
+            RenderOptions {
+                code_copy_buttons: true,
+                ..Default::default()
+            },
+        );
+        let controls: Vec<_> = lines
+            .iter()
+            .flat_map(|l| &l.spans)
+            .filter(|s| s.code_copy.is_some())
+            .collect();
+        assert_eq!(
+            controls
+                .iter()
+                .map(|s| s.code_copy.unwrap())
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert!(
+            controls
+                .iter()
+                .all(|s| s.text_ranges.is_empty() && s.text.trim() == "Copy")
+        );
+    }
+
+    #[test]
+    fn narrow_code_headers_fit_without_overwriting_content() {
+        let doc = Document::new("```long_language_name\nabc\n```", Theme::default());
+        for width in 1..40 {
+            let lines = doc.layout(
+                width,
+                RenderOptions {
+                    code_copy_buttons: true,
+                    ..Default::default()
+                },
+            );
+            assert!(lines.iter().all(|l| l.width() <= usize::from(width)));
+            let controls: Vec<_> = lines
+                .iter()
+                .flat_map(|l| &l.spans)
+                .filter(|s| s.code_copy.is_some())
+                .collect();
+            assert_eq!(controls.len(), usize::from(width >= 4));
+            assert_eq!(doc.code_blocks()[0].text, "abc\n");
+        }
+    }
 }

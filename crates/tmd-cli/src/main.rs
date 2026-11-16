@@ -127,6 +127,7 @@ fn main() -> ExitCode {
             &theme,
             RenderOptions {
                 large_headings: large,
+                ..RenderOptions::default()
             },
         ),
         InputFormat::ClaudeJson => {

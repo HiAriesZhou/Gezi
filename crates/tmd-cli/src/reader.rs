@@ -7,12 +7,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use crossterm::{cursor, event, terminal};
-use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind};
+use event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
 use tmd_core::{Document, Line, LineSize, RenderOptions, Theme, truncate};
 
 use crate::cli::{Cli, InputFormat, ReaderMode};
 use crate::clipboard::{self, CopyError};
-use crate::reader_copy::CodePicker;
+use crate::reader_copy::{self, CopyButtons};
 use crate::reader_outline::Outline;
 use crate::reader_search::Search;
 use crate::reader_ui::{self, Notice, Pane, View};
@@ -39,7 +39,7 @@ fn sidebar_width(cols: u16, open: bool) -> Option<u16> {
 }
 
 fn reader_layout(cli: &Cli, document: &Document, size: (u16, u16), open: bool) -> Vec<Line> {
-    reader_image_layout(cli, document, size, open, None)
+    reader_image_layout(cli, document, size, open, None, true)
 }
 
 const DEFAULT_READING_WIDTH: u16 = 100;
@@ -50,6 +50,7 @@ fn reader_image_layout(
     size: (u16, u16),
     open: bool,
     images: Option<&tmd_core::ImageLayout<'_>>,
+    copy_buttons: bool,
 ) -> Vec<Line> {
     let sidebar = sidebar_width(size.0, open);
     let available = size.0.saturating_sub(sidebar.map_or(0, |w| w + 1));
@@ -63,6 +64,7 @@ fn reader_image_layout(
         sidebar.is_none() && size.1 >= 4 && large_headings::enabled(cli, true, Some(size), width);
     let options = RenderOptions {
         large_headings: large,
+        code_copy_buttons: copy_buttons,
     };
     let lines = match images {
         Some(images) => document.layout_with_images(width, options, images),
@@ -192,6 +194,7 @@ fn last_start(lines: &[Line], height: usize) -> usize {
 #[derive(Default)]
 struct Chrome<'a> {
     search: Option<&'a Search>,
+    copy_buttons: Option<&'a CopyButtons>,
     title: String,
     details: Vec<Line>,
     footer: String,
@@ -232,6 +235,10 @@ fn paint(
         for (index, line) in lines[start..end].iter().enumerate() {
             let marked = chrome.search.map(|search| search.highlight(line));
             let line = marked.as_ref().unwrap_or(line);
+            let copied = chrome
+                .copy_buttons
+                .and_then(|c| c.decorate(line, Instant::now()));
+            let line = copied.as_ref().unwrap_or(line);
             let mut text = String::new();
             if highlight == Some(start + index) {
                 let mut marked = line.clone();
@@ -369,9 +376,13 @@ fn paint_split(
         for (index, line) in lines.iter().enumerate().take(end).skip(start) {
             out.push_str(&format!("\x1b[{};{right}H", 2 + index - start));
             let marked = chrome.search.map(|search| search.highlight(line));
+            let line = marked.as_ref().unwrap_or(line);
+            let copied = chrome
+                .copy_buttons
+                .and_then(|c| c.decorate(line, Instant::now()));
             pane_line(
                 &mut out,
-                marked.as_ref().unwrap_or(line),
+                copied.as_ref().unwrap_or(line),
                 body_width,
                 highlight == Some(index),
             );
@@ -395,7 +406,6 @@ enum Action {
     Search,
     Next,
     Previous,
-    Copy,
     Outline,
     Confirm,
     Focus,
@@ -421,7 +431,6 @@ fn key_action(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('q') | KeyCode::Esc => Action::Exit,
         KeyCode::Char('?') => Action::Help,
         KeyCode::Char('/') => Action::Search,
-        KeyCode::Char('c') => Action::Copy,
         KeyCode::Char('o') => Action::Outline,
         KeyCode::Enter => Action::Confirm,
         KeyCode::Tab | KeyCode::BackTab => Action::Focus,
@@ -473,19 +482,19 @@ fn scroll_position(
     }
 }
 
-fn help_lines(width: u16, pane: Pane, fallback: &str, copy_error: &str) -> Vec<Line> {
+fn help_lines(width: u16, pane: Pane, fallback: &str) -> Vec<Line> {
     let common = [
         "↑↓ / j k / 滚轮：移动；PageUp/b、PageDown/空格：翻页；Home/End：首尾",
         "? / Esc / q：关闭帮助，返回打开帮助前的界面",
         "Ctrl-C：中断，恢复终端并返回命令行",
-        "Shift + 拖选：终端原生选择（Kaku）",
+        "点击代码块右上角 Copy 复制完整代码；不离开正文",
     ];
     let specific: &[&str] = match pane {
         Pane::Reading => &[
             "阅读帮助",
             "/：搜索正文（区分大小写，Enter 确认）；n/N：下一处/上一处匹配",
             "搜索输入中 Esc 取消；Ctrl-U 清空；q、o、c 等作为查询文字",
-            "o：开关标题目录；Tab：侧栏与正文切换焦点；c：代码块；?：帮助",
+            "o：开关标题目录；Tab：侧栏与正文切换焦点；?：帮助",
             "阅读时 q 直接退出；Esc 依次清除搜索、关闭侧栏、退出",
         ],
         Pane::Outline => &[
@@ -498,17 +507,12 @@ fn help_lines(width: u16, pane: Pane, fallback: &str, copy_error: &str) -> Vec<L
             "选择不会移动正文。重复和空标题按各自源码位置跳转",
             "目录跳转保留搜索；n/N 仍从原先选中的匹配继续",
         ],
-        Pane::Copy => &[
-            "代码块帮助",
-            "Enter：复制选中代码；Esc / q / c：取消，回到原阅读位置",
-            "仅 Enter 会尝试复制；成功返回正文；失败或空代码保留列表",
-        ],
     };
     specific
         .iter()
         .chain(common.iter())
         .copied()
-        .chain([fallback, copy_error].into_iter().filter(|s| !s.is_empty()))
+        .chain(std::iter::once(fallback).filter(|s| !s.is_empty()))
         .flat_map(|text| reader_ui::wrapped(text, width.saturating_sub(1) as usize, usize::MAX))
         .collect()
 }
@@ -687,7 +691,14 @@ fn run_with_copy(
 ) -> io::Result<u8> {
     let mut size = terminal::size()?;
     let document = Document::new(md, theme.clone());
-    let mut lines = layout(cli, &document, size);
+    let mut lines = reader_image_layout(
+        cli,
+        &document,
+        size,
+        false,
+        None,
+        mode != ReaderMode::Native,
+    );
     let content_height: usize = lines.iter().map(Line::physical_height).sum();
     let title = header();
     let mut session = Session::start(size.1)?;
@@ -736,6 +747,7 @@ fn run_with_copy(
             return Ok(0);
         }
         notice = " · 原生定位不可用，使用内置阅读".into();
+        lines = layout(cli, &document, size);
     }
     let mut images = crate::reader_images::Images::new(cli, &document);
     let result: io::Result<()> = (|| {
@@ -758,7 +770,7 @@ fn run_with_copy(
         }
         let mut help_start = 0;
         let mut search = Search::default();
-        let mut picker = CodePicker::default();
+        let mut copy_buttons = CopyButtons::default();
         let mut outline = Outline::default();
         let fallback = notice;
         let mut notice = Notice::default();
@@ -775,7 +787,14 @@ fn run_with_copy(
                 layouts.invalidate();
             }
             if layouts.update(&mut lines, size, width, || {
-                reader_image_layout(cli, &document, size, outline_open, images.layout().as_ref())
+                reader_image_layout(
+                    cli,
+                    &document,
+                    size,
+                    outline_open,
+                    images.layout().as_ref(),
+                    true,
+                )
             }) {
                 start = anchor.resolve(&lines, size.1.saturating_sub(2) as usize);
                 search.saved_start =
@@ -809,7 +828,8 @@ fn run_with_copy(
                     chrome.title = if view == View::Search {
                         reader_ui::footer(
                             View::Search,
-                            &format!("搜索{}", search.notice()),
+                            &transient
+                                .map_or_else(|| format!("搜索{}", search.notice()), str::to_owned),
                             false,
                             split.map_or(size.0, |w| size.0 - w - 1),
                         )
@@ -861,41 +881,23 @@ fn run_with_copy(
                     );
                     (&lines, start, None)
                 }
-                View::Copy => {
-                    chrome.title = format!(
-                        "Gezi · 代码块 · {}/{}",
-                        picker.selected + 1,
-                        document.code_blocks().len()
-                    );
-                    if !picker.notice.is_empty() && size.1 >= 4 {
-                        chrome.details = reader_ui::wrapped(
-                            picker.notice.trim_start_matches(" · "),
-                            size.0.saturating_sub(1) as usize,
-                            1,
-                        );
-                    }
-                    state = format!(
-                        "代码 · {}/{}",
-                        picker.selected + 1,
-                        document.code_blocks().len()
-                    );
-                    overlay = picker.rows(size.0);
-                    let top = picker.top(chrome.height(size.1));
-                    (&overlay, top, Some(picker.selected))
-                }
                 View::Help(pane) => {
                     chrome.title = "Gezi · 帮助".into();
-                    overlay = help_lines(size.0, pane, &fallback, &picker.notice);
+                    overlay = help_lines(size.0, pane, &fallback);
                     help_start = help_start.min(last_start(&overlay, chrome.height(size.1)));
                     (&overlay, help_start, None)
                 }
             };
+            if let Some(message) = transient {
+                state = message.into();
+            }
             chrome.footer =
                 reader_ui::footer(active_view, &state, !search.query.is_empty(), size.0);
             if matches!(active_view, View::Reading | View::Search)
                 || (active_view == View::Outline && split.is_some())
             {
                 chrome.search = Some(&search);
+                chrome.copy_buttons = Some(&copy_buttons);
             }
             let (mut frame, end) = if let Some(width) = split {
                 if active_view == View::Reading {
@@ -979,6 +981,14 @@ fn run_with_copy(
                 session.exit_row = 1.min(size.1.saturating_sub(1));
                 break;
             }
+            let body_height = chrome.height(size.1);
+            drop(chrome);
+            let buttons = if matches!(active_view, View::Reading | View::Search) || split.is_some()
+            {
+                reader_copy::buttons(&lines, start, end, split.map_or(0, |w| w + 1), size.0)
+            } else {
+                Vec::new()
+            };
             let input = loop {
                 if let Some(event) = queued.pop_front() {
                     break event;
@@ -999,10 +1009,27 @@ fn run_with_copy(
                 if show_images && images.needs_upload(&lines, start, end) {
                     continue 'reader;
                 }
-                if notice.expire(Instant::now()) {
+                let now = Instant::now();
+                let feedback_expired = copy_buttons.expire(now);
+                if notice.expire(now) || feedback_expired {
                     continue 'reader;
                 }
             };
+            if let Some(message) = copy_buttons.event(
+                &input,
+                &buttons,
+                document.code_blocks(),
+                &mut copy,
+                Instant::now(),
+            ) {
+                notice.show(message, Instant::now());
+                continue;
+            }
+            if matches!(input, Event::Mouse(mouse) if matches!(mouse.kind,
+                MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved))
+            {
+                continue;
+            }
             let action = match input {
                 Event::Key(key) => key_action(key),
                 _ => None,
@@ -1044,8 +1071,8 @@ fn run_with_copy(
                             start = scroll_position(
                                 start,
                                 end,
-                                last_start(&lines, chrome.height(size.1)),
-                                chrome.height(size.1),
+                                last_start(&lines, body_height),
+                                body_height,
                                 None,
                                 &input,
                             );
@@ -1110,55 +1137,31 @@ fn run_with_copy(
                         }
                     }
                 }
-                View::Outline | View::Copy => {
-                    let pane = if active_view == View::Outline {
-                        Pane::Outline
-                    } else {
-                        Pane::Copy
-                    };
-                    let close = action == Some(Action::Exit)
-                        || (active_view == View::Outline && action == Some(Action::Outline))
-                        || (active_view == View::Copy && action == Some(Action::Copy));
+                View::Outline => {
+                    let close = action == Some(Action::Exit) || action == Some(Action::Outline);
                     if close {
-                        if active_view == View::Outline {
-                            outline_open = false;
-                        }
+                        outline_open = false;
                         view = View::Reading;
-                        picker.notice.clear();
                     } else if action == Some(Action::Help) {
-                        view = View::Help(pane);
+                        view = View::Help(Pane::Outline);
                         help_start = 0;
                     } else if action == Some(Action::Confirm) {
-                        if active_view == View::Outline {
-                            if let Some(row) = Document::heading_line(
-                                &lines,
-                                &document.headings()[outline.selected],
-                            ) {
-                                anchor = Anchor::at(&lines, row);
-                                start =
-                                    row.min(last_start(&lines, size.1.saturating_sub(2) as usize));
-                                if split.is_none() {
-                                    outline_open = false;
-                                    view = View::Reading;
-                                } else {
-                                    view = View::Outline;
-                                }
-                                notice.show(
-                                    format!(
-                                        "已跳转 · L{}",
-                                        document.headings()[outline.selected].source_line
-                                    ),
-                                    Instant::now(),
-                                );
-                            }
-                        } else {
-                            picker.confirm(document.code_blocks(), &mut copy);
-                            if !picker.open {
+                        if let Some(row) =
+                            Document::heading_line(&lines, &document.headings()[outline.selected])
+                        {
+                            anchor = Anchor::at(&lines, row);
+                            start = row.min(last_start(&lines, size.1.saturating_sub(2) as usize));
+                            if split.is_none() {
+                                outline_open = false;
                                 view = View::Reading;
-                                notice
-                                    .show(picker.notice.trim_start_matches(" · "), Instant::now());
-                                picker.notice.clear();
                             }
+                            notice.show(
+                                format!(
+                                    "已跳转 · L{}",
+                                    document.headings()[outline.selected].source_line
+                                ),
+                                Instant::now(),
+                            );
                         }
                     } else if let Some(amount) = list_movement(
                         action,
@@ -1166,14 +1169,10 @@ fn run_with_copy(
                         if split.is_some() {
                             size.1.saturating_sub(2) as usize
                         } else {
-                            chrome.height(size.1)
+                            body_height
                         },
                     ) {
-                        if active_view == View::Outline {
-                            outline.move_by(amount, document.headings().len());
-                        } else {
-                            picker.move_by(amount);
-                        }
+                        outline.move_by(amount, document.headings().len());
                     }
                 }
                 View::Help(pane) => {
@@ -1183,8 +1182,8 @@ fn run_with_copy(
                         help_start = scroll_position(
                             help_start,
                             end,
-                            last_start(display, chrome.height(size.1)),
-                            chrome.height(size.1),
+                            last_start(display, body_height),
+                            body_height,
                             action,
                             &input,
                         );
@@ -1225,17 +1224,6 @@ fn run_with_copy(
                                 continue;
                             }
                         }
-                        Some(Action::Copy) => {
-                            picker.show(document.code_blocks(), &lines[start..]);
-                            if picker.open {
-                                view = View::Copy;
-                            } else {
-                                notice
-                                    .show(picker.notice.trim_start_matches(" · "), Instant::now());
-                                picker.notice.clear();
-                                continue;
-                            }
-                        }
                         Some(Action::Help) => {
                             view = View::Help(Pane::Reading);
                             help_start = 0;
@@ -1255,8 +1243,8 @@ fn run_with_copy(
                             let next = scroll_position(
                                 start,
                                 end,
-                                last_start(&lines, chrome.height(size.1)),
-                                chrome.height(size.1),
+                                last_start(&lines, body_height),
+                                body_height,
                                 action,
                                 &input,
                             );

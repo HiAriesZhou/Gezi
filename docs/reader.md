@@ -15,7 +15,7 @@ To read a file named `help`, use `gezi ./help` or `gezi -- help`.
 | PageUp / PageDown, `b` / Space | Previous / next page |
 | `/`, Enter, `n` / `N` | Search, confirm, next / previous match |
 | `o`, Tab | Toggle the outline, switch sidebar/document focus |
-| `c` | Choose a code block to copy |
+| Click `Copy` | Copy the whole code block without leaving the document |
 | `?` | Help for the current view |
 | `q` | Exit reading; close a focused list or help |
 | Esc | Cancel input or close a list/help; while reading, clear search, then close the sidebar, then exit |
@@ -42,11 +42,19 @@ Home/End and Backspace/Delete edit it. The visible cursor
 anchors the system input method. Narrow tables may show a match at an ellipsis;
 widen the window to see the text.
 
-Press `c`, select a code block and press Enter to copy. This preserves tabs,
-indentation, trailing spaces and line breaks, with CRLF normalized to LF. Markdown
-fences and rendered borders are excluded. Empty blocks leave the clipboard
-unchanged. Esc, `q` or `c` cancels. Clipboard writes occur only on confirmation,
-on local macOS; SSH copying is not supported.
+Click `Copy` at the top right of a code block to copy its complete original text.
+The button briefly shows `Copied` on success. Failures show `Retry` and a status
+message; the document and reading position stay in place. `c` no longer opens a
+separate chooser. Very narrow blocks use compact `Copy` / `Done` / `Fail` labels;
+blocks narrower than four columns cannot show a button.
+
+Copying preserves tabs, indentation, trailing spaces and line breaks, with CRLF
+normalized to LF. Markdown fences, display wrapping and rendered borders are
+excluded. Empty blocks leave the clipboard unchanged. A click requires pressing
+and releasing on the same button; dragging, scrolling, resizing or a keyboard
+action cancels it. Clipboard writes are supported only on local macOS, not SSH.
+Buttons appear only in the interactive reader, not plain, streaming or native
+terminal output. This control does not implement ordinary text selection.
 
 ## Heading outline
 
@@ -61,7 +69,7 @@ wide show a left sidebar; narrower windows show a full-page list.
 
 Headings retain their source order and level. Repeated and empty headings have
 separate destinations. Long titles are truncated; the header shows the source
-line. Search, code selection and help preserve the sidebar when returning.
+line. Search and help preserve the sidebar when returning; clicking Copy keeps it open.
 Split views use ordinary headings, even with `--large-headings`.
 
 ## Images

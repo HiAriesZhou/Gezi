@@ -14,6 +14,7 @@ use crate::wrap::{Row, push_text};
 const MIN_CONTENT: usize = 2;
 
 pub(crate) struct Ctx<'t> {
+    pub copy_buttons: bool,
     pub theme: &'t Theme,
     /// How many lists enclose the current block; picks the bullet.
     pub list_depth: usize,
@@ -60,7 +61,7 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
             }
             rows
         }
-        Block::Code(block) => code::rows(theme, block, width)
+        Block::Code(block) => code::rows(theme, block, width, ctx.copy_buttons)
             .into_iter()
             .map(|(row, _)| row)
             .collect(),
@@ -109,6 +110,7 @@ fn list(ctx: &Ctx, start: Option<u64>, tight: bool, items: &[Item], width: usize
     let inner_ctx = Ctx {
         theme,
         list_depth: ctx.list_depth + 1,
+        copy_buttons: ctx.copy_buttons,
         images: ctx.images,
     };
     let mut rows = Vec::new();
