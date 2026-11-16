@@ -91,9 +91,9 @@ impl ClaudeStream {
             Block::Text(mut text) => out.extend(text.finish().committed),
             Block::Thinking(count) => {
                 out.push(self.folded(&if count == 0 {
-                    "▸ 思考 · 内容不可见".into()
+                    crate::i18n::text("▸ Thinking · content hidden", "▸ 思考 · 内容不可见").into()
                 } else {
-                    format!("▸ 思考 · {count} 字")
+                    crate::i18n::trf!("▸ Thinking · {count} characters", "▸ 思考 · {count} 字")
                 }));
             }
             Block::Tool {
@@ -108,7 +108,10 @@ impl ClaudeStream {
                 } else {
                     format!(" · {summary}")
                 };
-                out.push(self.folded(&format!("▸ 工具 · {name}{summary}")));
+                out.push(self.folded(&crate::i18n::trf!(
+                    "▸ Tool · {name}{summary}",
+                    "▸ 工具 · {name}{summary}"
+                )));
                 if !id.is_empty() {
                     self.tools.insert(id, Tool { name, started });
                 }
@@ -221,7 +224,10 @@ impl ClaudeStream {
                     Some("message_stop") => {
                         self.close_block(out);
                         if value.get("abandoned_blocks").is_some_and(|v| !v.is_null()) {
-                            out.push(self.folded("▸ 回答中断，重新生成"));
+                            out.push(self.folded(crate::i18n::text(
+                                "▸ Response interrupted; regenerating",
+                                "▸ 回答中断，重新生成",
+                            )));
                         }
                     }
                     _ => {}
@@ -239,11 +245,15 @@ impl ClaudeStream {
                         if let Some(tool) = self.tools.remove(id) {
                             self.close_block(out);
                             let text = if item["is_error"].as_bool() == Some(true) {
-                                format!("✗ {} · 出错", tool.name)
+                                crate::i18n::trf!("✗ {} · failed", "✗ {} · 出错", tool.name)
                             } else {
                                 let elapsed =
                                     (self.now)().saturating_sub(tool.started).as_secs_f64();
-                                format!("✓ {} · 用时 {elapsed:.1} s", tool.name)
+                                crate::i18n::trf!(
+                                    "✓ {} · {elapsed:.1} s",
+                                    "✓ {} · 用时 {elapsed:.1} s",
+                                    tool.name
+                                )
                             };
                             out.push(self.folded(&text));
                         }
@@ -253,15 +263,19 @@ impl ClaudeStream {
             Some("result") => {
                 self.close_block(out);
                 let mut text = String::from(if value["is_error"].as_bool() == Some(true) {
-                    "失败"
+                    crate::i18n::text("Failed", "失败")
                 } else {
-                    "完成"
+                    crate::i18n::text("Complete", "完成")
                 });
                 if let Some(ms) = value["duration_ms"]
                     .as_f64()
                     .filter(|v| v.is_finite() && *v >= 0.0)
                 {
-                    text.push_str(&format!(" · 总用时 {:.1} s", ms / 1000.0));
+                    text.push_str(&crate::i18n::trf!(
+                        " · Total {:.1} s",
+                        " · 总用时 {:.1} s",
+                        ms / 1000.0
+                    ));
                 }
                 if let Some(cost) = value["total_cost_usd"]
                     .as_f64()

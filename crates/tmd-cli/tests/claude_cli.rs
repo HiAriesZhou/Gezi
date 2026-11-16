@@ -3,7 +3,14 @@ use std::process::{Command, Stdio};
 
 fn run(input: &[u8], debug: bool, ansi: bool) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_gezi"));
-    command.args(["--from", "claude-json", "--theme", "default-dark"]);
+    command.args([
+        "--language",
+        "zh",
+        "--from",
+        "claude-json",
+        "--theme",
+        "default-dark",
+    ]);
     if debug {
         command.arg("--debug");
     }

@@ -28,7 +28,7 @@ END = b"\x1b[?2026l"
 class Terminal:
     def __init__(self, options=(), *, row=12, config=None, native=False, capacity=10000,
                  wrong_token=False, text=None, answer_cursor=True, interrupt_probe=False,
-                 cursor_prefix=b"", cols=80, legacy_config=None, ssh=False):
+                 cursor_prefix=b"", cols=80, legacy_config=None, ssh=False, language="zh"):
         self.temp = tempfile.TemporaryDirectory(prefix="tmd-reader-")
         root = Path(self.temp.name)
         path = root / "article.md"
@@ -51,7 +51,7 @@ class Terminal:
                 env.pop(key, None)
             if ssh:
                 env["SSH_CONNECTION"] = "gezi-test"
-            args = [str(BINARY), "--theme", "default-dark", *options, str(path)]
+            args = [str(BINARY), "--theme", "default-dark", "--language", language, *options, str(path)]
             os.execve(str(BINARY), args, env)
         os.close(ready_read)
         self.resize(cols, 24)
@@ -269,6 +269,52 @@ class ReaderTests(unittest.TestCase):
         self.assertNotIn(b"?1049", terminal.data)
         self.assertNotIn(b"\x1b[3J", terminal.data)
 
+    def test_language_switch_preserves_reading_outline_and_search(self):
+        source = "# Top 中文\n\n```text\nhello 中文\n```\n\n" + "\n\n".join(f"Row {i:03}" for i in range(50))
+        t = self.terminal(text=source, language="en")
+        first = t.until(END)
+        self.assertIn(b"Copy", first)
+        self.assertIn("L Language", self.footer(first))
+        zh = t.frame(b"L")
+        self.assertIn("复制".encode(), zh)
+        self.assertIn("L 语言", self.footer(zh))
+        self.assertEqual(self.pane_rows(first, 1)[4:], self.pane_rows(zh, 1)[4:])
+        help_zh = t.frame(b"?")
+        self.assertIn("阅读帮助".encode(), help_zh)
+        help_en = t.frame(b"L")
+        self.assertIn(b"Reading help", help_en)
+        t.frame(b"q")
+        t.frame(b"o")
+        outline = t.frame(b"L")
+        self.assertIn("标题目录".encode(), outline)
+        t.frame(b"o")
+        t.frame(b"/")
+        query = t.frame(b"L")
+        self.assertIn(b"/L", query)
+        en = t.frame(b"\x1bOQ")  # F2
+        self.assertIn(b"/L", en)
+        self.assertIn(b"Cancel", en)
+        zh = t.frame(b"\x1bOQ")
+        self.assertIn(b"/L", zh)
+        self.assertIn("取消".encode(), zh)
+        t.frame(b"\x1b")
+        self.assertEqual(t.finish(b"q"), 0)
+        self.assert_restored(t)
+
+    def test_both_languages_fit_narrow_reading_and_help(self):
+        for language in ("en", "zh"):
+            for cols in (19, 39, 79, 80):
+                with self.subTest(language=language, cols=cols):
+                    t = self.terminal(language=language, cols=cols)
+                    first = t.until(END)
+                    self.assertIn("q", self.footer(first))
+                    help_frame = t.frame(b"?")
+                    self.assertIn("Esc", self.footer(help_frame))
+                    t.frame(b"L")
+                    t.frame(b"q")
+                    self.assertEqual(t.finish(b"q"), 0)
+                    self.assert_restored(t)
+
     def test_open_at_top_then_wheel_and_end_reach_pre_rendered_tail(self):
         for row in (1, 12, 24):
             with self.subTest(row=row):
@@ -415,16 +461,16 @@ class ReaderTests(unittest.TestCase):
         t = self.terminal(text="```\ncode\n```", ssh=True)
         initial = t.until(END)
         row = self.pane_rows(initial, 1, 2, 2)[0]
-        x = row.index("Copy") + 1
+        x = row.index("复制") + 1
         t.frame(f"\x1b[<0;{x};2M".encode())
         self.assertNotIn(b";44m", t.frame(b"\x1b[<32;6;3M"))
         released = t.frame(b"\x1b[<0;6;3m")
         self.assertNotIn("暂不支持复制".encode(), released)
-        self.assertIn(b"Copy", released)
+        self.assertIn("复制".encode(), released)
         t.frame(f"\x1b[<0;{x};2M".encode())
         failed = t.frame(f"\x1b[<0;{x};2m".encode())
         self.assertIn("暂不支持复制".encode(), failed)
-        self.assertIn(b"Retry", failed)
+        self.assertIn("重试".encode(), failed)
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
@@ -472,12 +518,12 @@ class ReaderTests(unittest.TestCase):
         t = self.terminal(text="```\n```\n\nAfter code")
         initial = t.until(END)
         row = self.pane_rows(initial, 1, 2, 2)[0]
-        self.assertIn("Copy", row)
-        x = row.index("Copy") + 1
+        self.assertIn("复制", row)
+        x = row.index("复制") + 1
         t.frame(f"\x1b[<0;{x};2M".encode())
         failed = t.frame(f"\x1b[<0;{x};2m".encode())
         self.assertIn("为空".encode(), failed)
-        self.assertIn(b"Retry", failed)
+        self.assertIn("重试".encode(), failed)
         self.assertIn(b"After code", failed)
         self.assertIn(b"After code", t.frame(b"c"))
         self.assertEqual(t.finish(b"q"), 0)
@@ -487,13 +533,13 @@ class ReaderTests(unittest.TestCase):
         t = self.terminal(text="```\n```\n\nAfter code")
         initial = t.until(END)
         row = self.pane_rows(initial, 1, 2, 2)[0]
-        x = row.index("Copy") + 1
+        x = row.index("复制") + 1
         t.frame(b"/")
         t.frame(f"\x1b[<0;{x};2M".encode())
         failed = t.frame(f"\x1b[<0;{x};2m".encode())
         title = self.pane_rows(failed, 1, 1, 1)[0]
         self.assertIn("为空", title)
-        self.assertIn(b"Retry", failed)
+        self.assertIn("重试".encode(), failed)
         self.assertIn(b"\x1b[24;1H\x1b#5\x1b[0m\x1b[2K/", failed)
         self.assertEqual(t.finish(b"\x03"), 130)
         self.assert_restored(t)
@@ -503,11 +549,11 @@ class ReaderTests(unittest.TestCase):
         native = self.terminal(("--reader", "native"), native=True, text=source)
         self.assertEqual(native.finish(), 0)
         self.assertIn(b"example", native.data)
-        self.assertNotIn(b"Copy", native.data)
+        self.assertNotIn("复制".encode(), native.data)
         self.assert_restored(native)
         fallback = self.terminal(("--reader", "native"), text=source)
         frame = fallback.until(END)
-        self.assertIn(b"Copy", frame)
+        self.assertIn("复制".encode(), frame)
         self.assertEqual(fallback.finish(b"q"), 0)
         self.assert_restored(fallback)
 
@@ -515,7 +561,7 @@ class ReaderTests(unittest.TestCase):
         t = self.terminal(text="```\ncode\n```")
         initial = t.until(END)
         row = self.pane_rows(initial, 1, 2, 2)[0]
-        x = row.index("Copy") + 1
+        x = row.index("复制") + 1
         t.frame(f"\x1b[<0;{x};2M".encode())
         offset = len(t.data)
         t.resize(4, 1)

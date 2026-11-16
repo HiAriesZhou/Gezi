@@ -46,7 +46,12 @@ exit. Use `--reader inline` if you previously configured native output.
 | `/`, then Enter; `n` / `N` | Search; next / previous match |
 | `o`; Tab | Toggle the outline; switch panes |
 | Click `Copy` | Copy a complete code block in place |
+| `L` / F2 | Switch English / Chinese (F2 during search input) |
 | `?` | Help for the current view |
+
+Interface language follows Kaku’s macOS app language preference, then the system,
+with English as the fallback. Override it with `--language en|zh|auto`. See the
+[language rules](docs/reader.md#interface-language) for supported sources and limits.
 
 ## Update
 

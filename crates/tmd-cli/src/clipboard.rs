@@ -8,8 +8,14 @@ pub(crate) enum CopyError {
 impl std::fmt::Display for CopyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Empty => "内容为空，未修改剪贴板",
-            Self::Unsupported => "此环境暂不支持复制（仅本机 macOS）",
+            Self::Empty => crate::i18n::text(
+                "Nothing to copy; clipboard unchanged",
+                "内容为空，未修改剪贴板",
+            ),
+            Self::Unsupported => crate::i18n::text(
+                "Copy unavailable (local macOS only)",
+                "此环境暂不支持复制（仅本机 macOS）",
+            ),
             Self::Backend(message) => message,
         })
     }
@@ -38,14 +44,22 @@ fn copy_local(
 
 #[cfg(target_os = "macos")]
 fn write_system(text: &str) -> Result<(), &'static str> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|_| "无法访问系统剪贴板")?;
-    clipboard
-        .set_text(text)
-        .map_err(|_| "复制失败，未能确认剪贴板写入")
+    let mut clipboard = arboard::Clipboard::new().map_err(|_| {
+        crate::i18n::text("Cannot access the system clipboard", "无法访问系统剪贴板")
+    })?;
+    clipboard.set_text(text).map_err(|_| {
+        crate::i18n::text(
+            "Copy failed; clipboard write could not be confirmed",
+            "复制失败，未能确认剪贴板写入",
+        )
+    })
 }
 #[cfg(not(target_os = "macos"))]
 fn write_system(_: &str) -> Result<(), &'static str> {
-    Err("此环境暂不支持复制")
+    Err(crate::i18n::text(
+        "Copy unavailable in this environment",
+        "此环境暂不支持复制",
+    ))
 }
 
 #[cfg(test)]
@@ -53,6 +67,7 @@ mod tests {
     use super::*;
     #[test]
     fn empty_and_remote_requests_never_reach_a_clipboard_backend() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         for (text, supported, expected) in [
             ("", true, CopyError::Empty),
             ("code", false, CopyError::Unsupported),
@@ -65,6 +80,7 @@ mod tests {
     }
     #[test]
     fn write_once_preserves_payload_and_reports_errors() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let text = "{\\rtf1 \t中文\n}\n";
         let mut calls = 0;
         let result = copy_local(text, true, |received| {

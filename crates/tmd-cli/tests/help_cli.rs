@@ -6,7 +6,7 @@ fn help_command_and_flags_exit_without_waiting_for_stdin() {
     let mut expected = None;
     for argument in ["help", "--help", "-h"] {
         let mut child = Command::new(env!("CARGO_BIN_EXE_gezi"))
-            .arg(argument)
+            .args([argument, "--language", "en"])
             .env("NO_COLOR", "1")
             .env_remove("CLICOLOR_FORCE")
             .stdin(Stdio::piped())
@@ -39,6 +39,31 @@ fn help_command_and_flags_exit_without_waiting_for_stdin() {
             }
         } else {
             expected = Some(text.trim().to_owned());
+        }
+    }
+}
+
+#[test]
+fn explicit_languages_work_before_and_after_commands() {
+    for (language, usage, description) in [
+        ("en", "Usage: gezi", "Interface language"),
+        ("zh", "用法：gezi", "界面语言"),
+    ] {
+        for args in [
+            vec!["--language", language, "help"],
+            vec!["help", "--language", language],
+            vec!["--language", language, "--help"],
+            vec!["--language", language, "update", "--help"],
+            vec!["update", "--language", language, "--help"],
+        ] {
+            let output = Command::new(env!("CARGO_BIN_EXE_gezi"))
+                .args(&args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{args:?}: {:?}", output.stderr);
+            let text = String::from_utf8(output.stdout).unwrap();
+            assert!(text.contains(usage), "{args:?}: {text}");
+            assert!(text.contains(description), "{args:?}: {text}");
         }
     }
 }

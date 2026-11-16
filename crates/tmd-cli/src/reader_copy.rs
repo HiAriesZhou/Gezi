@@ -81,7 +81,7 @@ impl CopyButtons {
                 };
                 self.feedback = Some((pressed.code, result.is_ok(), now + Duration::from_secs(3)));
                 return Some(match result {
-                    Ok(()) => "已复制代码块".into(),
+                    Ok(()) => crate::i18n::text("Code block copied", "已复制代码块").into(),
                     Err(error) => error.to_string(),
                 });
             }
@@ -102,21 +102,34 @@ impl CopyButtons {
         }
     }
     pub fn decorate(&self, line: &Line, now: Instant) -> Option<Line> {
-        let (code, success, deadline) = self.feedback?;
-        if now >= deadline || !line.spans.iter().any(|s| s.code_copy == Some(code)) {
+        use crate::i18n::{self, Language};
+        let feedback = self.feedback.filter(|(_, _, deadline)| now < *deadline);
+        if !line.spans.iter().any(|s| s.code_copy.is_some())
+            || (i18n::current() == Language::English
+                && !line
+                    .spans
+                    .iter()
+                    .any(|s| feedback.is_some_and(|(code, _, _)| s.code_copy == Some(code))))
+        {
             return None;
         }
         let mut marked = line.clone();
         for span in &mut marked.spans {
-            if span.code_copy == Some(code) {
-                span.text = match (success, span.width()) {
-                    (true, 6) => "Copied",
-                    (false, 6) => "Retry ",
-                    (true, _) => "Done",
-                    (false, _) => "Fail",
-                }
-                .into();
+            let Some(code) = span.code_copy else {
+                continue;
+            };
+            let status = feedback
+                .filter(|(index, _, _)| *index == code)
+                .map(|(_, success, _)| success);
+            span.text = match (status, span.width()) {
+                (Some(true), 6) => i18n::text("Copied", "已复制"),
+                (Some(false), 6) => i18n::text("Retry ", " 重试 "),
+                (Some(true), _) => i18n::text("Done", "完成"),
+                (Some(false), _) => i18n::text("Fail", "失败"),
+                (None, 6) => i18n::text(" Copy ", " 复制 "),
+                (None, _) => i18n::text("Copy", "复制"),
             }
+            .into();
         }
         Some(marked)
     }
@@ -136,7 +149,58 @@ mod tests {
         })
     }
     #[test]
+    fn translated_buttons_keep_width_and_hit_boxes_in_every_state() {
+        let doc = Document::new("```text\nhello\n```", Theme::default());
+        for width in [4, 6, 12, 30] {
+            let lines = doc.layout(
+                width,
+                RenderOptions {
+                    code_copy_buttons: true,
+                    ..Default::default()
+                },
+            );
+            let original = buttons(&lines, 0, lines.len(), 0, 80);
+            for language in [
+                crate::i18n::Language::English,
+                crate::i18n::Language::Chinese,
+            ] {
+                let _guard = crate::i18n::scoped(language);
+                for feedback in [None, Some(true), Some(false)] {
+                    let now = Instant::now();
+                    let state = CopyButtons {
+                        armed: None,
+                        feedback: feedback.map(|ok| (0, ok, now + Duration::from_secs(1))),
+                    };
+                    let marked: Vec<_> = lines
+                        .iter()
+                        .map(|line| state.decorate(line, now).unwrap_or_else(|| line.clone()))
+                        .collect();
+                    for (before, after) in lines.iter().zip(&marked) {
+                        assert_eq!(before.width(), after.width());
+                    }
+                    let controls = buttons(&marked, 0, marked.len(), 0, 80);
+                    assert_eq!(
+                        original
+                            .iter()
+                            .map(|b| (b.row, b.left, b.right))
+                            .collect::<Vec<_>>(),
+                        controls
+                            .iter()
+                            .map(|b| (b.row, b.left, b.right))
+                            .collect::<Vec<_>>()
+                    );
+                    assert!(!controls.is_empty());
+                    if language == crate::i18n::Language::Chinese && feedback.is_none() {
+                        assert!(marked.iter().any(|line| line.plain_text().contains("复制")));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn click_copies_exact_code_once_and_keeps_layout() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::English);
         let doc = Document::new("```text\n\t中文  \n\nlast\n```", Theme::default());
         let lines = doc.layout(
             30,
@@ -176,7 +240,7 @@ mod tests {
                     now
                 )
                 .as_deref(),
-            Some("已复制代码块")
+            Some("Code block copied")
         );
         assert!(
             state
@@ -201,6 +265,7 @@ mod tests {
     }
     #[test]
     fn hit_boxes_follow_visible_rows_and_sidebar_origin() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::English);
         let doc = Document::new(
             "# Title\n\n```\nfirst\n```\n\n> ```\n> second\n> ```",
             Theme::default(),
@@ -233,6 +298,7 @@ mod tests {
 
     #[test]
     fn release_must_hit_same_button_and_failure_can_retry() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::English);
         let doc = Document::new("```\none\n```\n\n```\ntwo\n```", Theme::default());
         let lines = doc.layout(
             30,
@@ -299,6 +365,7 @@ mod tests {
 
     #[test]
     fn cancelled_clicks_and_empty_blocks_do_not_write() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::English);
         let doc = Document::new("```\n```\n\n```\nx\n```", Theme::default());
         let lines = doc.layout(
             30,
@@ -359,7 +426,7 @@ mod tests {
                     now
                 )
                 .unwrap()
-                .contains("为空")
+                .contains("Nothing to copy")
         );
     }
 }
