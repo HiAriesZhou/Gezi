@@ -53,6 +53,7 @@ fn replay(input: &str, chunks: bool) -> Vec<Line> {
 
 #[test]
 fn real_fixtures_replay_identically_across_chunks() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     for (name, input) in [
         (
             "plain",
@@ -86,6 +87,7 @@ fn real_fixtures_replay_identically_across_chunks() {
 
 #[test]
 fn text_is_active_until_stopped_and_assistant_duplicates_are_ignored() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     let mut s = source();
     send(&mut s, start(0, json!({"type":"text", "text":"你好"})));
     let f = send(
@@ -108,6 +110,7 @@ fn text_is_active_until_stopped_and_assistant_duplicates_are_ignored() {
 
 #[test]
 fn bad_unknown_and_child_events_do_not_corrupt_parent() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     let mut s = source();
     send(&mut s, start(0, json!({"type":"text"})));
     for line in [
@@ -144,6 +147,7 @@ fn bad_unknown_and_child_events_do_not_corrupt_parent() {
 
 #[test]
 fn thinking_counts_only_visible_characters() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     let mut s = source();
     send(
         &mut s,
@@ -160,6 +164,7 @@ fn thinking_counts_only_visible_characters() {
 
 #[test]
 fn tool_results_pair_by_id_with_injected_clock_and_failures() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     let clock = Rc::new(Cell::new(Duration::ZERO));
     let copy = clock.clone();
     let mut s = ClaudeStream::with_clock(80, Theme::default(), false, move || copy.get());
@@ -202,6 +207,7 @@ fn tool_results_pair_by_id_with_injected_clock_and_failures() {
 
 #[test]
 fn eof_and_result_flush_active_text_and_only_show_valid_fields() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     let input = [
         start(0, json!({"type":"text", "text":"尾行"})),
         json!({"type":"result", "duration_ms":1250, "total_cost_usd":0.01234}),
@@ -229,6 +235,7 @@ fn eof_and_result_flush_active_text_and_only_show_valid_fields() {
 
 #[test]
 fn resizing_changes_only_active_text_and_folded_lines_fit() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     let mut s = source();
     send(
         &mut s,
@@ -259,6 +266,7 @@ fn resizing_changes_only_active_text_and_folded_lines_fit() {
 
 #[test]
 fn upstream_error_is_not_reported_as_success() {
+    let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
     assert_eq!(
         plain(&replay(r#"{"type":"result","is_error":true}"#, false)),
         "失败\n"

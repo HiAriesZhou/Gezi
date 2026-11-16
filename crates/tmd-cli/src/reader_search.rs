@@ -83,16 +83,17 @@ impl Search {
         if self.query.is_empty() {
             String::new()
         } else if self.matches.is_empty() {
-            " · 未找到匹配".into()
+            crate::i18n::text(" · No matches", " · 未找到匹配").into()
         } else {
-            format!(
+            crate::i18n::trf!(
+                " · Match {}/{}{}",
                 " · 匹配 {}/{}{}",
                 self.selected + 1,
                 self.matches.len(),
                 if self.input.is_some() {
                     ""
                 } else {
-                    " · n/N 前后"
+                    crate::i18n::text(" · n/N Next/previous", " · n/N 前后")
                 }
             )
         }
@@ -204,6 +205,7 @@ mod tests {
     use super::*;
     #[test]
     fn live_preview_cancel_and_empty_confirm_restore_selection() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let doc = Document::new("one one 中文", tmd_core::Theme::default());
         let mut s = Search::default();
         s.open(3);
@@ -237,6 +239,7 @@ mod tests {
 
     #[test]
     fn query_edits_whole_clusters_and_paste_is_text() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let mut q = Query {
             text: String::new(),
             cursor: 0,
@@ -255,6 +258,7 @@ mod tests {
     }
     #[test]
     fn large_queries_scroll_without_splitting_or_changing_the_cursor() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let mut q = Query {
             text: "中".repeat(100_000),
             cursor: 300_000,
@@ -269,6 +273,7 @@ mod tests {
 
     #[test]
     fn search_counts_cycle_and_empty_query_keeps_previous_search() {
+        let _language = crate::i18n::scoped(crate::i18n::Language::Chinese);
         let doc = Document::new("one one 中文", tmd_core::Theme::default());
         let mut s = Search::default();
         s.open(3);

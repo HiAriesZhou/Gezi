@@ -12,7 +12,10 @@ fn both_commands_use_the_gezi_brand() {
             String::from_utf8(output.stdout).unwrap(),
             format!("gezi {}\n", env!("CARGO_PKG_VERSION"))
         );
-        let help = Command::new(binary).arg("help").output().unwrap();
+        let help = Command::new(binary)
+            .args(["help", "--language", "en"])
+            .output()
+            .unwrap();
         assert!(help.status.success());
         assert!(
             String::from_utf8(help.stdout)

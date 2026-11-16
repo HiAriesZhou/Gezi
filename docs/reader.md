@@ -16,6 +16,7 @@ To read a file named `help`, use `gezi ./help` or `gezi -- help`.
 | `/`, Enter, `n` / `N` | Search, confirm, next / previous match |
 | `o`, Tab | Toggle the outline, switch sidebar/document focus |
 | Click `Copy` | Copy the whole code block without leaving the document |
+| `L` / F2 | Switch English / Chinese for this session; use F2 while typing a search |
 | `?` | Help for the current view |
 | `q` | Exit reading; close a focused list or help |
 | Esc | Cancel input or close a list/help; while reading, clear search, then close the sidebar, then exit |
@@ -24,6 +25,35 @@ To read a file named `help`, use `gezi ./help` or `gezi -- help`.
 Drag directly in the document to select and copy text; no modifier key is needed.
 The footer shows shortcuts for the focused view; it is
 not clickable. Resizing preserves a text/source anchor, not an exact screen row.
+
+## Interface language
+
+The interface supports English and Simplified Chinese. Automatic selection uses:
+
+1. In Kaku (`TERM_PROGRAM=Kaku`), macOS's app-specific `AppleLanguages` preference
+   for `fun.tw93.kaku`, if configured.
+2. The macOS preferred language list.
+3. The first nonempty `LC_ALL`, `LC_MESSAGES` or `LANG` locale, if macOS preferences
+   provide neither supported language.
+4. English.
+
+Each preference list uses its first supported English or Chinese entry. Chinese
+locale variants currently use Simplified Chinese. Current Kaku has no active
+built-in language selector; its legacy Lua `config.language` is unused. Gezi reads
+macOS preferences without changing them and does not execute Kaku configuration.
+
+Use `gezi --language en article.md` or `gezi --language zh article.md` to override
+automatic selection; `--language auto` restores it for a new process. Press `L`
+or F2 to switch immediately in the reader. While entering a search, `L` remains
+query text and F2 switches language. Switching preserves the reading position,
+query and outline state; the choice lasts only for that process.
+
+Reader controls, notices, code-copy labels, help descriptions and Claude stream
+status use the selected language. Markdown, paths, code and tool output stay
+unchanged. Parser, updater and underlying system diagnostics retain their original
+language. Image fallback labels embedded by the Markdown renderer still use
+Chinese (`图片` / `无法加载`); they are not reader controls. In Chinese, copy buttons show `复制`, `已复制` and `重试` (compact feedback:
+`完成` / `失败`) with the same click area as their English labels.
 
 ## Search and copying
 
