@@ -7,7 +7,6 @@ pub(crate) enum Pane {
     #[default]
     Reading,
     Outline,
-    Copy,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -16,7 +15,6 @@ pub(crate) enum View {
     Reading,
     Search,
     Outline,
-    Copy,
     Help(Pane),
 }
 
@@ -25,7 +23,6 @@ impl Pane {
         match self {
             Self::Reading => View::Reading,
             Self::Outline => View::Outline,
-            Self::Copy => View::Copy,
         }
     }
 }
@@ -116,7 +113,7 @@ pub(crate) fn footer(view: View, state: &str, query: bool, cols: u16) -> String 
             "q",
         ],
         View::Reading => &[
-            "/ 搜索  o 目录  c 复制  ? 帮助  q 退出",
+            "/ 搜索  o 目录  ? 帮助  q 退出",
             "o 目录  ? 帮助  q 退出",
             "? 帮助  q 退出",
             "?  q",
@@ -126,13 +123,6 @@ pub(crate) fn footer(view: View, state: &str, query: bool, cols: u16) -> String 
             "↑↓ 选择  Enter 跳转  Esc 返回  ? 帮助",
             "Enter 跳转  Esc 返回  ? 帮助",
             "Enter 跳转  Esc 返回",
-            "Enter  Esc",
-            "Esc",
-        ],
-        View::Copy => &[
-            "↑↓ 选择  Enter 复制  Esc 返回  ? 帮助",
-            "Enter 复制  Esc 返回  ? 帮助",
-            "Enter 复制  Esc 返回",
             "Enter  Esc",
             "Esc",
         ],
@@ -172,7 +162,7 @@ pub(crate) fn sidebar_footer(view: View, state: &str, query: bool, cols: u16) ->
     let actions = match view {
         View::Outline => "↑↓ 选择  Enter 跳转  Tab 正文  Esc 关闭  ? 帮助",
         View::Reading if query => "n/N 跳转  Esc 清除  Tab 目录  o 关闭  ? 帮助  q 退出",
-        _ => "↑↓ 滚动  Tab 目录  / 搜索  c 复制  o 关闭  ? 帮助  q 退出",
+        _ => "↑↓ 滚动  Tab 目录  / 搜索  o 关闭  ? 帮助  q 退出",
     };
     let width = cols.saturating_sub(1) as usize;
     let remaining = width.saturating_sub(text_width(actions));
@@ -236,12 +226,7 @@ mod tests {
     #[test]
     fn footer_keeps_actions_whole_and_only_advertises_active_commands() {
         for cols in [0, 1, 4, 20, 24, 40, 60, 80, 120] {
-            for view in [
-                View::Reading,
-                View::Outline,
-                View::Copy,
-                View::Help(Pane::Reading),
-            ] {
+            for view in [View::Reading, View::Outline, View::Help(Pane::Reading)] {
                 let text = footer(view, &"很长的状态👩‍💻é".repeat(20), false, cols);
                 assert!(text_width(&text) <= cols.saturating_sub(1) as usize);
                 if view != View::Reading {
@@ -250,7 +235,7 @@ mod tests {
                         assert!(text.contains("Esc"));
                     }
                 }
-                if matches!(view, View::Outline | View::Copy) && cols >= 24 {
+                if matches!(view, View::Outline) && cols >= 24 {
                     assert!(text.contains("Enter"));
                 }
             }
@@ -258,7 +243,7 @@ mod tests {
         let text = footer(View::Reading, "匹配 2/8", true, 40);
         assert!(text.contains("Esc 清除") && text.contains("q 退出"));
         let wide = footer(View::Reading, "阅读 · 开头", false, 80);
-        for key in ["/ 搜索", "o 目录", "c 复制", "? 帮助", "q 退出"] {
+        for key in ["/ 搜索", "o 目录", "? 帮助", "q 退出"] {
             assert!(wide.contains(key));
         }
     }

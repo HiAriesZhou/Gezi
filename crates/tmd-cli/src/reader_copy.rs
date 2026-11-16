@@ -1,237 +1,365 @@
-//! Code chooser state. Backend injection keeps tests away from real clipboards.
+//! Inline code copy controls. Tests inject a backend and never use the clipboard.
 use crate::clipboard::CopyError;
-use crate::reader_ui::{ListViewport, ellipsize};
-use tmd_core::{CodeSnippet, Line, LineSize, Span, Style, clusters, text_width};
+use crossterm::event::{Event, MouseButton, MouseEventKind};
+use std::time::{Duration, Instant};
+use tmd_core::{CodeSnippet, Line};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Button {
+    pub code: usize,
+    pub row: u16,
+    pub left: u16,
+    pub right: u16,
+}
+
+pub(crate) fn buttons(
+    lines: &[Line],
+    start: usize,
+    end: usize,
+    origin: u16,
+    cols: u16,
+) -> Vec<Button> {
+    let mut result = Vec::new();
+    let mut row = 1;
+    for line in &lines[start..end] {
+        let mut x = origin as usize;
+        for span in &line.spans {
+            let right = x + span.width() * line.physical_height();
+            if let Some(code) = span.code_copy
+                && right <= cols.saturating_sub(1) as usize
+            {
+                result.push(Button {
+                    code,
+                    row,
+                    left: x as u16,
+                    right: right as u16,
+                });
+            }
+            x = right;
+        }
+        row += line.physical_height() as u16;
+    }
+    result
+}
 
 #[derive(Default)]
-pub(crate) struct CodePicker {
-    pub open: bool,
-    pub selected: usize,
-    pub notice: String,
-    entries: Vec<String>,
-    viewport: ListViewport,
+pub(crate) struct CopyButtons {
+    armed: Option<Button>,
+    feedback: Option<(usize, bool, Instant)>,
 }
-impl CodePicker {
-    /// `following` starts at the current reading row and includes the tail.
-    pub fn show(&mut self, codes: &[CodeSnippet], following: &[Line]) {
-        self.notice.clear();
-        self.viewport.reset();
-        self.open = false;
-        if codes.is_empty() {
-            self.notice = " · 未找到代码块".into();
-            return;
-        }
-        self.selected = following
-            .iter()
-            .flat_map(|line| &line.spans)
-            .find_map(|span| span.code_block)
-            .unwrap_or(codes.len() - 1);
-        self.entries = codes
-            .iter()
-            .enumerate()
-            .map(|(i, code)| {
-                format!(
-                    "{} · {} · L{} · {}",
-                    i + 1,
-                    code.language.as_deref().unwrap_or("代码"),
-                    code.source_line,
-                    preview(&code.text)
-                )
-            })
-            .collect();
-        self.open = true;
-    }
-    pub fn rows(&self, width: u16) -> Vec<Line> {
-        self.entries
-            .iter()
-            .enumerate()
-            .map(|(index, text)| Line {
-                spans: vec![Span::new(
-                    ellipsize(
-                        &format!("{} {text}", if index == self.selected { '>' } else { ' ' }),
-                        width.saturating_sub(1) as usize,
-                    ),
-                    Style::default(),
-                )],
-                src: 0..0,
-                size: LineSize::Normal,
-            })
-            .collect()
-    }
-    pub fn top(&mut self, height: usize) -> usize {
-        self.viewport.top(self.selected, self.entries.len(), height)
-    }
-    pub fn move_by(&mut self, amount: isize) {
-        let before = self.selected;
-        self.selected = self
-            .selected
-            .saturating_add_signed(amount)
-            .min(self.entries.len().saturating_sub(1));
-        if before != self.selected {
-            self.notice.clear();
-        }
-    }
-    pub fn confirm(
+impl CopyButtons {
+    pub fn event(
         &mut self,
+        event: &Event,
+        buttons: &[Button],
         codes: &[CodeSnippet],
         copy: &mut impl FnMut(&str) -> Result<(), CopyError>,
-    ) {
-        let Some(code) = codes.get(self.selected) else {
-            return;
+        now: Instant,
+    ) -> Option<String> {
+        let Event::Mouse(mouse) = event else {
+            self.armed = None;
+            return None;
         };
-        let result = if code.text.is_empty() {
-            Err(CopyError::Empty)
-        } else {
-            copy(&code.text)
-        };
-        match result {
-            Ok(()) => {
-                self.notice = format!(" · 已复制代码块 {}", self.selected + 1);
-                self.open = false;
+        let hit = buttons
+            .iter()
+            .find(|b| b.row == mouse.row && b.left <= mouse.column && mouse.column < b.right)
+            .copied();
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) if mouse.modifiers.is_empty() => {
+                self.armed = hit
             }
-            Err(error) => self.notice = format!(" · {error}"),
-        }
-    }
-}
-
-fn preview(text: &str) -> String {
-    let Some(line) = text.lines().find(|line| !line.trim().is_empty()) else {
-        return "（空代码块）".into();
-    };
-    let mut out = String::new();
-    let mut width = 0;
-    for cluster in clusters(line) {
-        let clean: String = cluster
-            .chars()
-            .filter_map(|c| {
-                if c == '\t' {
-                    Some(' ')
-                } else if c.is_control() {
-                    None
-                } else {
-                    Some(c)
+            MouseEventKind::Up(MouseButton::Left) => {
+                let pressed = self.armed.take()?;
+                if !mouse.modifiers.is_empty() || hit != Some(pressed) {
+                    return None;
                 }
-            })
-            .collect();
-        let used = text_width(&clean);
-        if width + used > 100 {
-            break;
+                let code = codes.get(pressed.code)?;
+                let result = if code.text.is_empty() {
+                    Err(CopyError::Empty)
+                } else {
+                    copy(&code.text)
+                };
+                self.feedback = Some((pressed.code, result.is_ok(), now + Duration::from_secs(3)));
+                return Some(match result {
+                    Ok(()) => "已复制代码块".into(),
+                    Err(error) => error.to_string(),
+                });
+            }
+            MouseEventKind::Moved => {}
+            _ => self.armed = None,
         }
-        out.push_str(&clean);
-        width += used;
+        None
     }
-    out
+    pub fn expire(&mut self, now: Instant) -> bool {
+        if self
+            .feedback
+            .is_some_and(|(_, _, deadline)| now >= deadline)
+        {
+            self.feedback = None;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn decorate(&self, line: &Line, now: Instant) -> Option<Line> {
+        let (code, success, deadline) = self.feedback?;
+        if now >= deadline || !line.spans.iter().any(|s| s.code_copy == Some(code)) {
+            return None;
+        }
+        let mut marked = line.clone();
+        for span in &mut marked.spans {
+            if span.code_copy == Some(code) {
+                span.text = match (success, span.width()) {
+                    (true, 6) => "Copied",
+                    (false, 6) => "Retry ",
+                    (true, _) => "Done",
+                    (false, _) => "Fail",
+                }
+                .into();
+            }
+        }
+        Some(marked)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent};
     use tmd_core::{Document, RenderOptions, Theme};
+    fn mouse(kind: MouseEventKind, x: u16, y: u16) -> Event {
+        Event::Mouse(MouseEvent {
+            kind,
+            column: x,
+            row: y,
+            modifiers: KeyModifiers::NONE,
+        })
+    }
     #[test]
-    fn confirming_is_the_only_write_and_failure_keeps_the_selection() {
-        let doc = Document::new(
-            "```text\n\t中文  \n\nlast\n```\n\n```\n```",
-            Theme::default(),
+    fn click_copies_exact_code_once_and_keeps_layout() {
+        let doc = Document::new("```text\n\t中文  \n\nlast\n```", Theme::default());
+        let lines = doc.layout(
+            30,
+            RenderOptions {
+                code_copy_buttons: true,
+                ..Default::default()
+            },
         );
-        let lines = doc.layout(20, RenderOptions::default());
-        let mut picker = CodePicker::default();
-        picker.show(doc.code_blocks(), &lines);
-        let mut calls = 0;
-        picker.confirm(doc.code_blocks(), &mut |text| {
-            calls += 1;
-            assert_eq!(text, "\t中文  \n\nlast\n");
-            Err(CopyError::Backend("测试写入失败"))
-        });
-        assert!(picker.open);
-        assert_eq!(calls, 1);
-        assert_eq!(picker.selected, 0);
-        picker.confirm(doc.code_blocks(), &mut |_| {
-            calls += 1;
+        let controls = buttons(&lines, 0, lines.len(), 0, 80);
+        assert_eq!(controls.len(), 1);
+        let b = controls[0];
+        let mut state = CopyButtons::default();
+        let now = Instant::now();
+        let mut received = Vec::new();
+        let mut copy = |s: &str| {
+            received.push(s.to_owned());
             Ok(())
-        });
-        assert!(!picker.open);
-        assert_eq!(calls, 2);
-        assert!(picker.notice.contains("已复制"));
-        picker.show(doc.code_blocks(), &lines);
-        picker.move_by(1);
-        picker.confirm(doc.code_blocks(), &mut |_| {
-            panic!("empty block must not write")
-        });
-        assert!(picker.open);
-        assert!(picker.notice.contains("为空"));
+        };
+        assert!(
+            state
+                .event(
+                    &mouse(MouseEventKind::Down(MouseButton::Left), b.left, b.row),
+                    &controls,
+                    doc.code_blocks(),
+                    &mut copy,
+                    now
+                )
+                .is_none()
+        );
+        assert_eq!(
+            state
+                .event(
+                    &mouse(MouseEventKind::Up(MouseButton::Left), b.left, b.row),
+                    &controls,
+                    doc.code_blocks(),
+                    &mut copy,
+                    now
+                )
+                .as_deref(),
+            Some("已复制代码块")
+        );
+        assert!(
+            state
+                .event(
+                    &mouse(MouseEventKind::Up(MouseButton::Left), b.left, b.row),
+                    &controls,
+                    doc.code_blocks(),
+                    &mut copy,
+                    now
+                )
+                .is_none()
+        );
+        assert_eq!(received, ["\t中文  \n\nlast\n"]);
+        let feedback = state.decorate(&lines[0], now).unwrap();
+        assert!(feedback.plain_text().contains("Copied"));
+        assert_eq!(feedback.width(), lines[0].width());
+        assert!(
+            state
+                .decorate(&lines[0], now + Duration::from_secs(4))
+                .is_none()
+        );
     }
     #[test]
-    fn chooser_defaults_to_visible_code_and_previews_remove_controls() {
-        let doc = Document::new("```\nfirst\n```\n\n```\nsecond\n```", Theme::default());
-        let lines = doc.layout(20, RenderOptions::default());
-        let row = Document::match_line(&lines, &doc.find("second")[0]).unwrap();
-        let mut picker = CodePicker::default();
-        picker.show(doc.code_blocks(), &lines[row..]);
-        assert_eq!(picker.selected, 1);
-        assert_eq!(preview("\x1b]52;bad\x07\t中文"), "]52;bad 中文");
-    }
-
-    #[test]
-    fn chooser_recognizes_empty_and_control_only_blocks_from_their_label() {
-        for container in ["", "> ", "  "] {
-            let prefix = if container == "  " { "- item\n\n" } else { "" };
-            let markdown = format!(
-                "{prefix}{container}```first\n{container}one\n{container}```\n{container}\n\
-                 {container}```empty\n{container}```\n{container}\n\
-                 {container}```control\n{container}\x07\n{container}```\n{container}\n\
-                 {container}```last\n{container}four\n{container}```\n"
-            );
-            let doc = Document::new(&markdown, Theme::default());
-            assert_eq!(doc.code_blocks().len(), 4, "{markdown:?}");
-            for width in [12, 80] {
-                let lines = doc.layout(width, RenderOptions::default());
-                for (label, expected) in [("empty", 1), ("control", 2)] {
-                    let row = lines
-                        .iter()
-                        .position(|line| {
-                            line.spans.iter().any(|span| span.style.dim)
-                                && line
-                                    .spans
-                                    .iter()
-                                    .any(|span| span.code_block == Some(expected))
-                        })
-                        .expect("code language label is visible");
-                    for visible in [&lines[row..=row], &lines[row + 1..=row + 1]] {
-                        let mut picker = CodePicker::default();
-                        picker.show(doc.code_blocks(), visible);
-                        assert_eq!(
-                            picker.selected, expected,
-                            "{container:?} {label} width={width}"
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn chooser_selects_the_next_empty_block_when_no_code_is_visible() {
+    fn hit_boxes_follow_visible_rows_and_sidebar_origin() {
         let doc = Document::new(
-            "```\none\n```\n\nparagraph\n\n```\n```\n\n```\nlast\n```",
+            "# Title\n\n```\nfirst\n```\n\n> ```\n> second\n> ```",
             Theme::default(),
         );
-        let lines = doc.layout(20, RenderOptions::default());
-        let row = Document::match_line(&lines, &doc.find("paragraph")[0]).unwrap();
-        let mut picker = CodePicker::default();
-        picker.show(doc.code_blocks(), &lines[row..]);
-        assert_eq!(picker.selected, 1);
-        // An unlabelled empty block still carries a visible identity.
-        picker.show(doc.code_blocks(), &lines[row + 2..=row + 2]);
-        assert_eq!(picker.selected, 1);
+        let lines = doc.layout(
+            40,
+            RenderOptions {
+                code_copy_buttons: true,
+                large_headings: true,
+            },
+        );
+        let full = buttons(&lines, 0, lines.len(), 0, 80);
+        let shifted = buttons(&lines, 0, lines.len(), 31, 100);
+        assert_eq!(full.len(), 2);
+        for (a, b) in full.iter().zip(&shifted) {
+            assert_eq!(b.left, a.left + 31);
+            assert_eq!(b.right, a.right + 31);
+            assert_eq!(b.row, a.row);
+        }
+        let second = lines
+            .iter()
+            .position(|l| l.spans.iter().any(|s| s.code_copy == Some(1)))
+            .unwrap();
+        let scrolled = buttons(&lines, second, lines.len(), 0, 80);
+        assert_eq!(scrolled.len(), 1);
+        assert_eq!((scrolled[0].code, scrolled[0].row), (1, 1));
+        assert!(buttons(&lines, second + 1, lines.len(), 0, 80).is_empty());
+        assert!(buttons(&lines, 0, lines.len(), 0, 4).is_empty());
     }
 
     #[test]
-    fn chooser_selects_next_code_after_a_viewport_of_only_decorations() {
-        let markdown = format!("```\none\n```\n\n{}\n```\nthree\n```", "---\n\n".repeat(30));
-        let doc = Document::new(&markdown, Theme::default());
-        let lines = doc.layout(80, RenderOptions::default());
-        let mut picker = CodePicker::default();
-        picker.show(doc.code_blocks(), &lines[4..]);
-        assert_eq!(picker.selected, 1);
+    fn release_must_hit_same_button_and_failure_can_retry() {
+        let doc = Document::new("```\none\n```\n\n```\ntwo\n```", Theme::default());
+        let lines = doc.layout(
+            30,
+            RenderOptions {
+                code_copy_buttons: true,
+                ..Default::default()
+            },
+        );
+        let controls = buttons(&lines, 0, lines.len(), 0, 80);
+        let b = controls[0];
+        let now = Instant::now();
+        let down = mouse(MouseEventKind::Down(MouseButton::Left), b.left, b.row);
+        let up = mouse(MouseEventKind::Up(MouseButton::Left), b.left, b.row);
+        let mut modified = up.clone();
+        if let Event::Mouse(ref mut m) = modified {
+            m.modifiers = KeyModifiers::SHIFT;
+        }
+        for released in [
+            mouse(MouseEventKind::Up(MouseButton::Left), b.right, b.row),
+            mouse(
+                MouseEventKind::Up(MouseButton::Left),
+                controls[1].left,
+                controls[1].row,
+            ),
+            modified,
+        ] {
+            let mut state = CopyButtons::default();
+            let mut forbidden = |_: &str| -> Result<(), CopyError> { panic!("unexpected copy") };
+            state.event(&down, &controls, doc.code_blocks(), &mut forbidden, now);
+            assert!(
+                state
+                    .event(&released, &controls, doc.code_blocks(), &mut forbidden, now)
+                    .is_none()
+            );
+        }
+        let mut state = CopyButtons::default();
+        let mut failed = |_: &str| Err(CopyError::Backend("unavailable"));
+        state.event(&down, &controls, doc.code_blocks(), &mut failed, now);
+        assert!(
+            state
+                .event(&up, &controls, doc.code_blocks(), &mut failed, now)
+                .unwrap()
+                .contains("unavailable")
+        );
+        assert!(
+            state
+                .decorate(&lines[0], now)
+                .unwrap()
+                .plain_text()
+                .contains("Retry")
+        );
+        let mut received = Vec::new();
+        let mut copy = |s: &str| {
+            received.push(s.to_owned());
+            Ok(())
+        };
+        state.event(&down, &controls, doc.code_blocks(), &mut copy, now);
+        state.event(&up, &controls, doc.code_blocks(), &mut copy, now);
+        assert_eq!(received, ["one\n"]);
+        assert!(!state.expire(now));
+        assert!(state.expire(now + Duration::from_secs(4)));
+        assert!(state.decorate(&lines[0], now).is_none());
+    }
+
+    #[test]
+    fn cancelled_clicks_and_empty_blocks_do_not_write() {
+        let doc = Document::new("```\n```\n\n```\nx\n```", Theme::default());
+        let lines = doc.layout(
+            30,
+            RenderOptions {
+                code_copy_buttons: true,
+                ..Default::default()
+            },
+        );
+        let controls = buttons(&lines, 0, lines.len(), 0, 80);
+        assert_eq!(controls.len(), 2);
+        let b = controls[1];
+        let now = Instant::now();
+        for cancel in [
+            Event::Resize(50, 20),
+            Event::Key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)),
+            mouse(MouseEventKind::Drag(MouseButton::Left), b.left, b.row),
+            mouse(MouseEventKind::ScrollDown, b.left, b.row),
+        ] {
+            let mut state = CopyButtons::default();
+            let mut forbidden = |_: &str| -> Result<(), CopyError> { panic!("unexpected copy") };
+            state.event(
+                &mouse(MouseEventKind::Down(MouseButton::Left), b.left, b.row),
+                &controls,
+                doc.code_blocks(),
+                &mut forbidden,
+                now,
+            );
+            state.event(&cancel, &controls, doc.code_blocks(), &mut forbidden, now);
+            assert!(
+                state
+                    .event(
+                        &mouse(MouseEventKind::Up(MouseButton::Left), b.left, b.row),
+                        &controls,
+                        doc.code_blocks(),
+                        &mut forbidden,
+                        now
+                    )
+                    .is_none()
+            );
+        }
+        let b = controls[0];
+        let mut state = CopyButtons::default();
+        let mut forbidden = |_: &str| -> Result<(), CopyError> { panic!("empty block copied") };
+        state.event(
+            &mouse(MouseEventKind::Down(MouseButton::Left), b.left, b.row),
+            &controls,
+            doc.code_blocks(),
+            &mut forbidden,
+            now,
+        );
+        assert!(
+            state
+                .event(
+                    &mouse(MouseEventKind::Up(MouseButton::Left), b.left, b.row),
+                    &controls,
+                    doc.code_blocks(),
+                    &mut forbidden,
+                    now
+                )
+                .unwrap()
+                .contains("为空")
+        );
     }
 }

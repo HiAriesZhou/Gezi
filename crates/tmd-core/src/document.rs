@@ -296,6 +296,7 @@ mod tests {
                     width,
                     RenderOptions {
                         large_headings: large,
+                        ..RenderOptions::default()
                     },
                 );
                 let mut previous = 0;
@@ -466,6 +467,7 @@ mod tests {
             for large in [false, true] {
                 let options = RenderOptions {
                     large_headings: large,
+                    ..RenderOptions::default()
                 };
                 let normal = crate::render_with_options(md, width, &theme, options);
                 let indexed = doc.layout(width, options);
@@ -498,6 +500,7 @@ mod tests {
                 width,
                 RenderOptions {
                     large_headings: true,
+                    ..RenderOptions::default()
                 },
             );
             for query in ["needle", "👩‍💻", "中文"] {

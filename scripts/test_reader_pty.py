@@ -412,62 +412,62 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(t.finish(b"\x03"), 130)
         self.assert_restored(t)
 
-    def test_code_chooser_cancel_and_paste_preserve_reading(self):
-        text = "# Codes\n\n```rust\nfirst()\n```\n\n" + "\n\n".join(f"Paragraph {i}" for i in range(30)) + "\n\n```sh\nsecond\n```"
-        t = self.terminal(text=text)
-        t.until(END)
-        t.frame(b"\x1b[F")
-        menu = t.frame(b"c")
-        self.assertIn("代码块".encode(), menu)
-        self.assertIn(b"2/2", menu)
-        self.assertIn(b"rust", menu)
-        self.assertIn(b"sh", menu)
-        # The payload's Enter/q/c must never be executed as chooser actions.
-        self.assertIn("代码块".encode(), t.frame(b"\x1b[200~\rqcc\x1b[201~"))
-        returned = t.frame(b"\x1b")
-        self.assertIn(b"second", returned)
+    def test_copy_button_empty_block_stays_in_document_and_c_is_not_a_view(self):
+        # Clicking an empty block tests the real input path without clipboard IO.
+        t = self.terminal(text="```\n```\n\nAfter code")
+        initial = t.until(END)
+        row = self.pane_rows(initial, 1, 2, 2)[0]
+        self.assertIn("Copy", row)
+        x = row.index("Copy") + 1
+        t.frame(f"\x1b[<0;{x};2M".encode())
+        failed = t.frame(f"\x1b[<0;{x};2m".encode())
+        self.assertIn("为空".encode(), failed)
+        self.assertIn(b"Retry", failed)
+        self.assertIn(b"After code", failed)
+        self.assertIn(b"After code", t.frame(b"c"))
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
-    def test_code_chooser_resize_and_ctrl_c_restore_terminal(self):
+    def test_copy_button_error_remains_visible_while_searching(self):
+        t = self.terminal(text="```\n```\n\nAfter code")
+        initial = t.until(END)
+        row = self.pane_rows(initial, 1, 2, 2)[0]
+        x = row.index("Copy") + 1
+        t.frame(b"/")
+        t.frame(f"\x1b[<0;{x};2M".encode())
+        failed = t.frame(f"\x1b[<0;{x};2m".encode())
+        title = self.pane_rows(failed, 1, 1, 1)[0]
+        self.assertIn("为空", title)
+        self.assertIn(b"Retry", failed)
+        self.assertIn(b"\x1b[24;1H\x1b#5\x1b[0m\x1b[2K/", failed)
+        self.assertEqual(t.finish(b"\x03"), 130)
+        self.assert_restored(t)
+
+    def test_copy_buttons_only_appear_after_native_fallback(self):
+        source = "```text\nexample\n```"
+        native = self.terminal(("--reader", "native"), native=True, text=source)
+        self.assertEqual(native.finish(), 0)
+        self.assertIn(b"example", native.data)
+        self.assertNotIn(b"Copy", native.data)
+        self.assert_restored(native)
+        fallback = self.terminal(("--reader", "native"), text=source)
+        frame = fallback.until(END)
+        self.assertIn(b"Copy", frame)
+        self.assertEqual(fallback.finish(b"q"), 0)
+        self.assert_restored(fallback)
+
+    def test_copy_button_resize_and_ctrl_c_restore_terminal(self):
         t = self.terminal(text="```\ncode\n```")
-        t.until(END)
-        t.frame(b"c")
+        initial = t.until(END)
+        row = self.pane_rows(initial, 1, 2, 2)[0]
+        x = row.index("Copy") + 1
+        t.frame(f"\x1b[<0;{x};2M".encode())
         offset = len(t.data)
         t.resize(4, 1)
         t.until(END, offset)
+        released = t.frame(f"\x1b[<0;{x};2m".encode())
+        self.assertNotIn("已复制".encode(), released)
         self.assertEqual(t.finish(b"\x03"), 130)
-        self.assert_restored(t)
-        t = self.terminal(text="no code blocks here")
-        t.until(END)
-        self.assertIn("未找到代码块".encode(), t.frame(b"c"))
-        self.assertEqual(t.finish(b"q"), 0)
-        self.assert_restored(t)
-
-    def test_code_chooser_defaults_to_visible_empty_block(self):
-        text = "```first\none\n```\n\n```empty\n```\n\n" + "\n\n".join(
-            f"After {i:02}" for i in range(30)) + "\n\n```last\nthree\n```"
-        t = self.terminal(text=text)
-        t.until(END)
-        for _ in range(3):
-            t.frame(b"j")
-        self.assertIn(b"2/3", t.frame(b"c"))
-        # No Enter: this regression never touches the real clipboard.
-        self.assertIn(b"After 00", t.frame(b"\x1b"))
-        self.assertEqual(t.finish(b"q"), 0)
-        self.assert_restored(t)
-
-    def test_code_chooser_selects_next_code_after_decorative_viewport(self):
-        text = "```\none\n```\n\n" + "---\n\n" * 30 + "```\nthree\n```"
-        t = self.terminal(text=text)
-        t.until(END)
-        for _ in range(4):
-            frame = t.frame(b"j")
-        self.assertNotIn(b"one", frame)
-        self.assertNotIn(b"three", frame)
-        self.assertIn(b"2/2", t.frame(b"c"))
-        t.frame(b"\x1b")
-        self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
     @staticmethod
@@ -658,8 +658,7 @@ class ReaderTests(unittest.TestCase):
         confirmed = t.frame(b"\r")
         self.assertIn("匹配 1/40", confirmed.decode())
         self.assertIn("标题目录", confirmed.decode())
-        t.frame(b"c")
-        returned = t.frame(b"\x1b")
+        returned = t.frame(b"c")
         self.assertIn("Tab 目录", self.footer(returned))
         self.assertIn("2/2", returned.decode())
         self.assertIn("匹配 1/40", returned.decode())
@@ -774,7 +773,7 @@ class ReaderTests(unittest.TestCase):
             raise AssertionError("No footer painted")
         return matches[-1].decode()
 
-    def test_contextual_footers_and_help_return_to_originating_chooser(self):
+    def test_contextual_footers_and_help_return_to_originating_view(self):
         text = "# Top\n\n" + "\n\n".join(f"Paragraph {i}" for i in range(40))
         text += "\n\n## Target\n\n```rs\nlet value = 1;\n```\n\n### Last\n"
         t = self.terminal(text=text, cols=79)
@@ -794,12 +793,11 @@ class ReaderTests(unittest.TestCase):
         self.assertIn(b"\x1b[100m    H2 Target", returned)
         self.assertNotIn("目录帮助".encode(), returned)
         self.assertIn(b"Paragraph 0", t.frame(b"o"))
-        code = t.frame(b"c")
-        self.assertIn("Enter 复制", self.footer(code))
-        self.assertNotIn("o 目录", self.footer(code))
-        self.assertIn("代码块帮助".encode(), t.frame(b"?"))
-        self.assertIn("Enter 复制", self.footer(t.frame(b"\x1b")))
-        self.assertIn(b"Paragraph 0", t.frame(b"c"))
+        reading = t.frame(b"c")
+        self.assertIn(b"Paragraph 0", reading)
+        self.assertNotIn("Enter 复制", self.footer(reading))
+        self.assertIn("阅读帮助".encode(), t.frame(b"?"))
+        self.assertIn(b"Paragraph 0", t.frame(b"\x1b"))
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
 
