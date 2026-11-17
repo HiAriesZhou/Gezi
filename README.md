@@ -5,155 +5,89 @@
 
 **Markdown, at home in your terminal.**
 
-A lightweight, terminal-native Markdown reader for macOS Apple Silicon, designed
-for Kaku and developer workflows.
+Gezi (格子) is a lightweight Markdown reader for macOS Apple Silicon, designed
+for Kaku. Read files, search text, navigate headings and render Markdown streams
+with `gezi` or its equivalent short command, `ge`.
 
-Gezi (格子, “grid” in Chinese) takes its name from manuscript paper and the
-terminal’s character grid. Use `gezi` or the shorter `ge`; both run the same reader.
+Current releases are read-only. Editing, undo/redo and saving are planned.
 
-Read files, search text, navigate headings, and read Markdown from a pipe.
-Editing, undo/redo and saving files are planned, not yet available.
+<a id="installation-details"></a>
 
 ## Install
-
-Install the latest release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HiAriesZhou/Gezi/main/install.sh | sh
 ```
 
-Installs `gezi` and `ge` to `~/.local/bin`. See [installation details](#installation-details)
-for PATH setup, other options and a copyable coding-agent prompt.
+Installs both commands to `~/.local/bin` after verifying SHA256. No Rust or sudo
+is needed. [Installation details](docs/installation.md) cover PATH setup, custom
+destinations and source builds. You can also [install with a coding agent](docs/installation.md#install-with-a-coding-agent).
 
 ## Quick start
 
 ```sh
 gezi README.md                       # Open the interactive reader
-ge README.md                         # Short form of the same command
+ge README.md                         # Same reader, shorter command
 cat notes.md | gezi                   # Render a Markdown stream
 gezi --ansi README.md                 # Print once and return to the shell
-gezi --remote-images off README.md    # Load local images only
 gezi --theme neon-tokyo README.md     # Choose a theme
-gezi help
+gezi help                            # Command-line options
 ```
 
-File reading is interactive when stdin and stdout are terminals. Press `q` to
-exit. Use `--reader inline` if you previously configured native output.
+In the reader, press `/` to search, `o` for the outline, `?` for help and `q` to
+exit. Drag text to copy on release, or click **Copy** on a code block to copy its
+original text. See the [reader guide](docs/reader.md) for controls and settings.
 
-| Key | Action |
-| --- | --- |
-| Scroll wheel, ↑ / ↓, `j` / `k` | Scroll |
-| `/`, then Enter; `n` / `N` | Search; next / previous match |
-| `o`; Tab | Toggle the outline; switch panes |
-| Click `Copy` | Copy a complete code block in place |
-| `L` / F2 | Switch English / Chinese (F2 during search input) |
-| `?` | Help for the current view |
+The English/Chinese interface follows Kaku's app language preference, then the
+system, with English as the fallback. Press `L` or F2 to switch for the session,
+or use `--language en|zh|auto`. See [language selection](docs/reader.md#interface-language)
+for the full precedence and exceptions.
 
-Interface language follows Kaku’s macOS app language preference, then the system,
-with English as the fallback. Override it with `--language en|zh|auto`. See the
-[language rules](docs/reader.md#interface-language) for supported sources and limits.
+## Features and limits
+
+- Highlighted code, tables, links, lists and mixed Chinese/English layout.
+- Main-screen reading with search and a heading outline, preserving terminal history.
+- Local and remote PNG, JPEG and static SVG images in the inline reader in direct Kaku.
+- Markdown streams and Claude Code JSONL: `cat events.jsonl | gezi --from claude-json`.
+- Automatic light/dark themes, custom TOML palettes and optional large H1 headings.
+
+Remote images load by default and contact the hosts in the document. Use
+`--remote-images off` for local images only, or `--images off` to disable loading.
+Streams, native output and unsupported terminals use text labels. Clipboard
+writes require local macOS, not SSH. Details: [images](docs/reader.md#images),
+[copying](docs/reader.md#copying) and [output modes](docs/reader.md#output-and-configuration).
 
 ## Update
 
-Update to the latest stable release:
-
 ```sh
-gezi update
-# Equivalent short command:
-ge update
+gezi update                          # Or: ge update
 ```
 
-The updater verifies SHA256, backs up the previous binary and updates both
-commands beside the running executable. It does nothing when the installed
-version is already current or newer. It does not require sudo.
+The updater verifies the download, backs up the old binary and updates both
+commands beside the running executable. Current or newer installations are left
+unchanged. Cargo installations use [Cargo to update](docs/installation.md#source-installation).
 
-The built-in updater supports macOS binary-package installations. For Cargo
-source builds, use the [source installation command](docs/architecture.md#source-installation)
-with `--force`. To switch installation methods, use a separate directory or
-uninstall the Cargo package first.
+## Planned
 
-## Available today
-
-- Markdown rendering with highlighted code, tables, links, lists and mixed Chinese/English layout.
-- Interactive reading with search, a heading sidebar, repeated navigation and a responsive footer.
-- Code copying that preserves indentation and line breaks, without rendered borders.
-- Local and remote PNG, JPEG and static SVG images in direct Kaku sessions, including HTML `<img>` and badge rows.
-- Incremental Markdown output and a Claude Code stream-json adapter: `cat events.jsonl | gezi --from claude-json`.
-- Automatic light/dark themes, custom TOML themes and optional large H1 headings in Kaku.
-- Main-screen reading that preserves terminal history and restores terminal input on exit.
-
-Remote images load by default and contact the hosts in the document. Use
-`--remote-images off` to disable remote loading or `--images off` to disable all
-image loading. Graphics require the inline reader in direct Kaku; native output,
-streams and other terminals keep text labels. Code copying requires local macOS.
-
-## TODO
-
-Editing is planned; these capabilities are not in the current release. In order:
-
-- [ ] Editable Markdown source with cursor movement, selection, Chinese input and undo/redo.
-- [ ] Safe saving, unsaved-change prompts and detection of external file changes.
-- [ ] Switch between source and rendered views while keeping the reading/editing position.
-- [ ] Find and replace, followed by task-list and code-block editing shortcuts.
+- Edit Markdown source, with cursor movement, selection, Chinese input and undo/redo.
+- Save safely, with unsaved-change prompts and external-file change detection.
+- Switch between source and rendered views while preserving position.
+- Find and replace, then task-list and code-block editing shortcuts.
 
 ## Documentation
 
-- [Reader guide](docs/reader.md): navigation, images and optional Kaku integration.
-- [Themes](themes/README.md): built-in palettes and custom themes.
-- [Changelog](CHANGELOG.md): changes by release.
-- [Brand assets](assets/brand/README.md): logos, slogans, social images and usage guidelines.
+| Guide | Contents |
+| --- | --- |
+| [Installation](docs/installation.md) | Install, update, source builds and agent instructions |
+| [Reader](docs/reader.md) | Controls, search, copying, language, images and native Kaku mode |
+| [Themes](themes/README.md) | Built-in palettes and custom TOML schema |
+| [Architecture](docs/architecture.md) | Module boundaries and implementation contracts |
+| [Testing](docs/terminal-testing.md) | Automated checks and real-terminal acceptance |
+| [Releases](docs/release.md) | Packaging, publication and recovery |
+| [Website](docs/website.md) / [Brand](assets/brand/README.md) | Site maintenance and artwork |
 
-For contributors: [architecture](docs/architecture.md),
-[testing](docs/terminal-testing.md), [release maintenance](docs/release.md)
-and [repository rules](AGENTS.md). Bug reports should include the gezi version,
-terminal and a minimal Markdown example.
-
-## Installation details
-
-The installer verifies SHA256, installs to `~/.local/bin`, and keeps a backup when
-replacing an existing binary. No Rust, sudo or shell configuration changes are
-needed. If the directory is not on your PATH, add this line to `~/.zshrc` and run
-it in your current shell:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-To choose a release or directory, set `GEZI_VERSION=v0.1.7` or
-`GEZI_INSTALL_DIR=/absolute/path` on the `sh` command. You can also inspect
-[install.sh](install.sh) or download the archive and checksum from
-[Releases](https://github.com/HiAriesZhou/Gezi/releases/latest).
-Packages are ad hoc signed, without Developer ID signing or notarization.
-
-### Install with a coding agent
-
-Copy the entire prompt below into your coding agent. On GitHub, use the copy
-button in the upper-right corner of the block:
-
-```text
-Install the latest stable Gezi release from
-https://github.com/HiAriesZhou/Gezi on this machine.
-
-1. Check that this is Apple Silicon macOS running in a native arm64 shell.
-   If it is unsupported, stop and explain.
-2. Check existing gezi and ge commands, including aliases, symlinks and their
-   installation method. Do not overwrite another tool or mix Cargo and
-   binary-package installations. If there is a conflict, explain it before
-   making changes.
-3. Download https://raw.githubusercontent.com/HiAriesZhou/Gezi/main/install.sh
-   to a temporary file, inspect it, and run it with sh. Use the default
-   ~/.local/bin destination, keep download checksum verification enabled,
-   and do not use sudo. Preserve existing configuration and unrelated files.
-4. Ensure ~/.local/bin is on PATH. If a shell startup change is needed,
-   explain it and add only the missing entry without replacing existing
-   settings.
-5. Verify gezi --version, ge --version, gezi help, and rendering a short
-   Markdown sample. Confirm that both commands resolve to this installation
-   and report the same version.
-6. Report the installed paths and version, show how to open a Markdown file
-   with gezi or ge, and explain that future updates use gezi update or
-   ge update. Stop and report any error rather than claiming installation
-   succeeded.
-```
+See the [changelog](CHANGELOG.md) for release history and [repository rules](AGENTS.md)
+for contributions. Bug reports should include the Gezi version, terminal and a
+minimal Markdown example.
 
 [MIT License](LICENSE)

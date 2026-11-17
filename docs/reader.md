@@ -4,7 +4,8 @@
 It starts at the beginning, uses the main screen and preserves terminal history.
 Files are currently read-only. Nonempty documents stay open until you exit.
 `ge` is an equivalent short command. Run `gezi help` for command-line options (`--help` and `-h` also work).
-To read a file named `help`, use `gezi ./help` or `gezi -- help`.
+To read a file named `help` or `update`, use an explicit path or `--`, such as
+`gezi ./update` or `gezi -- update`; otherwise these names run CLI commands.
 
 ## Navigation
 
@@ -22,17 +23,14 @@ To read a file named `help`, use `gezi ./help` or `gezi -- help`.
 | Esc | Cancel input or close a list/help; while reading, clear search, then close the sidebar, then exit |
 | Ctrl-C | Exit from any view with status 130 |
 
-Drag directly in the document to select and copy text; no modifier key is needed.
-The footer shows shortcuts for the focused view; it is
-not clickable. Resizing preserves a text/source anchor, not an exact screen row.
+The footer shows shortcuts for the focused view; it is not clickable. Resizing
+preserves a text/source anchor, not an exact screen row.
 
 ## Help
 
-Press `?` for the current view's shortcut reference. Actions are grouped by task,
-with bold shortcut labels and aligned descriptions. Narrow windows stack each
-shortcut above its description; text wraps without splitting character clusters.
-The footer shows the visible line range. Scroll with the wheel or navigation keys;
-`?`, Esc or `q` returns to the view you came from, keeping its position and state.
+Press `?` for grouped shortcuts for the current view. Scroll with the wheel or
+navigation keys; `?`, Esc or `q` returns to the previous view without losing its
+position. Narrow windows place descriptions below their shortcut labels.
 
 ## Interface language
 
@@ -45,10 +43,9 @@ The interface supports English and Simplified Chinese. Automatic selection uses:
    provide neither supported language.
 4. English.
 
-Each preference list uses its first supported English or Chinese entry. Chinese
-locale variants currently use Simplified Chinese. Current Kaku has no active
-built-in language selector; its legacy Lua `config.language` is unused. Gezi reads
-macOS preferences without changing them and does not execute Kaku configuration.
+Each list uses its first supported English or Chinese entry; Chinese variants
+use Simplified Chinese. Gezi reads macOS preferences without changing them or
+executing Kaku's Lua configuration.
 
 Use `gezi --language en article.md` or `gezi --language zh article.md` to override
 automatic selection; `--language auto` restores it for a new process. Press `L`
@@ -56,14 +53,12 @@ or F2 to switch immediately in the reader. While entering a search, `L` remains
 query text and F2 switches language. Switching preserves the reading position,
 query and outline state; the choice lasts only for that process.
 
-Reader controls, notices, code-copy labels, help descriptions and Claude stream
-status use the selected language. Markdown, paths, code and tool output stay
-unchanged. Parser, updater and underlying system diagnostics retain their original
-language. Image fallback labels embedded by the Markdown renderer still use
-Chinese (`图片` / `无法加载`); they are not reader controls. In Chinese, copy buttons show `复制`, `已复制` and `重试` (compact feedback:
-`完成` / `失败`) with the same click area as their English labels.
+Reader controls, help, copy labels and Claude stream status use this language.
+Document text, paths, code and tool output stay unchanged. Parser, updater and
+system diagnostics retain their original language; core image fallback labels
+still use Chinese (`图片` / `无法加载`).
 
-## Search and copying
+## Search
 
 Search is literal and case-sensitive, including Chinese and emoji. It covers
 rendered text, headings and code, including offscreen content. Hidden link URLs,
@@ -80,31 +75,28 @@ Home/End and Backspace/Delete edit it. The visible cursor
 anchors the system input method. Narrow tables may show a match at an ellipsis;
 widen the window to see the text.
 
-In the document pane, drag with the left mouse button to select text directly;
-no modifier key is needed. The selection has a blue background and is copied
-when you release the button. A click without a drag leaves the clipboard alone.
-Dragging can span visible lines in either direction, including Chinese and emoji.
-The reader owns this selection so wheel scrolling and the outline remain available
-without terminal configuration changes. Keyboard actions, scrolling and resize
-clear the selection. Dragging outside the document clamps to its visible edge.
+## Copying
 
-Drag-copy uses displayed text and line breaks, including rendered decorations but excluding Copy controls;
-it trims trailing display spaces. For code without wrapping or decorations, use
-the code block’s `Copy` button. Clipboard writes use the same local macOS backend.
+Drag with the left mouse button to select visible text in either direction;
+release to copy. No modifier is needed. Selection uses a blue background and
+handles Chinese, combining marks and emoji. It copies displayed text and line
+breaks, including decorations but excluding Copy controls and trailing display
+spaces. Dragging outside the document stops at its visible edge.
 
-Click `Copy` at the top right of a code block to copy its complete original text.
-The button briefly shows `Copied` on success. Failures show `Retry` and a status
-message; the document and reading position stay in place. `c` no longer opens a
-separate chooser. Very narrow blocks use compact `Copy` / `Done` / `Fail` labels;
-blocks narrower than four columns cannot show a button.
+A click without a drag does not copy. Keyboard input, scrolling and resize cancel
+selection. The reader implements selection itself so the outline and wheel remain
+usable without changing Kaku configuration.
 
-Copying preserves tabs, indentation, trailing spaces and line breaks, with CRLF
-normalized to LF. Markdown fences, display wrapping and rendered borders are
-excluded. Empty blocks leave the clipboard unchanged. A click requires pressing
-and releasing on the same button; dragging, scrolling, resizing or a keyboard
-action cancels it. Clipboard writes are supported only on local macOS, not SSH.
-Buttons appear only in the interactive reader, not plain, streaming or native
-terminal output.
+For original code, click **Copy** at the block's top right (**复制** in Chinese).
+This preserves tabs, indentation, trailing spaces and line breaks, with CRLF
+normalized to LF. It excludes fences, wrapping and borders. Empty blocks leave
+the clipboard unchanged. Success or retry feedback appears in place; no chooser
+opens and the document stays put. Very narrow blocks use compact labels; blocks
+under four columns have no button.
+
+Press and release on the same button. Dragging, scrolling, resizing or a keyboard
+action cancels the click. Both copy methods require local macOS, not SSH, and are
+available only in the interactive inline reader.
 
 ## Heading outline
 
@@ -169,13 +161,10 @@ window still limits the result. `--width` does not change the terminal font.
 Images share the text column's left edge. One-shot and streaming output retain
 their existing width selection.
 
-Code blocks reserve up to two columns on each side, reducing that inset in narrow
-panes. Language labels align with code content. Level-two headings have extra
-separation above them.
-
 To select a reading mode, use `--reader inline|native`
 or set `reader.mode` in `~/.config/gezi/config.toml` (under `$XDG_CONFIG_HOME` when
-set). The command-line option wins. Non-reader output ignores this file.
+set). The command-line option wins; the default is `inline`. If the Gezi file is
+absent, the legacy `tmd/config.toml` is read instead. Non-reader output ignores it.
 
 ### Optional native Kaku mode
 

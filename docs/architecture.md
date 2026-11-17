@@ -71,15 +71,11 @@ Built-in and user TOML themes use the same layout. See the
 
 ## Input and output selection
 
-`gezi help` prints CLI help and exits before theme, terminal or input IO. The
-legacy `--help` and `-h` flags remain supported. `gezi update` (also `ge update`)
-also bypasses rendering and never reads document input. It uses `curl` to resolve
-the latest stable tag from the fixed GitHub release address, validates the exact
-URL and numeric version, and skips equal or older versions. For a newer version,
-`update` runs the bundled installer with a pinned tag and the running executable's
-directory. Download verification, locking, command ownership and rollback remain
-in the installer. No remote shell script is downloaded or executed.
-To open files named `help` or `update`, use an explicit path or `--`.
+`help` and `update` bypass rendering and document input. The updater resolves a
+fixed GitHub release URL, validates the numeric version and runs the bundled
+installer with a pinned tag in the executable's directory. The installer owns
+download verification, locking, command ownership and rollback; the updater
+never downloads a remote shell script. See [installation](installation.md).
 
 | Condition | Output |
 | --- | --- |
@@ -155,26 +151,16 @@ range and line number. Repeated and empty titles retain distinct identities.
 `heading_line` maps ranges to layout lines, skipping preceding separators rather
 than searching by title.
 
-CLI `View` separates reading, query input, outline and help with
-its return origin. Sidebar visibility and keyboard focus are independent. At 80
-columns, outline and ordinary-size text use separate column ranges; narrower
-windows temporarily show a full-page outline without losing split-view focus.
-Enter keeps sidebar focus after jumping, but closes a full-page list. Tab switches
-panes; wheel routing uses pointer position without changing keyboard focus.
-Clipping respects character clusters.
+CLI `View` separates reading, query input, outline and help. Document position,
+outline selection and keyboard focus are independent; temporary views retain
+their return state. `reader_outline` owns selection/current-section markers;
+`reader_ui` owns viewports, footers and timed feedback. The reader guide defines
+[outline behavior](reader.md#heading-outline) and [content width](reader.md#output-and-configuration).
 
-`reader_outline` keeps selection and current section separately, drawn as a theme
-background and leading bar. `reader_ui` shares list viewports, width-aware footers
-and timed feedback. Temporary views preserve document and list positions. Tiny
-window states retain the original anchor for later expansion.
-
-The inline reader defaults to at most 100 content columns, bounded by the document
-pane with two margin columns per side when space permits. `--width` overrides the
-default, including wider columns, within that bound. The content is centered in
-the pane. Tiny windows reduce the margin. CLI-only, unmapped prefix spans position
-text and images together; separators stay empty so heading destinations remain
-distinguishable. Double-size lines use half as many prefix cells and an even
-physical inset. One-shot and streaming layouts do not receive these margins.
+CLI-only, unmapped prefix spans center text and images together. Separators stay
+empty so heading destinations remain distinguishable. Double-size lines use
+half as many prefix cells and an even physical inset. One-shot and streaming
+layouts do not receive these margins.
 
 Cache at most full-width and sidebar layouts for one window size, moving ownership
 rather than cloning the document. Resize invalidates them. The document, theme
@@ -217,34 +203,19 @@ echoed controls. On failure, clean up any unmatched half before restoring termio
 This lifecycle differs from both raw reading and non-raw streaming; do not share
 a session guard across them.
 
-## Source installation
-
-The Cargo package name is `tmd-cli`; the installed commands are `gezi` and `ge`:
-
-```sh
-cargo install --git https://github.com/HiAriesZhou/Gezi.git --locked tmd-cli
-```
-
-Cargo installs both commands in `~/.cargo/bin`. Use `--force` to reinstall.
-The built-in `update` command replaces a binary-package installation beside the
-running executable; it does not update a Cargo installation. Use a separate
-directory when switching methods, because the installer refuses to overwrite a
-`ge` file it did not install.
-
 ## Verification
 
-Rust tests, snapshots, PTY protocol checks and real-terminal acceptance provide
-different evidence. See [testing](terminal-testing.md) and [releases](release.md).
-This document describes current implementation; plans and review records stay
-outside the repository.
+See [testing](terminal-testing.md) for automated and real-terminal checks,
+[releases](release.md) for packaging, and [installation](installation.md#source-installation)
+for source builds. This document describes current implementation; plans and
+review records stay outside the repository.
 
 ## Interface language
 
 Language detection and UI text belong to `tmd-cli::i18n`; core layout stays
 locale-independent. The CLI reads exact macOS preference domains through
 CoreFoundation so a global preference is not mistaken for a Kaku override.
-Explicit `--language` wins, followed by Kaku app preferences, system preferences,
-locale environment and English. Only English and Simplified Chinese are supported.
+Language precedence and coverage are defined in the [reader guide](reader.md#interface-language).
 
 The current language is local to the UI thread. Reader redraws resolve labels
 at paint time, including code-copy feedback, without relaying out document text.

@@ -22,8 +22,8 @@ Keep the version label and rendered specimen consistent when updating it.
 
 ## Deployment
 
-Use the same Vercel account and team as the other product sites. Link this
-repository to the `gezi` project, then deploy a preview:
+Use the existing `gezi` Vercel project and verify the selected account and team
+before linking or deploying a preview:
 
 ```sh
 vercel link --project gezi

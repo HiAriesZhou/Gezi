@@ -1,164 +1,146 @@
-# Terminal testing
+# Testing
 
 ## Automated checks
-
-Run formatting, Clippy and Rust tests, then build the candidate:
 
 ```sh
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo build --release --locked
-python3 scripts/check_stream_pty.py --binary target/release/gezi
-python3 scripts/test_stream_pty.py --binary target/release/gezi
-python3 -B scripts/test_reader_pty.py --binary target/release/gezi
-python3 -B scripts/test_images_pty.py --binary target/release/gezi
+python3 -B scripts/test_site.py
 python3 -B -m unittest discover -s scripts -p 'test_*release.py'
 ```
 
-PTY checks use only Python's standard library and `/bin/bash` on macOS. They do
-not load user shell configuration or save history. Pass `--binary <path>` to test
-a downloaded package instead of a local build.
+For terminal changes, also exercise debug signal/lifecycle behavior:
 
-Image checks use synthetic SVG and a local HTTP server. They cover default
-loading, remote/all-images off, responsiveness during slow requests, cropping,
-sidebar/help transitions and session-owned cleanup. These verify protocol output,
-not actual Kaku rendering.
+```sh
+cargo build --locked
+python3 -B scripts/test_stream_pty.py --binary target/debug/gezi
+```
 
-Streaming probes cover split UTF-8, multiple frames, resize, normal completion and
-INT/TERM/HUP termination by signal, QUIT exit status 131, restoration, and a shell loop stopping after
-keyboard Ctrl-C. Scenarios use observed output rather
-than fixed startup delays, for both Markdown and Claude JSONL. Failures return
-nonzero. Setting `TERM_PROGRAM=Kaku` selects protocol branches; it is not real
-Kaku acceptance.
+Then [build and verify a release package](release.md#building-a-candidate). Its
+checker runs the full terminal suite on the extracted executable:
 
-Signal priority over buffered input is tested directly in the Rust event loop:
-the signal is raised after one frame while input, EOF and a wake remain queued.
-PTY checks cover actual signal delivery and terminal restoration. They do not
-impose a byte limit on a frame already being written or prove instantaneous
-interruption of arbitrarily large frames.
+| Script | Coverage |
+| --- | --- |
+| `test_reader_pty.py` | Navigation, search, copying controls, help, resize and reader lifecycle |
+| `test_images_pty.py` | Image protocols, loading controls, cropping, caches and failure recovery |
+| `check_stream_pty.py` | Markdown/Claude streams, resize, completion and keyboard interruption through a shell |
+| `test_stream_pty.py` | Large-heading lifecycle, signals, startup and terminal restoration |
 
-Updater integration tests run the real `gezi` and `ge` commands from isolated
-binary-package directories with a local download stub. They cover numeric version
-comparison, fixed tag downloads, actual replacement of both commands, installation
-environment overrides, unchanged current/newer versions, local help, open stdin,
-and network/checksum failure propagation. Never test updates against a personal
-installation. Check the live latest-release lookup using a build at least as new
-as the latest public release, so the check cannot downgrade it.
+These scripts use Python's standard library and macOS `/bin/bash`, without user
+shell configuration or history. For focused iteration, run a script directly
+with `--binary <path>` instead of rebuilding and checking the whole package.
 
-CI runs Rust tests and streaming signal/lifecycle checks in debug mode. The full
-terminal suite runs once against the extracted release package; reader, image
-and shell-stream probes are not also repeated against the debug binary. Each
-packaged suite streams its diagnostics and reports its elapsed time.
+[CI](../.github/workflows/ci.yml) runs the complete package suite once, plus the
+debug streaming checks. Each packaged suite streams diagnostics and reports its
+time. Only PRs matching the workflow's explicit documentation allowlist skip the
+Rust/package steps; every main push runs them.
 
-The long-document random small-chunk stress test is excluded from ordinary
-`cargo test`. Daily checks retain long-document line/mixed-byte boundaries and
-randomized short fixtures, including persisted regression seeds. Run the extra
-stress check when changing streaming commitment, parsing or highlighting:
+### Stress and regression coverage
+
+Ordinary Rust tests retain long-document line/mixed-byte boundaries, randomized
+short fixtures and persisted failure seeds. Run the extra long-document random
+small-chunk stress test when changing streaming commitment, parsing or highlighting:
 
 ```sh
 cargo test -p tmd-core streaming_long_document_matches_a_full_render -- --ignored
 ```
 
-Installer tests use isolated destinations and
-mock downloads to verify failed checksums, backups, repeat installation and
-atomic replacement. After changing installation, also install an official Release
-into a temporary directory; do not overwrite the personal installation.
+The Rust event-loop test raises a signal after one frame while input, EOF and a
+wake remain queued. PTY tests exercise actual signal delivery and restoration;
+they do not prove instantaneous interruption of an arbitrarily large frame
+already being written. INT/TERM/HUP terminate by signal; QUIT returns 131.
 
-Release candidates must pass [archive verification](release.md#building-a-candidate)
-using the actual packaged executable, including version, help, rendering and PTY
-behavior.
+Large-heading interruption tests must send the terminal's actual VINTR character,
+not only SIGINT. They check NOFLSH/no-echo, retained canonical mode and ISIG, DEC
+line-size reset and termios restoration. Rust tests also inject failures and
+cancellation at output byte boundaries.
+
+### Installation and update checks
+
+Tests use temporary installations and local download stubs for checksums, command
+ownership, backups, rollback, signals and both executable aliases. Release tests
+simulate GitHub responses; they create no remote releases or tags.
+
+After changing installation, also check an official Release in a temporary
+directory. Never update a personal installation for a test. Use a build at least
+as new as the latest public release when checking live latest-version lookup.
 
 ## Reader performance
 
-Use a release build or an extracted download:
+Use a release build or an extracted package on an idle machine:
 
 ```sh
 python3 -B scripts/benchmark_reader.py --binary target/release/gezi > /tmp/gezi-reader-performance.json
 ```
 
-The isolated 80x24 PTY uses a 1 MiB synthetic Chinese/English document and 1,000
-headings. It samples each action 100 times, including the first, and reports first,
-P50, P95 and maximum latency for sidebar toggling, jumps, focus and search. P95
-above 100 ms fails. Record hardware on an idle machine and keep results outside
-the repository; shared CI contention is not a product performance measurement.
+The 80×24 pseudo-terminal uses a 1 MiB Chinese/English document with 1,000 headings
+and 100 samples per action. It reports first-use, median, 95th-percentile and
+maximum latency; a 95th percentile above 100 ms fails. Record hardware with the
+results outside the repository. Timing ends at synchronized-output completion
+and excludes Kaku painting, input methods and human input. Shared CI contention
+is not a product performance measurement.
 
-The reader reuses two layouts for a window size without copying the full document.
-Initial sidebar opening and resizing still require layout. Timings end at the
-synchronized-output end marker and exclude Kaku painting, IME and human input.
+## Real-terminal acceptance
 
-## Real-terminal checks
+Protocol tests do not prove visual rendering or clipboard compatibility. Use the
+candidate in direct Kaku on macOS, record the binary version and terminal, and
+report automated results, visual checks and maintainer acceptance separately.
+Do not call a simulated handshake or `TERM_PROGRAM=Kaku` real Kaku acceptance.
 
-PTY success does not prove smooth painting, font alignment or terminal
-compatibility. The current acceptance environment is Kaku on macOS:
+Use the [reader guide](reader.md) as the behavior reference. Exercise these
+boundaries rather than repeating its entire control reference:
+
+| Area | Acceptance checks |
+| --- | --- |
+| Lifecycle | Launch from different window positions; start at the document beginning without clearing history or using the alternate screen. Nonempty short files stay open. Test q/Esc, Ctrl-C and normal typing after exit. Pasted q must not exit. |
+| Navigation and outline | Repeated jumps, duplicate/empty H1 through H6 titles, long titles and no headings. Test 79/80-column layout transitions, pointer-based wheel routing, independent selection/current-section markers and focus preservation. On a 1,200-heading sample, navigate for 30 seconds and watch for stalls or drift. |
+| Search | Use a Chinese input method; check candidate position, live counts, current/all-match contrast, same-line repetitions, cross-style and wrapped text. Try no matches, literal q, n/N wrapping, cancellation after resize, and search/outline/help transitions. |
+| Help and feedback | Check both languages and light/dark themes at 80×24, 40×12, 24-column and 4×1 sizes. Verify scrolling, return position, valid shortcuts and three-second feedback without content/cursor movement. |
+| Images | Use synthetic local SVG and disposable remote URLs. Check crop/placement through scroll, resize, help, outline and search; loading controls; text alignment; and cleanup that leaves unrelated terminal images alone. |
+| Configuration | Check command-line overrides, invalid settings, themes, language switching and native fallback. Plain output, pipes and Claude JSONL must retain their documented behavior. |
+
+### Clipboard
+
+Save personal clipboard content before manual testing and use disposable text.
+Drag without modifiers in both directions across visible lines, with Chinese,
+combining marks, emoji, tables, large H1 rows and the outline open/closed. The blue
+selection must match the copied display text. Click, cancel, scroll or resize
+must not copy; keyboard and wheel navigation must remain usable.
+
+Click Copy on code with tabs, trailing spaces, Chinese, long lines, CRLF, nested
+blocks and empty content. Compare with the original snippet; check in-place
+success/error feedback, narrow blocks and outline offsets. A resize between
+press and release cancels the click. Copy buttons must not start drag selection;
+selection across a header must exclude button labels. Pressing `c` must not open
+a chooser. Automated tests use fake clipboard backends or cancel before release.
+
+### Streaming and large headings
 
 ```sh
 python3 scripts/slowcat.py fixtures/long.md | target/release/gezi
 target/release/gezi --width 80 fixtures/cjk-table.md
-```
-
-Check flicker, Chinese/emoji table alignment, progressive code output and active
-height. Resize while streaming: only the active region should reflow. Repeat and
-press Ctrl-C; verify upstream termination, cursor restoration and normal typing.
-Record the actual terminal, executable version and result. Report automated
-checks, visual acceptance and maintainer acceptance separately; mark environments
-that were not exercised.
-
-## Large headings
-
-These noninteractive-stdin commands exercise one-shot output. Test the interactive
-reader separately below. Use direct Kaku with at least 40 columns and 10 rows:
-
-```sh
 target/release/gezi --large-headings fixtures/large-headings.md < /dev/null
-target/release/gezi fixtures/large-headings.md < /dev/null
 target/release/gezi --large-headings --width 20 fixtures/large-headings.md < /dev/null
 ```
 
-Keep screenshots and acceptance records outside the repository.
+Check progressive output, flicker, Chinese/emoji alignment and resize: only the
+active stream area reflows. Ctrl-C must stop the upstream pipeline and restore
+normal input. The redirected-stdin commands exercise one-shot output; also open
+the same file interactively and scroll across viewport edges.
 
-1. Only top-level ATX/Setext H1 doubles in width and height. H2-H6, nested H1, body, code and tables stay ordinary. H1 separators remain full-width and single-height.
-2. Check Chinese, combining characters, emoji, styles and links. At 20 columns, wrapping must not split clusters or overlap. Upper/lower halves remain paired in scrollback.
-3. After completion, run `printf 'normal prompt test\n'`. The prompt and later text must use ordinary size, including after resize. Static history does not promise reflow.
-4. Copy a large heading into a plain-text editor and record duplication. Both physical halves contain the same text; this disclosed limitation is not lossless copying.
-5. Repeat the sample in a temporary file outside the repository. Interrupt one-shot output with Ctrl-C; expect status 130, normal prompt size and no orphaned half-heading.
-6. `--ansi`, redirected output, piped input and tmux/screen retain ordinary headings. Do not spoof terminal variables and call it real display acceptance.
+Only top-level H1 should enlarge. Check complete upper/lower pairs, ordinary body
+text, small-window/capability fallback and `printf 'normal prompt test\n'` after
+exit. Interrupt a temporary sample and verify status 130 with no orphaned half.
+Copy a large heading into a text editor to check the documented duplicate-half
+limitation. `--ansi`, pipes and tmux/screen retain ordinary headings.
 
-Stream PTY tests cover static completion, interruption after observed heading
-output, small windows and capability fallback. Rust tests inject errors or
-cancellation at every output byte boundary. VINTR regressions write `0x03` to the
-controlling terminal and verify temporary NOFLSH/no-echo, retained canonical/ISIG,
-and restoration of original termios. HUP, QUIT and TERM are also covered. These
-prove lifecycle/protocol behavior; Kaku visuals and copying need separate checks.
+### Native Kaku integration
 
-## Main-screen reader
-
-Use the candidate binary for every scenario:
-
-1. Launch `gezi fixtures/acceptance.md` from the top, middle and bottom of a window. Invocation context appears above the beginning of the document; no alternate screen is used.
-2. Scroll continuously without loading more pages. Check Home/End, Shift-drag selection, persistent short documents and enlargement. Help can scroll and returns to the old position. Pasting text containing `q` does not exit.
-3. With `--large-headings fixtures/large-headings.md`, scroll across viewport edges and resize. No half-heading remains and body text never becomes large.
-4. Shrink to a narrow or one-row window, then expand. Anchors and exit remain usable. `q`/Esc restores the prompt; Ctrl-C returns 130. Run another command to check echo and inspect preserved shell history.
-5. Search with the system Chinese IME. Candidate placement follows the input cursor. Typing previews and counts matches, with yellow highlights and a cyan, bold, underlined current match. Enter keeps the search; n/N then wraps. Esc restores the prior search and position. Check same-line repetitions, cross-style matches and light/dark themes. A typed q stays query text. Cancel after resize restores location. Check soft-wrapped words, no matches, help/search Esc behavior and Ctrl-C recovery.
-6. Click Copy on blocks with tabs, Chinese and long lines, then compare the original text. Check CRLF normalization, nested code, trailing newline and empty-block clipboard preservation. Save personal clipboard content before manual tests; automated tests use fake backends. Cancel, scroll, search and exit must not alter it. Check in-place Copied/Retry feedback, narrow widths and outline offsets. Press c to confirm that no chooser opens. Resize between mouse-down and mouse-up to verify cancellation.
-7. Check configuration, CLI overrides and invalid settings. ANSI, redirection, Markdown pipes and Claude JSONL keep their behavior.
-8. Use temporary Kaku configuration outside the repository for native integration; never overwrite personal settings. Successful preflight prints and positions at the beginning. Missing adapters or insufficient history fall back before output. Terminal scrolling/copying work and no extra input reaches the shell.
-9. Open the outline with `o`. Include H1-H6, Setext, duplicate and empty headings; omit examples in quotes, lists and code. Moving selection leaves the document still. Repeat Down/Enter three times in a wide window without reopening or switching focus. Tab changes focus; Esc/q/o closes the focused outline. Selection background and current-section bar are independent; document scrolling updates only the latter. Inactive selection is muted. Check both themes, cluster-safe truncation and source lines for repeated titles.
-10. At 80 columns the panes sit side by side; at 79 they become a full-page outline. Expansion restores selection and focus. Switching between short and long titles never inserts detail rows in the sidebar or changes page step. Wheel routing follows the pointer without changing focus. Opening the sidebar uses ordinary headings; closing restores requested large headings. Text never overwrites the separator.
-11. Help in outline views preserves selection and list scroll on return. Footers show only valid actions at 80x24 and 40x12. Shrink to 24 columns and 4x1, then restore: destinations and search remain valid.
-12. Empty-outline, jump and copy-success feedback disappears after three seconds; copy errors also expire after three seconds. Feedback never moves content or the IME cursor. On a 1,200-heading sample, navigate for 30 seconds and record stalls, artifacts or selection drift. PTY timing is not visual acceptance.
-13. Run `gezi help` directly and with stdin held open. It prints CLI help and exits without entering the reader. `--help` and `-h` remain supported; a file named `help` can be opened as `./help` or after `--`.
-
-Do not report a simulated native handshake as real adapter acceptance when
-connection failed or the adapter was not installed.
-
-## Direct text selection
-
-Drag in the document without modifiers, in both directions and across lines.
-Check Chinese, combining marks, emoji, large H1 rows, code and tables, with the
-outline open and closed. The blue selection must match the copied displayed text;
-mouse release copies once. A click, cancelled drag or resize must not copy. Wheel
-and keyboard navigation must remain usable. Use disposable clipboard content for
-manual acceptance; automated selection tests inject a fake backend and PTY tests
-cancel before release or use an unsupported remote environment. Check that Copy button gestures never start text selection and selecting across a header excludes button labels. Verify light/dark themes in real Kaku separately from PTY
-protocol checks. Terminal-native selection shortcuts are not reader selection.
+Use temporary configuration outside the repository; preserve personal settings.
+Follow [native setup](reader.md#optional-native-kaku-mode). Check successful
+positioning at the beginning, terminal scrolling/selection, and fallback before
+output when the adapter is missing or history is insufficient. No extra input
+should reach the shell. If the adapter cannot connect, report that gap rather
+than claiming compatibility. Keep screenshots and acceptance records outside
+the repository.
