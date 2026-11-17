@@ -370,6 +370,55 @@ mod tests {
     }
 
     #[test]
+    fn signal_after_a_frame_preempts_buffered_input_and_end() {
+        struct InterruptAfterFrame<'a> {
+            signal: &'a AtomicI32,
+            bytes: Vec<u8>,
+        }
+        impl Write for InterruptAfterFrame<'_> {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                self.bytes.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                self.signal.store(2, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let (sender, received) = mpsc::channel();
+        for n in 0..128 {
+            sender
+                .send(Event::Input(format!("paragraph-{n}\n\n").into_bytes()))
+                .unwrap();
+        }
+        sender.send(Event::End).unwrap();
+        // A wake placed behind all input must not delay the separate flag.
+        sender.send(Event::Wake).unwrap();
+        let signal = AtomicI32::new(0);
+        let mut out = InterruptAfterFrame {
+            signal: &signal,
+            bytes: Vec::new(),
+        };
+        let outcome = stream(
+            &received,
+            &signal,
+            &mut out,
+            |width| Box::new(tmd_core::Streamer::new(width, tmd_core::Theme::default())),
+            Some(80),
+        )
+        .unwrap();
+        assert_eq!(outcome, Outcome::Signalled(2));
+        let remaining: Vec<_> = received.try_iter().collect();
+        assert_eq!(remaining.len(), 129, "only the first input was consumed");
+        assert!(matches!(remaining[127], Event::End));
+        assert!(matches!(remaining[128], Event::Wake));
+        let output = String::from_utf8(out.bytes).unwrap();
+        assert!(output.contains("paragraph-0"));
+        assert!(!output.contains("paragraph-1"));
+    }
+
+    #[test]
     fn frames_redraw_only_the_active_area() {
         let mut area = ActiveArea::default();
         let first = drawn(&mut area, &frame(&[], &["a1", "a2"]), 24);

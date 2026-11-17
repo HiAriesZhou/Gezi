@@ -53,8 +53,8 @@ jobs:
         if: steps.changes.outputs.full == 'true'
         with:
           cache-workspace-crates: 'true'
-          # Cargo still checks source fingerprints; rotate snapshots as source changes.
-          key: ${{ hashFiles('crates/**', 'fixtures/**', 'themes/**') }}
+          # Keep dependency caches reusable across source edits. The action keys
+          # toolchain/dependency changes; Cargo checks workspace source changes.
       - run: cargo fmt --all --check
         if: steps.changes.outputs.full == 'true'
       - run: cargo clippy --all-targets -- -D warnings
@@ -63,13 +63,9 @@ jobs:
         if: steps.changes.outputs.full == 'true'
       - run: cargo build --locked
         if: steps.changes.outputs.full == 'true'
-      - run: python3 scripts/check_stream_pty.py --binary target/debug/gezi
-        if: steps.changes.outputs.full == 'true'
+      # Exercise signal/terminal restoration in both optimization modes. The
+      # complete reader, image and streaming suites run once on the package.
       - run: python3 scripts/test_stream_pty.py --binary target/debug/gezi
-        if: steps.changes.outputs.full == 'true'
-      - run: python3 -B scripts/test_reader_pty.py --binary target/debug/gezi
-        if: steps.changes.outputs.full == 'true'
-      - run: python3 -B scripts/test_images_pty.py --binary target/debug/gezi
         if: steps.changes.outputs.full == 'true'
       - run: python3 -B -m unittest discover -s scripts -p 'test_*release.py'
         if: steps.changes.outputs.full == 'true'

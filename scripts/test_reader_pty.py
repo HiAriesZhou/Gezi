@@ -1035,7 +1035,9 @@ class ReaderTests(unittest.TestCase):
         t = self.terminal(text=text, cols=79)
         t.until(END)
         durations = []
-        for i in range(50):
+        # First use and repeated reopen/jump cycles are regression coverage;
+        # sustained timing belongs in benchmark_reader.py, not every CI run.
+        for _ in range(5):
             began = time.monotonic()
             t.frame(b"o")
             t.frame(b"\x1b[F")
@@ -1050,7 +1052,7 @@ class ReaderTests(unittest.TestCase):
             durations.append(time.monotonic() - began)
         self.assertEqual(t.finish(b"q"), 0)
         self.assert_restored(t)
-        print(f"\nOutline 1200 headings / 50 cycles: max={max(durations):.3f}s "
+        print(f"\nOutline 1200 headings / {len(durations)} cycles: max={max(durations):.3f}s "
               f"mean={sum(durations)/len(durations):.3f}s (PTY protocol only)", file=sys.stderr)
 
     def test_gezi_config_wins_and_legacy_config_remains_supported(self):

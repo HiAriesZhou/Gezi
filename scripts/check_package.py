@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 from package_release import checked_commit, package_name, verify_package
 from release_metadata import ReleaseError, version_and_notes
@@ -39,12 +40,17 @@ def smoke(root, directory):
         if "中文".encode() not in rendered or len(rendered) < 100:
             raise ReleaseError("Installed executable did not render the Markdown fixture")
         for script in ("test_reader_pty.py", "test_images_pty.py", "check_stream_pty.py", "test_stream_pty.py"):
-            result = subprocess.run([sys.executable, "-B", str(root / "scripts" / script),
-                                     "--binary", str(binary)], env=env, timeout=180,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            started = time.monotonic()
+            print(f"Checking installed package: {script}", flush=True)
+            try:
+                # Stream diagnostics, including output before a timeout, so a
+                # failed suite can be identified without rerunning the build.
+                result = subprocess.run([sys.executable, "-B", str(root / "scripts" / script),
+                                         "--binary", str(binary)], env=env, timeout=180)
+            finally:
+                print(f"{script}: {time.monotonic() - started:.2f}s", flush=True)
             if result.returncode:
-                detail = result.stderr[-2000:].decode(errors="replace")
-                raise ReleaseError(f"Installed package {script} failed: {detail}")
+                raise ReleaseError(f"Installed package {script} failed (exit {result.returncode})")
     return "Installed package version/help/render and reader/image/stream PTY checks passed"
 
 

@@ -260,11 +260,34 @@ mod tests {
     #[test]
     fn cache_is_bounded() {
         let mut cache = Cache::default();
-        for n in 0..(MAX_CACHED_LINES + 10) {
+        highlight_with(&mut cache, "rust", &["let seed = 0;"], true);
+        let seed = cache.entries.pop().unwrap();
+        let checkpoint = &seed.lines[0];
+        // Populate the boundary directly: incremental highlighting has its own
+        // tests. Finding a prefix in 20,000 unrelated blocks on every insertion
+        // made setup quadratic without testing any additional eviction behavior.
+        cache.entries = (0..MAX_CACHED_LINES)
+            .map(|n| Entry {
+                syntax: seed.syntax.clone(),
+                dark: seed.dark,
+                lines: vec![Checkpoint {
+                    line: format!("let x{n} = {n};"),
+                    pieces: checkpoint.pieces.clone(),
+                    parse: checkpoint.parse.clone(),
+                    highlight: checkpoint.highlight.clone(),
+                }],
+            })
+            .collect();
+        for n in MAX_CACHED_LINES..(MAX_CACHED_LINES + 10) {
             let line = format!("let x{n} = {n};");
             highlight_with(&mut cache, "rust", &[line.as_str()], true);
         }
         let lines: usize = cache.entries.iter().map(|e| e.lines.len()).sum();
         assert_eq!(lines, MAX_CACHED_LINES);
+        assert_eq!(cache.entries[0].lines[0].line, "let x10 = 10;");
+        assert_eq!(
+            cache.entries.last().unwrap().lines[0].line,
+            format!("let x{} = {};", MAX_CACHED_LINES + 9, MAX_CACHED_LINES + 9)
+        );
     }
 }

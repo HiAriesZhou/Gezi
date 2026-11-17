@@ -304,74 +304,10 @@ class StreamingSignals(unittest.TestCase):
                         os.close(slave)
                         os.close(master)
 
-    def test_signal_is_not_queued_behind_buffered_input(self):
-        import errno
-        import fcntl
-        import pty
-        import select
-        import signal
-        import struct
-        import subprocess
-        import termios
-        import threading
-
-        master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
-        child = subprocess.Popen(
-            [str(BINARY), "--theme", "default-dark"],
-            stdin=subprocess.PIPE, stdout=slave, stderr=slave,
-            env=dict(os.environ, TERM_PROGRAM="Kaku", TERM="kaku"))
-        os.close(slave)
-        # A fast producer can queue far more input than one frame renders,
-        # and may have closed its end before the signal arrives.
-        payload = b"".join(b"## Section %d\n\nParagraph %d with some text.\n\n" % (i, i)
-                           for i in range(100000))
-
-        def produce():
-            with contextlib.suppress(BrokenPipeError):
-                child.stdin.write(payload)
-                child.stdin.close()
-
-        producer = threading.Thread(target=produce, daemon=True)
-        producer.start()
-        received = bytearray()
-
-        def read_output(timeout):
-            if not select.select([master], [], [], timeout)[0]:
-                return child.poll() is None
-            try:
-                chunk = os.read(master, 65536)
-            except OSError as error:
-                if error.errno == errno.EIO:
-                    return False
-                raise
-            received.extend(chunk)
-            return bool(chunk)
-
-        try:
-            deadline = time.monotonic() + 5
-            while b"\x1b[?2026l" not in received:
-                self.assertLess(time.monotonic(), deadline, "no initial stream frame")
-                self.assertTrue(read_output(.05), "renderer exited before receiving a signal")
-            child.send_signal(signal.SIGINT)
-            before_signal = len(received)
-            deadline = time.monotonic() + 10
-            while read_output(.05):
-                self.assertLess(time.monotonic(), deadline, "signal did not stop the renderer")
-            child.wait(timeout=2)
-            self.assertEqual(child.returncode, -signal.SIGINT)
-            # Rendering the whole backlog writes megabytes; a signal handled
-            # before queued input stops after at most a few frames. Bytes,
-            # not elapsed time, keep this independent of build speed.
-            self.assertLess(len(received) - before_signal, 1 << 20,
-                            "signal waited behind queued input")
-            self.assertGreater(received.rfind(b"\x1b[?25h"), received.rfind(b"\x1b[?25l"))
-        finally:
-            if child.poll() is None:
-                child.kill()
-                child.wait()
-            producer.join(timeout=2)
-            os.close(master)
+    # Queue priority is checked deterministically in Rust by
+    # stream::tests::signal_after_a_frame_preempts_buffered_input_and_end.
+    # A PTY byte limit cannot distinguish queued work from a single large
+    # frame already being written when the signal arrives.
 
     def test_keyboard_interrupt_stops_calling_shell_loop(self):
         import pty
