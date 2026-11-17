@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.15
+
+- Preview basic Mermaid flowcharts, sequence, state, class, entity relationship and mindmap diagrams in the inline reader in direct Kaku, without a browser or external service.
+- Press `m` to switch the first visible Mermaid block between native preview and source; searching shows source and Copy preserves the complete code.
+- Keep source visible for unsupported diagram types, rendering failures and non-graphics output. Native previews differ from the official Mermaid renderer.
+- Bound background rendering with cancellation, deadlines, input/output limits and sampled worker memory usage; preserve decorative reading positions when search changes diagram layout.
+
 ## 0.1.14
 
 - Read shortcuts in groups with aligned, bold keys, clearer spacing and a visible scroll position in both English and Chinese.
