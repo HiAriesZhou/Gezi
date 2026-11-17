@@ -22,7 +22,7 @@ for i,(name,duration,crop) in enumerate(parts):
     filters.append(f'[0:v]trim=start={start}:duration={duration},setpts=PTS-STARTPTS,{crop},scale=1760:900:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x202522,setsar=1,fps=30[v{i}]')
 # Finish on the actual diagram in the reading view after the outline closes.
 start=shots['outline']+11
-filters.append(f'[0:v]trim=start={start}:duration=5,setpts=PTS-STARTPTS,crop=min(iw\\,2200):min(ih-180\\,1500):(iw-ow)/2:ih-oh-90,scale=1760:900:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x202522,setsar=1,fps=30[v4]')
+filters.append(f'[0:v]trim=start={start}:duration=5,setpts=PTS-STARTPTS,crop=min(iw\\,2200):min(ih-180\\,1500):(iw-ow)/2:ih-oh-150,scale=1760:900:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x202522,setsar=1,fps=30[v4]')
 filters.append('[v0][v1][v2][v3][v4]concat=n=5:v=1:a=0[cut]')
 # Branding lives outside the real UI area.
 captions=[('Read the document beside the code.',0,12),('Search text. Jump between headings.',12,27),('Gezi | Markdown, at home in your terminal.',27,33)]
