@@ -6,3 +6,11 @@
 /docs/TASKS.md
 /docs/research.md
 /docs/plans/
+
+# Private capture and review artifacts; regenerate with scripts/launch.
+/launch/raw/
+/launch/output/
+/launch/reports/
+/launch/storyboard.md
+
+/scripts/launch/__pycache__/
