@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.13
+
+- Use English or Chinese interface text, following the Kaku app language preference, then the system language, with English as the fallback.
+- Press L or F2 in the reader to switch languages immediately, or choose one with --language en|zh|auto.
+
+## 0.1.12
+
+- Drag text with the left mouse button and release to copy it automatically, without holding Shift or pressing another key.
+
+## 0.1.11
+
+- Click Copy at the top right of a code block to copy its original contents, with success or retry feedback in place of the button.
+- Remove the `c` code chooser shortcut.
+
 ## 0.1.10
 
 - Preview literal search as you type, highlight all visible matches and distinguish the current match. Enter keeps the search; Esc restores the previous search and reading position.
