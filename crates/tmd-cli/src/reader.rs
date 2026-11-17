@@ -420,6 +420,7 @@ enum Action {
     Confirm,
     Focus,
     Language,
+    Mermaid,
 }
 
 fn key_action(key: KeyEvent) -> Option<Action> {
@@ -443,6 +444,7 @@ fn key_action(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('?') => Action::Help,
         KeyCode::Char('/') => Action::Search,
         KeyCode::Char('o') => Action::Outline,
+        KeyCode::Char('m') => Action::Mermaid,
         KeyCode::Char('L') | KeyCode::F(2) if key.kind == KeyEventKind::Press => Action::Language,
         KeyCode::Enter => Action::Confirm,
         KeyCode::Tab | KeyCode::BackTab => Action::Focus,
@@ -507,6 +509,7 @@ fn native_fallback() -> &'static str {
 struct Anchor {
     text: Option<usize>,
     source: usize,
+    source_row: usize,
     image: Option<(usize, u16, u16)>,
 }
 
@@ -520,6 +523,13 @@ impl Anchor {
                     .find_map(|s| s.text_ranges.first().map(|r| r.start))
             }),
             source: line.map_or(0, |l| l.src.start),
+            source_row: line.map_or(0, |line| {
+                lines[..start]
+                    .iter()
+                    .rev()
+                    .take_while(|previous| previous.src == line.src)
+                    .count()
+            }),
             image: line
                 .and_then(|line| line.spans.iter().find_map(|span| span.image_cell))
                 .map(|cell| (cell.index, cell.row, cell.rows)),
@@ -544,7 +554,17 @@ impl Anchor {
                 self.text
                     .and_then(|text| Document::match_line(lines, &(text..text + 1)))
             })
-            .or_else(|| lines.iter().position(|l| l.src.start >= self.source))
+            .or_else(|| {
+                let first = lines.iter().position(|l| l.src.start >= self.source)?;
+                if lines[first].src.start != self.source {
+                    return Some(first);
+                }
+                let count = lines[first..]
+                    .iter()
+                    .take_while(|line| line.src == lines[first].src)
+                    .count();
+                Some(first + self.source_row.min(count.saturating_sub(1)))
+            })
             .unwrap_or_else(|| lines.len().saturating_sub(1))
             .min(last_start(lines, height))
     }
@@ -772,7 +792,9 @@ fn run_with_copy(
             }
             let width = sidebar_width(size.0, outline_open);
             let geometry_changed = images.refresh_geometry();
-            if images.poll().1 || geometry_changed {
+            let source_changed =
+                images.search_sources(view == View::Search || !search.query.is_empty());
+            if images.poll().1 || geometry_changed || source_changed {
                 layouts.invalidate();
             }
             if layouts.update(&mut lines, size, width, || {
@@ -1239,6 +1261,19 @@ fn run_with_copy(
                 }
                 View::Reading => {
                     match action {
+                        Some(Action::Mermaid) => {
+                            if search.query.is_empty()
+                                && let Some(image) = lines[start..end]
+                                    .iter()
+                                    .flat_map(|line| &line.spans)
+                                    .filter_map(|span| span.code_block)
+                                    .find_map(|code| document.code_blocks()[code].preview)
+                            {
+                                images.toggle_source(image);
+                                anchor = Anchor::at(&lines, start);
+                                layouts.invalidate();
+                            }
+                        }
                         Some(Action::Exit) => {
                             if matches!(input, Event::Key(key) if key.code == KeyCode::Esc)
                                 && !search.query.is_empty()

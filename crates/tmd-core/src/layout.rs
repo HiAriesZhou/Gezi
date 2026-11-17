@@ -61,7 +61,7 @@ pub(crate) fn block(ctx: &Ctx, item: &Block, width: usize) -> Vec<Row> {
             }
             rows
         }
-        Block::Code(block) => code::rows(theme, block, width, ctx.copy_buttons)
+        Block::Code(block) => code::media_rows(theme, block, width, ctx.copy_buttons, ctx.images)
             .into_iter()
             .map(|(row, _)| row)
             .collect(),

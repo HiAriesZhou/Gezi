@@ -36,7 +36,8 @@ gezi help                            # Command-line options
 
 In the reader, press `/` to search, `o` for the outline, `?` for help and `q` to
 exit. Drag text to copy on release, or click **Copy** on a code block to copy its
-original text. See the [reader guide](docs/reader.md) for controls and settings.
+original text. Press `m` to switch a visible Mermaid block between preview and source.
+See the [reader guide](docs/reader.md) for controls and settings.
 
 The English/Chinese interface follows Kaku's app language preference, then the
 system, with English as the fallback. Press `L` or F2 to switch for the session,
@@ -48,6 +49,7 @@ for the full precedence and exceptions.
 - Highlighted code, tables, links, lists and mixed Chinese/English layout.
 - Main-screen reading with search and a heading outline, preserving terminal history.
 - Local and remote PNG, JPEG and static SVG images in the inline reader in direct Kaku.
+- Native Mermaid previews for six basic diagram types, with source switching and searching.
 - Markdown streams and Claude Code JSONL: `cat events.jsonl | gezi --from claude-json`.
 - Automatic light/dark themes, custom TOML palettes and optional large H1 headings.
 
@@ -56,6 +58,9 @@ Remote images load by default and contact the hosts in the document. Use
 Streams, native output and unsupported terminals use text labels. Clipboard
 writes require local macOS, not SSH. Details: [images](docs/reader.md#images),
 [copying](docs/reader.md#copying) and [output modes](docs/reader.md#output-and-configuration).
+
+Mermaid previews require the same graphics support; other output retains code.
+See [supported diagrams and limitations](docs/reader.md#mermaid).
 
 ## Update
 

@@ -13,6 +13,64 @@ use crate::wrap::{Row, hard_wrap_spans, push_text};
 
 const CODE_INSET: usize = 2;
 
+pub(crate) fn media_rows(
+    theme: &Theme,
+    code: &CodeBlock,
+    width: usize,
+    copy_buttons: bool,
+    images: Option<&crate::ImageLayout<'_>>,
+) -> Vec<(Row, Range<usize>)> {
+    let mut source = rows(theme, code, width, copy_buttons);
+    let (Some(image), Some(images)) = (&code.preview, images) else {
+        return source;
+    };
+    let hidden = images.source_previews.contains(&image.index);
+    let ready = images.sizes.get(image.index).is_some_and(Option::is_some);
+    let label = if images.failed.get(image.index) == Some(&true) {
+        "mermaid · preview unavailable · source"
+    } else if ready && !hidden {
+        "mermaid · native preview · m: source"
+    } else {
+        "mermaid · source · m: preview"
+    };
+    if let Some((row, _)) = source.first_mut() {
+        *row = label_row(
+            &theme.code_block,
+            label,
+            width.max(1),
+            CODE_INSET.min(width.saturating_sub(2) / 2),
+            code.index.filter(|_| copy_buttons && width >= 4),
+        );
+    }
+    for (row, _) in &mut source {
+        if let Some(span) = row.first_mut() {
+            span.image = Some(image.clone());
+            span.code_block = code.index;
+        }
+    }
+    if hidden {
+        return source;
+    }
+    if ready {
+        let mut span = Span::new("Mermaid", theme.text.clone());
+        span.image = Some(image.clone());
+        span.text_ranges = code
+            .lines
+            .iter()
+            .filter_map(|line| line.text_range.clone())
+            .collect();
+        let mut preview = crate::image::wrap(&[span], width, Some(images));
+        for row in &mut preview {
+            for span in row {
+                span.code_block = code.index;
+            }
+        }
+        source.truncate(1);
+        source.extend(preview.into_iter().map(|row| (row, code.src.clone())));
+    }
+    source
+}
+
 /// Rows with the source range each comes from: the label row maps to the
 /// opening fence, code rows to their source line.
 pub(crate) fn rows(

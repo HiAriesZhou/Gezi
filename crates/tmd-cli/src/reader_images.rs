@@ -56,6 +56,12 @@ pub struct Viewport {
 }
 
 pub struct Images {
+    source_previews: Vec<usize>,
+    manual_sources: HashSet<usize>,
+    searching: bool,
+    previews: Vec<usize>,
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
+    workers: Vec<std::thread::JoinHandle<()>>,
     enabled: bool,
     mapping: Vec<Option<usize>>,
     entries: Vec<Entry>,
@@ -97,14 +103,24 @@ impl Images {
                 if !enabled {
                     return None;
                 }
-                let source =
+                let source = if let Some(text) = doc.mermaid_source(reference) {
+                    if text.len() > 64 * 1024 {
+                        failed[reference] = true;
+                        return None;
+                    }
+                    Source::Mermaid {
+                        text: text.into(),
+                        dark: doc.dark(),
+                    }
+                } else {
                     match image_loader::source(&image.destination, cli.file.as_deref()?, true) {
                         Ok(source) => source,
                         Err(_) => {
                             failed[reference] = true;
                             return None;
                         }
-                    };
+                    }
+                };
                 if matches!(source, Source::Remote(_)) && cli.remote_images == RemoteImages::Off {
                     return None;
                 }
@@ -126,6 +142,16 @@ impl Images {
             .collect();
         let (sender, receiver) = mpsc::sync_channel(2);
         Self {
+            source_previews: Vec::new(),
+            manual_sources: HashSet::new(),
+            searching: false,
+            previews: doc
+                .code_blocks()
+                .iter()
+                .filter_map(|code| code.preview)
+                .collect(),
+            cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            workers: Vec::new(),
             enabled,
             mapping,
             entries,
@@ -151,6 +177,7 @@ impl Images {
         self.enabled.then(|| {
             let (cell_width, cell_height) = self.cell;
             ImageLayout {
+                source_previews: &self.source_previews,
                 cell_width,
                 cell_height,
                 sizes: &self.sizes,
@@ -164,6 +191,26 @@ impl Images {
         let changed = self.enabled && self.cell != cell;
         self.cell = cell;
         changed
+    }
+
+    pub fn search_sources(&mut self, searching: bool) -> bool {
+        if !self.enabled || self.previews.is_empty() || self.searching == searching {
+            return false;
+        }
+        self.searching = searching;
+        self.source_previews = if searching {
+            self.previews.clone()
+        } else {
+            self.manual_sources.iter().copied().collect()
+        };
+        true
+    }
+
+    pub fn toggle_source(&mut self, image: usize) {
+        if !self.manual_sources.remove(&image) {
+            self.manual_sources.insert(image);
+        }
+        self.source_previews = self.manual_sources.iter().copied().collect();
     }
 
     fn key(&self, cell: ImageCell) -> Option<Key> {
@@ -404,6 +451,21 @@ impl Images {
             self.entries[index].state = State::Loading;
             let sender = self.sender.clone();
             let source = self.entries[index].source.clone();
+            if let Source::Mermaid { text, dark } = source.as_ref() {
+                let text = text.clone();
+                let dark = *dark;
+                let cancelled = self.cancelled.clone();
+                self.workers.retain(|worker| !worker.is_finished());
+                self.workers.push(std::thread::spawn(move || {
+                    let result = std::panic::catch_unwind(|| {
+                        crate::mermaid::render(&text, dark, &cancelled)
+                            .and_then(|bytes| image_loader::decode(&bytes))
+                    })
+                    .unwrap_or_else(|_| Err("Mermaid decoder failed".into()));
+                    let _ = sender.try_send(Reply::Loaded(index, result));
+                }));
+                continue;
+            }
             std::thread::spawn(move || {
                 let result = std::panic::catch_unwind(|| image_loader::load(&source))
                     .unwrap_or_else(|_| Err("image decoder failed".into()));
@@ -523,6 +585,11 @@ impl Images {
 
 impl Drop for Images {
     fn drop(&mut self) {
+        self.cancelled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
         if !self.enabled {
             return;
         }
@@ -633,6 +700,7 @@ mod tests {
             20,
             RenderOptions::default(),
             &ImageLayout {
+                source_previews: &[],
                 cell_width: 8,
                 cell_height: 16,
                 sizes: &images.sizes,

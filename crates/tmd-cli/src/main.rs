@@ -6,6 +6,7 @@ mod config;
 mod i18n;
 mod image_loader;
 mod large_headings;
+mod mermaid;
 mod reader;
 mod reader_config;
 mod reader_copy;
@@ -36,6 +37,9 @@ use crate::cli::{Cli, InputFormat, resolve_width};
 use crate::source::Source;
 
 fn main() -> ExitCode {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--internal-mermaid")) {
+        return mermaid::worker();
+    }
     let cli = Cli::parse_localized();
     if matches!(cli.command, Some(cli::Command::Update)) {
         return match update::run() {

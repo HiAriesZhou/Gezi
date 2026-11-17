@@ -37,6 +37,7 @@ pub(crate) enum Block {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CodeBlock {
+    pub preview: Option<std::sync::Arc<crate::ImageSource>>,
     pub lang: Option<String>,
     pub lines: Vec<CodeLine>,
     /// Preserved only for static readers, before display cleaning.
@@ -465,6 +466,7 @@ impl<'t> Builder<'t> {
             TagEnd::CodeBlock => {
                 if let Some((lang, pieces)) = self.code.take() {
                     self.push_block(Block::Code(CodeBlock {
+                        preview: None,
                         lang,
                         index: None,
                         lines: code_lines(&pieces),
