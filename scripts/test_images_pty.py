@@ -93,9 +93,26 @@ class ImagesTests(unittest.TestCase):
                 self.assertGreater(server.server_address[1], 0)
 
     def terminal(self, text, options=()):
-        terminal = reader.Terminal(text=text, options=options, cols=100)
+        terminal = reader.Terminal(text=text, options=options, cols=100, files={"asset.svg": SVG})
         self.addCleanup(terminal.close)
         return terminal
+
+    def test_local_fixture_is_ready_before_terminal_constructor_returns(self):
+        original_init = reader.Terminal.__init__
+
+        def wait_for_image(terminal, *args, **kwargs):
+            original_init(terminal, *args, **kwargs)
+            # Let the real child load the fixture before the caller can create it.
+            try:
+                self.placement(terminal)
+            except BaseException:
+                terminal.close()
+                raise
+
+        with patch.object(reader.Terminal, "__init__", wait_for_image):
+            terminal = self.terminal("![local](asset.svg)")
+        self.assertEqual(terminal.finish(b"q"), 0)
+        self.assert_restored(terminal)
 
     def settled(self, terminal, seconds=.35):
         deadline = time.monotonic() + seconds
@@ -131,7 +148,6 @@ class ImagesTests(unittest.TestCase):
 
     def test_local_image_scroll_sidebar_help_search_resize_and_owned_cleanup(self):
         terminal = self.terminal("# Start\n\n![local](asset.svg)\n\n# End\n\n" + "body\n\n" * 35)
-        Path(terminal.temp.name, "asset.svg").write_bytes(SVG)
         placement = self.placement(terminal)
         image_id = re.search(rb"i=(\d+)", placement)[1]
         self.settled(terminal)
@@ -167,7 +183,6 @@ class ImagesTests(unittest.TestCase):
             "# Start\n\nCENTER-MARKER\n\n![local](asset.svg)",
             ("--width", "40"),
         )
-        Path(terminal.temp.name, "asset.svg").write_bytes(SVG)
         self.placement(terminal)
         self.settled(terminal)
 
@@ -273,7 +288,6 @@ class ImagesTests(unittest.TestCase):
 
     def test_pixel_only_resize_reflows_and_keeps_images_within_body(self):
         terminal = self.terminal("![image](asset.svg)\n\nTAIL-MARKER\n\n" + "body\n\n" * 25)
-        Path(terminal.temp.name, "asset.svg").write_bytes(SVG)
         fcntl.ioctl(terminal.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 800, 384))
         self.placement(terminal)
         self.settled(terminal)
