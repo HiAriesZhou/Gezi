@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13
+
+- Use English or Chinese interface text, following the Kaku app language preference, then the system language, with English as the fallback.
+- Press L or F2 in the reader to switch languages immediately, or choose one with --language en|zh|auto.
+
 ## 0.1.12
 
 - Drag text with the left mouse button and release to copy it automatically, without holding Shift or pressing another key.
