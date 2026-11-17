@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Record only a dedicated, sanitized Kaku window. Never capture the desktop."""
 import argparse
+import os
 import json
 import pathlib
 import shutil
@@ -16,6 +17,7 @@ def apple(source):
     return run('osascript', '-e', source, capture_output=True).stdout.strip()
 
 def main():
+    os.environ['PATH'] = '/usr/bin:/bin:/usr/sbin:/sbin:' + os.environ.get('PATH', '')
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--binary', required=True, type=pathlib.Path)
     args = p.parse_args()
@@ -55,22 +57,26 @@ for w in windows where w[kCGWindowOwnerName as String] as? String == "Kaku" && w
     movie = raw / 'kaku.mov'
     if movie.exists():
         raise SystemExit('Move existing launch/raw/kaku.mov before recording again')
-    record = subprocess.Popen(['screencapture', '-v', '-V', '32', '-l', wid, str(movie)])
+    shots = {}
+    started = time.monotonic()
+    record = subprocess.Popen(['screencapture', '-v', '-V', '70', '-l', wid, str(movie)])
     try:
         time.sleep(2)
         keys('cat ' + shlex.quote(str(ROOT / 'launch/fixtures/reading.md'))); enter()
+        shots['raw'] = time.monotonic() - started
         time.sleep(3)
         keys('clear; ' + shlex.quote(str(binary)) + ' --language en --theme default-dark ' + shlex.quote(str(ROOT / 'launch/fixtures/reading.md'))); enter()
+        shots['reading'] = time.monotonic() - started
         time.sleep(7)
-        keys('/clarity'); enter(); time.sleep(5)
+        keys('/clarity'); enter(); shots['search'] = time.monotonic() - started; time.sleep(5)
         apple('tell application "System Events" to tell process "Kaku" to key code 53')
-        keys('o'); time.sleep(7)
-        keys('o'); time.sleep(7)
+        keys('o'); shots.setdefault('outline', time.monotonic() - started); time.sleep(7)
+        keys('o'); shots.setdefault('outline', time.monotonic() - started); time.sleep(7)
     finally:
-        record.wait(timeout=45)
+        record.wait(timeout=85)
     if not movie.exists() or movie.stat().st_size < 10000:
         raise SystemExit('Capture missing or empty')
-    (raw / 'provenance.json').write_text(json.dumps({'binary_version': version, 'window_id': wid, 'source': 'real Kaku window; screencapture', 'fixture': 'launch/fixtures/reading.md'}, indent=2))
+    (raw / 'provenance.json').write_text(json.dumps({'binary_version': version, 'window_id': wid, 'source': 'real Kaku window; screencapture', 'fixture': 'launch/fixtures/reading.md', 'shots': shots}, indent=2))
     print(movie)
 
 if __name__ == '__main__':
