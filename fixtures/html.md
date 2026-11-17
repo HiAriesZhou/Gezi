@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="logo.png" alt="TMD logo" width="120">
+  <img src="logo.png" alt="Gezi logo" width="120">
 </p>
-<h1 align="center">tmd</h1>
+<h1 align="center">Gezi</h1>
 <p align="center">
   <a href="https://example.com/actions"><img src="https://img.shields.io/badge/ci-passing-green" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>

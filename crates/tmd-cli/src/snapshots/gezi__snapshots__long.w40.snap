@@ -365,8 +365,8 @@ while English words stay whole.
   }                                     
                                         
   fn main() {                           
-      let counts = word_count("tmd ren  
-  ders markdown in the terminal");      
+      let counts = word_count("Gezi re  
+  nders markdown in the terminal");     
       println!("{counts:?}");           
   }                                     
 

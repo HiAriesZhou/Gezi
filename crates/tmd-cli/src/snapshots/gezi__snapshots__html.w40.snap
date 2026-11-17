@@ -3,8 +3,8 @@ source: crates/tmd-cli/src/snapshots.rs
 assertion_line: 42
 expression: plain(&lines)
 ---
-[图片: TMD logo]
-tmd
+[图片: Gezi logo]
+Gezi
 [图片: CI] [图片: License: MIT]
 
 HTML 去标签

@@ -252,7 +252,7 @@ fn step_16(input: &[i64]) -> i64 {
 }
 
 fn main() {
-    let counts = word_count("tmd renders markdown in the terminal");
+    let counts = word_count("Gezi renders markdown in the terminal");
     println!("{counts:?}");
 }
 ```

@@ -307,7 +307,7 @@ while English words stay whole.
   }                                                                             
                                                                                 
   fn main() {                                                                   
-      let counts = word_count("tmd renders markdown in the terminal");          
+      let counts = word_count("Gezi renders markdown in the terminal");         
       println!("{counts:?}");                                                   
   }                                                                             
 
