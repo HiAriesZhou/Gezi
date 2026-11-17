@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.14
+
+- Read shortcuts in groups with aligned, bold keys, clearer spacing and a visible scroll position in both English and Chinese.
+- Keep help readable in narrow windows by placing each description below its shortcut.
+
 ## 0.1.13
 
 - Use English or Chinese interface text, following the Kaku app language preference, then the system language, with English as the fallback.
