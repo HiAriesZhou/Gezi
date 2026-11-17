@@ -45,15 +45,9 @@ sRGB. Use PNG for social previews; many crawlers do not accept SVG.
 | [og-image-light.svg](og-image-light.svg), [og-image-light.png](og-image-light.png) | 1200 × 630 | Optional light sharing preview |
 | [github-social.svg](github-social.svg), [github-social.png](github-social.png) | 1280 × 640 | GitHub repository social preview |
 
-Open Graph is the metadata a website supplies to services that create link
-previews. These files do not configure a website or change GitHub settings.
-Upload `github-social.png` in the repository's social-preview settings when
-ready. A website should serve `og-image.png` at a public, absolute HTTPS URL and
-set `og:image`, `og:image:width` (1200), `og:image:height` (630), `og:image:type`
-(`image/png`), and `og:image:alt`. Use `summary_large_image` for `twitter:card`.
-
-Suggested alternative text: "Gezi (格子). Markdown, at home in your terminal.
-A Kaku-first terminal Markdown project."
+The website uses `site/og-image.png`; the other sharing cards are alternatives.
+Use PNG for social previews. `github-social.png` is intended for the repository's
+social-preview setting; adding files here does not change that setting.
 
 ## Color and type
 
@@ -64,6 +58,8 @@ uses the official paper-white mark. Keep the backdrop separate from the characte
 so the surrounding page has no rectangular seams. The website and new raster
 banners use paper `#F3EEE4`, ink `#202522`, and restrained rust accents.
 The older vector sharing cards remain available as alternatives.
+
+The original vector artwork uses this palette:
 
 | Token | Value | Role |
 | --- | --- | --- |

@@ -13,8 +13,8 @@ From this extracted directory:
 ./gezi /path/to/document.md
 ```
 
-Press `/` to search, `o` for the outline, `c` to copy code, `?` for help and `q`
-to exit. Editing and saving are planned; this build reads files without changing
+Press `/` to search, `o` for the outline, `?` for help and `q` to exit.
+Drag text to copy on release, or click **Copy** at the top right of a code block. Editing and saving are planned; this build reads files without changing
 them. Use `--remote-images off` for local images only, or `--images off` for text.
 
 Update both commands in this installation to the latest stable release with

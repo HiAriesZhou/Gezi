@@ -1,12 +1,12 @@
 # Gezi engineering rules
 
-Gezi is a Kaku-first terminal Markdown editor project, invoked as `gezi` or `ge`. Current
+Gezi is a Kaku-first terminal Markdown reader, invoked as `gezi` or `ge`. Current
 releases provide read-only rendering and navigation. Editing, undo/redo and
 saving are planned; distinguish shipped behavior from plans in public copy.
 
 ## Entry points
 
-- Installation, usage and limits: `README.md`.
+- Overview and quick start: `README.md`; installation and updates: `docs/installation.md`.
 - Module boundaries and behavior contracts: `docs/architecture.md`.
 - Reader controls and configuration: `docs/reader.md`; themes: `themes/README.md`.
 - Automated checks and real-terminal acceptance: `docs/terminal-testing.md`.
