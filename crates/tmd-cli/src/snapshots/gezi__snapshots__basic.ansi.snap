@@ -3,7 +3,7 @@ source: crates/tmd-cli/src/snapshots.rs
 assertion_line: 48
 expression: ansi
 ---
-\e[1;95mTMD 基本元素\e[0m
+\e[1;95mGezi 基本元素\e[0m
 \e[1;95m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m
 
 这是一个普通段落，混合了中文和 English words。段落里有 \e[1;93m粗体\e[0m、\e[3;92m斜体\e[0m、\e[9m删除线\e[0m 和 \e[91;100m行\e[0m

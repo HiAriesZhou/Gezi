@@ -288,7 +288,7 @@ wrapping and width are exercised together.
   }                                                                                                                     
                                                                                                                         
   fn main() {                                                                                                           
-      let counts = word_count("tmd renders markdown in the terminal");                                                  
+      let counts = word_count("Gezi renders markdown in the terminal");                                                 
       println!("{counts:?}");                                                                                           
   }                                                                                                                     
 

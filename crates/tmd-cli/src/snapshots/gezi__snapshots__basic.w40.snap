@@ -3,7 +3,7 @@ source: crates/tmd-cli/src/snapshots.rs
 assertion_line: 43
 expression: plain(&lines)
 ---
-TMD 基本元素
+Gezi 基本元素
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 这是一个普通段落，混合了中文和 English

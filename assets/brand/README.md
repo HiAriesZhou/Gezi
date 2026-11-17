@@ -46,7 +46,7 @@ sRGB. Use PNG for social previews; many crawlers do not accept SVG.
 | [github-social.svg](github-social.svg), [github-social.png](github-social.png) | 1280 × 640 | GitHub repository social preview |
 
 The website uses `site/og-image.png`; the other sharing cards are alternatives.
-Use PNG for social previews. `github-social.png` is intended for the repository's
+`github-social.png` is intended for the repository's
 social-preview setting; adding files here does not change that setting.
 
 ## Color and type
@@ -57,7 +57,6 @@ also copied to `site/assets/reader.webp`; keep both files identical. Its book
 uses the official paper-white mark. Keep the backdrop separate from the character
 so the surrounding page has no rectangular seams. The website and new raster
 banners use paper `#F3EEE4`, ink `#202522`, and restrained rust accents.
-The older vector sharing cards remain available as alternatives.
 
 The original vector artwork uses this palette:
 

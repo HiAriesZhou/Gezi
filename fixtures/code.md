@@ -4,7 +4,7 @@
 
 ```rust
 fn main() {
-    println!("你好, tmd");
+    println!("你好, Gezi");
 }
 ```
 

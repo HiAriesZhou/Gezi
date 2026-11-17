@@ -3,8 +3,8 @@ source: crates/tmd-cli/src/snapshots.rs
 assertion_line: 47
 expression: ansi
 ---
-\e[90m[图片: TMD logo]\e[0m
-tmd
+\e[90m[图片: Gezi logo]\e[0m
+Gezi
 \e[90m[图片: CI]\e[0m \e[90m[图片: License: MIT]\e[0m
 
 \e[1;95mHTML 去标签\e[0m

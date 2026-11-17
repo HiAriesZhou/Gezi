@@ -1,8 +1,8 @@
 # Images
 
-Local SVG logo:
+Local SVG sample:
 
-<img src="images/logo.svg" alt="TMD logo" width="120">
+<img src="images/logo.svg" alt="Sample logo" width="120">
 
 Adjacent badges keep their proportions:
 
@@ -16,7 +16,7 @@ Adjacent badges keep their proportions:
 
 This image contacts img.shields.io unless `--remote-images off` is set.
 
-![Remote SVG badge](https://img.shields.io/badge/tmd-images-blue)
+![Remote SVG badge](https://img.shields.io/badge/gezi-images-blue)
 
 ## Fallback
 

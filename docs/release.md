@@ -21,8 +21,7 @@ unpublished historical candidates are not released versions.
 4. After main's macOS CI passes, `Publish version` uploads and verifies the Apple Silicon package and SHA256, pins `v<version>` to that checked commit, then publishes the GitHub Release.
 
 The title is `Gezi v<version>`; the body is only that version's changelog section.
-Versions such as `0.1.0-rc.1` are prereleases. An unchanged version that already
-has a published Release is skipped.
+Versions such as `0.1.0-rc.1` are prereleases.
 
 Releases contain a macOS Apple Silicon `.tar.gz`, its `.sha256` and GitHub's
 source archives. Intel binaries, crates.io and Homebrew packages are not provided.
@@ -73,9 +72,8 @@ python3 -B -m unittest discover -s scripts -p 'test_*release.py'
 
 Tests use simulated GitHub responses and do not create remote tags or Releases.
 CI runs them too. After a failure, inspect the publisher log, Release, tag and
-assets before acting. A rerun skips completed publication; it will not take over
-a leftover draft. Have the maintainer resolve a draft or conflict before retrying
-failed jobs. Never delete or move a published tag to reuse its version.
+assets against the [publication boundaries](#publication-boundaries). Have the
+maintainer resolve any leftover draft or tag conflict before retrying failed jobs.
 
 Implementation references: [job dependencies](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs)
 and [Release API](https://docs.github.com/en/rest/releases/releases#create-a-release).
