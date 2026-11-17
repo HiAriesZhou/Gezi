@@ -32,6 +32,12 @@ than fixed startup delays, for both Markdown and Claude JSONL. Failures return
 nonzero. Setting `TERM_PROGRAM=Kaku` selects protocol branches; it is not real
 Kaku acceptance.
 
+Signal priority over buffered input is tested directly in the Rust event loop:
+the signal is raised after one frame while input, EOF and a wake remain queued.
+PTY checks cover actual signal delivery and terminal restoration. They do not
+impose a byte limit on a frame already being written or prove instantaneous
+interruption of arbitrarily large frames.
+
 Updater integration tests run the real `gezi` and `ge` commands from isolated
 binary-package directories with a local download stub. They cover numeric version
 comparison, fixed tag downloads, actual replacement of both commands, installation
@@ -40,7 +46,21 @@ and network/checksum failure propagation. Never test updates against a personal
 installation. Check the live latest-release lookup using a build at least as new
 as the latest public release, so the check cannot downgrade it.
 
-CI runs the same checks on macOS. Installer tests use isolated destinations and
+CI runs Rust tests and streaming signal/lifecycle checks in debug mode. The full
+terminal suite runs once against the extracted release package; reader, image
+and shell-stream probes are not also repeated against the debug binary. Each
+packaged suite streams its diagnostics and reports its elapsed time.
+
+The long-document random small-chunk stress test is excluded from ordinary
+`cargo test`. Daily checks retain long-document line/mixed-byte boundaries and
+randomized short fixtures, including persisted regression seeds. Run the extra
+stress check when changing streaming commitment, parsing or highlighting:
+
+```sh
+cargo test -p tmd-core streaming_long_document_matches_a_full_render -- --ignored
+```
+
+Installer tests use isolated destinations and
 mock downloads to verify failed checksums, backups, repeat installation and
 atomic replacement. After changing installation, also install an official Release
 into a temporary directory; do not overwrite the personal installation.

@@ -190,6 +190,17 @@ fn first_difference(streamed: &[String], full: &[String]) -> String {
 
 const LONG: &str = include_str!("../../../../fixtures/long.md");
 
+#[test]
+fn long_document_matches_at_line_and_mixed_byte_boundaries() {
+    let full = render(LONG, 80, &Theme::default());
+    for pieces in [
+        LONG.split_inclusive('\n').collect(),
+        chunks(LONG, &[1, 1024, 2, 512, 3, 256]),
+    ] {
+        assert_eq!(stream(&pieces, 80).0, full);
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
@@ -210,11 +221,13 @@ proptest! {
 }
 
 proptest! {
-    // long.md takes hundreds of pushes per case; fewer cases keep the
-    // suite fast while still covering its long code block and table.
+    // Keep small-chunk exploration available as an explicit stress check.
+    // Daily coverage uses the long-document cases above and randomized small
+    // chunks over the seven short fixtures.
     #![proptest_config(ProptestConfig::with_cases(8))]
 
     #[test]
+    #[ignore = "long-document stress test; run explicitly with --ignored"]
     fn streaming_long_document_matches_a_full_render(
         sizes in prop::collection::vec(1usize..=50, 1..64),
     ) {
