@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- Drag text with the left mouse button and release to copy it automatically, without holding Shift or pressing another key.
+
 ## 0.1.11
 
 - Click Copy at the top right of a code block to copy its original contents, with success or retry feedback in place of the button.
