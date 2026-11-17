@@ -53,6 +53,13 @@ pub(crate) fn lines(cols: u16, pane: Pane, theme: &Theme, fallback: &str) -> Vec
                     ("PgDn / Space", t("Next page", "下一页")),
                     ("Home / End", t("Beginning / end", "开头 / 末尾")),
                     (
+                        "m",
+                        t(
+                            "First visible Mermaid: preview / source",
+                            "首个可见 Mermaid：预览 / 源码",
+                        ),
+                    ),
+                    (
                         "o",
                         t("Open or close the heading outline", "打开 / 关闭标题目录"),
                     ),

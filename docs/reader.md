@@ -17,6 +17,7 @@ To read a file named `help` or `update`, use an explicit path or `--`, such as
 | `/`, Enter, `n` / `N` | Search, confirm, next / previous match |
 | `o`, Tab | Toggle the outline, switch sidebar/document focus |
 | Click `Copy` | Copy the whole code block without leaving the document |
+| `m` | Toggle the first visible Mermaid block between native preview and source |
 | `L` / F2 | Switch English / Chinese for this session; use F2 while typing a search |
 | `?` | Help for the current view |
 | `q` | Exit reading; close a focused list or help |
@@ -141,6 +142,32 @@ for the current process. See [resource limits](architecture.md#image-resource-li
 Animation, browser CSS, table-cell graphics, `file:`/`data:` URLs and images in
 streaming, native or redirected output are not supported. Those output modes use
 text labels. If Kitty graphics is disabled in Kaku, use `--images off`.
+
+## Mermaid
+
+Fenced blocks labelled `mermaid` show native previews in the inline reader in
+direct Kaku. No Node.js, browser or network service is required. Basic flowcharts,
+sequence diagrams, state diagrams, class diagrams, entity relationship diagrams
+and mindmaps are supported. Other diagram types and detected rendering failures
+show the complete source with an unavailable label.
+
+This is a native interpretation, not the official Mermaid renderer. Layout and
+syntax support differ; some unsupported statements may be ignored by the parser.
+Use `m` to switch the first visible Mermaid block between preview and source.
+The Copy button always copies the complete original code. Searching shows source
+for every Mermaid block while the query is active; clearing the search restores
+your previous preview/source choices. Preview labels remain in English.
+
+Diagrams fit the text column and preserve their proportions. Dense or wide
+diagrams can become too small to read; switch to source or widen the column.
+Light/dark previews follow the document theme, with system CJK font fallbacks.
+The preview does not reproduce every custom theme color.
+
+`--images off` disables previews. `--remote-images off` does not disable them.
+Native output, one-shot output, streams and other terminals retain source.
+Limits include 64 KiB of source, 200 nodes, 400 edges, 200 combined annotations,
+a 15-second worker deadline and 2 MiB of generated SVG. Exceeding a limit
+keeps source visible. See [worker boundaries](architecture.md#mermaid-previews).
 
 ## Output and configuration
 

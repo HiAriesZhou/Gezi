@@ -144,3 +144,15 @@ output when the adapter is missing or history is insufficient. No extra input
 should reach the shell. If the adapter cannot connect, report that gap rather
 than claiming compatibility. Keep screenshots and acceptance records outside
 the repository.
+
+### Mermaid previews
+
+Run the candidate with `fixtures/mermaid.md` in direct Kaku. Check all six basic
+types in light and dark themes, especially Chinese labels, line intersections
+and text clipping. Use `m` on each block, search for a source-only identifier,
+clear the search, and check that Copy retains the full source. Repeat with a
+narrow column, the outline, scrolling and resize. Confirm the unsupported pie
+block keeps its source. Check `--images off`, `--remote-images off`, redirected
+output and streams. Exit during loading and confirm normal terminal input and
+no surviving Mermaid worker or session temporary directory. Protocol tests do
+not establish visual readability or maintainer acceptance.

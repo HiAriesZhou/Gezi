@@ -87,6 +87,43 @@ def serve(root, delay, socks=False):
 
 
 class ImagesTests(unittest.TestCase):
+    def test_mermaid_preview_source_search_and_remote_off(self):
+        terminal = self.terminal(
+            "```mermaid\nflowchart LR\nUniqueSourceNode[开始] --> B[Done]\n```",
+            ("--remote-images", "off"),
+        )
+        self.placement(terminal, seconds=20)
+        self.settled(terminal)
+        frame = terminal.frame(b"m")
+        self.assertIn(b"UniqueSourceNode", frame)
+        self.assertNotIn(b"a=p,", frame)
+        terminal.frame(b"m")
+        self.settled(terminal)
+        terminal.data.clear()
+        terminal.frame(b"/")
+        frame = terminal.frame(b"\x1b[200~UniqueSourceNode\x1b[201~")
+        self.assertIn(b"UniqueSourceNode", frame)
+        self.assertNotIn(b"a=p,", frame)
+        terminal.frame(b"\r")
+        terminal.data.clear()
+        terminal.frame(b"\x1b")
+        self.placement(terminal)
+        self.assertEqual(terminal.finish(b"q"), 0)
+        self.assert_restored(terminal)
+
+    def test_mermaid_failure_and_images_off_keep_source(self):
+        terminal = self.terminal('```mermaid\npie\n"Alpha": 60\n```')
+        self.visible_text(terminal, "preview unavailable")
+        self.visible_text(terminal, '"Alpha": 60')
+        self.assertNotIn(b"a=p,", terminal.data)
+        self.assertEqual(terminal.finish(b"q"), 0)
+        self.assert_restored(terminal)
+        terminal = self.terminal("```mermaid\nflowchart LR\nA --> B\n```", ("--images", "off"))
+        self.visible_text(terminal, "A --> B")
+        self.settled(terminal)
+        self.assertNotIn(b"\x1b_G", terminal.data)
+        self.assertEqual(terminal.finish(b"q"), 0)
+
     def test_http_fixture_startup_does_not_resolve_hostnames(self):
         with patch.object(socket, "getfqdn", side_effect=AssertionError("unexpected DNS lookup")):
             with http_server(http.server.BaseHTTPRequestHandler) as server:
@@ -120,8 +157,8 @@ class ImagesTests(unittest.TestCase):
             if not terminal.read():
                 break
 
-    def placement(self, terminal):
-        deadline = time.monotonic() + 8
+    def placement(self, terminal, seconds=8):
+        deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             placements = [header for header, _ in GRAPHICS.findall(terminal.data) if header.startswith(b"a=p,")]
             if placements:

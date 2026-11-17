@@ -53,6 +53,31 @@ to 20,000 nodes. Reject DTD, SVGZ, cyclic references, CSS escapes and stylesheet
 URL references. Do not execute scripts or load external/embedded images. Failures
 retain alt text; worker stack overflow must not abort the reader.
 
+## Mermaid previews
+
+Core associates each Mermaid code block with an image reference while retaining
+the original code, copy identity and searchable source ranges. Image layout can
+replace the body with image cells or explicitly retain source. Containers use the
+same path; plain and streaming layout never invokes a renderer.
+
+CLI pins `mermaid-rs-renderer` to 0.3.1 without its default features. A hidden
+same-binary worker parses, validates graph counts, lays out and emits SVG. Only
+flowchart, sequence, state, class, entity relationship and mindmap kinds are
+accepted. Its strict parser still accepts some unsupported statements without
+rendering them, so this is a native preview rather than exact Mermaid compatibility.
+
+Jobs share the two image-loading slots. Each job has a private temporary directory
+for input, output and the renderer's font cache. Its environment is cleared and
+the font cache is redirected into that directory. The parent enforces a
+15-second deadline, kills and reaps cancelled workers, and removes their
+temporary files. Exit cancels and joins active Mermaid jobs. The worker sets
+a 2 MiB file-size limit. The parent samples worker resident memory every 10 ms
+and cancels above 512 MiB when macOS provides the measurement. This sampled
+budget and the 64 MiB raster cache are not hard total-process memory limits.
+Cold system font discovery is included in the deadline. Source is limited to
+64 KiB; parsed nodes, edges and combined annotations to 200, 400 and 200.
+SVG still passes the existing bounded raster decoder before Kitty upload.
+
 ## Parsing and layout
 
 `parse` turns pulldown-cmark events into blocks with source byte ranges. `html`

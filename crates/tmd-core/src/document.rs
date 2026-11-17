@@ -44,7 +44,12 @@ impl Document {
             .collect();
         let mut code_blocks = Vec::new();
         for block in &mut blocks {
-            collect_codes(&mut block.block, &newline_offsets, &mut code_blocks);
+            collect_codes(
+                &mut block.block,
+                &newline_offsets,
+                &mut code_blocks,
+                &mut images,
+            );
         }
         Self {
             headings,
@@ -62,6 +67,17 @@ impl Document {
 
     pub fn images(&self) -> &[crate::ImageSource] {
         &self.images
+    }
+
+    pub fn mermaid_source(&self, image: usize) -> Option<&str> {
+        self.code_blocks
+            .iter()
+            .find(|code| code.preview == Some(image))
+            .map(|code| code.text.as_str())
+    }
+
+    pub fn dark(&self) -> bool {
+        self.theme.dark
     }
 
     pub fn layout_with_images(
@@ -171,6 +187,7 @@ pub struct Heading {
 /// A parser-recognized code block, independent of terminal display wrapping.
 #[derive(Debug)]
 pub struct CodeSnippet {
+    pub preview: Option<usize>,
     pub language: Option<String>,
     pub source_line: usize,
     pub source: Range<usize>,
@@ -178,11 +195,28 @@ pub struct CodeSnippet {
     pub text: String,
 }
 
-fn collect_codes(block: &mut Block, newlines: &[usize], out: &mut Vec<CodeSnippet>) {
+fn collect_codes(
+    block: &mut Block,
+    newlines: &[usize],
+    out: &mut Vec<CodeSnippet>,
+    images: &mut Vec<crate::ImageSource>,
+) {
     match block {
         Block::Code(code) => {
             code.index = Some(out.len());
+            if code.lang.as_deref() == Some("mermaid") {
+                let image = crate::ImageSource {
+                    destination: String::new(),
+                    alt: "Mermaid".into(),
+                    width: None,
+                    height: None,
+                    index: images.len(),
+                };
+                images.push(image.clone());
+                code.preview = Some(std::sync::Arc::new(image));
+            }
             out.push(CodeSnippet {
+                preview: code.preview.as_ref().map(|image| image.index),
                 language: code.lang.clone(),
                 source_line: newlines.partition_point(|&offset| offset < code.src.start) + 1,
                 source: code.src.clone(),
@@ -192,13 +226,13 @@ fn collect_codes(block: &mut Block, newlines: &[usize], out: &mut Vec<CodeSnippe
         Block::List { items, .. } => {
             for item in items {
                 for block in &mut item.blocks {
-                    collect_codes(block, newlines, out);
+                    collect_codes(block, newlines, out, images);
                 }
             }
         }
         Block::Quote(blocks) => {
             for block in blocks {
-                collect_codes(block, newlines, out);
+                collect_codes(block, newlines, out, images);
             }
         }
         _ => {}

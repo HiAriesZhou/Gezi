@@ -30,6 +30,7 @@ resvg = { version = "0.45", default-features = false, features = ["text", "syste
 ureq = { version = "3", features = ["socks-proxy"] }
 base64 = "0.22"
 xmlparser = "0.13"
+mermaid-rs-renderer = { version = "=0.3.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["term"] }

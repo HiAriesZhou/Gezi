@@ -108,7 +108,7 @@ fn render_blocks_with_images(
         } else if let parse::Block::Code(code) = &top_block.block {
             // Code lines keep their own source ranges so streaming can
             // commit a long block line by line.
-            code::rows(theme, code, width, options.code_copy_buttons)
+            code::media_rows(theme, code, width, options.code_copy_buttons, images)
                 .into_iter()
                 .map(|(spans, src)| Line {
                     spans,

@@ -26,6 +26,7 @@ pub struct ImageCell {
 }
 
 pub struct ImageLayout<'a> {
+    pub source_previews: &'a [usize],
     pub cell_width: u16,
     pub cell_height: u16,
     /// Decoded intrinsic sizes. Missing/failed images retain their alt labels.
@@ -180,6 +181,7 @@ mod tests {
             80,
             RenderOptions::default(),
             &ImageLayout {
+                source_previews: &[],
                 cell_width: 8,
                 cell_height: 16,
                 sizes: &[Some((8, 16)), Some((8, 16))],
@@ -233,6 +235,7 @@ mod tests {
         let doc = Document::new(md, Theme::default());
         let sizes = [Some((40, 20)), Some((40, 20)), Some((200, 200))];
         let images = ImageLayout {
+            source_previews: &[],
             cell_width: 10,
             cell_height: 20,
             sizes: &sizes,

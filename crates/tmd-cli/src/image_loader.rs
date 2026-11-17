@@ -13,6 +13,7 @@ const MAX_SIDE: u32 = 2048;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Source {
+    Mermaid { text: String, dark: bool },
     Local(PathBuf),
     Remote(String),
 }
@@ -83,6 +84,7 @@ pub fn source(destination: &str, markdown: &Path, remote: bool) -> Result<Source
 
 pub fn load(source: &Source) -> Result<Raster, String> {
     let bytes = match source {
+        Source::Mermaid { .. } => return Err("Mermaid requires a cancellable worker".into()),
         Source::Local(path) => {
             // Refuse devices/FIFOs so an image cannot keep a worker blocked forever.
             if !std::fs::metadata(path)
@@ -216,6 +218,8 @@ fn svg(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
             "/System/Library/Fonts/Supplemental/Arial.ttf",
             "/System/Library/Fonts/Helvetica.ttc",
             "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Medium.ttc",
+            "/System/Library/Fonts/Supplemental/Songti.ttc",
         ] {
             let _ = db.load_font_file(path);
         }
