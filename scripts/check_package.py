@@ -34,7 +34,7 @@ def smoke(root, directory):
             alias_output = subprocess.check_output([str(short), argument], env=env, timeout=30)
             if alias_output != output(argument):
                 raise ReleaseError("Installed commands do not behave identically")
-        if b"Usage:" not in output("help"):
+        if b"Usage:" not in output("--language", "en", "help"):
             raise ReleaseError("Installed executable help is missing")
         rendered = output("--ansi", "--theme", "default-dark", str(root / "fixtures/acceptance.md"))
         if "中文".encode() not in rendered or len(rendered) < 100:
