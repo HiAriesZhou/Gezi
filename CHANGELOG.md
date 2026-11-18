@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.16
+
+- Remove extra blank lines caused by invisible HTML anchors in Markdown documents.
+
 ## 0.1.15
 
 - Preview basic Mermaid flowcharts, sequence, state, class, entity relationship and mindmap diagrams in the inline reader in direct Kaku, without a browser or external service.
