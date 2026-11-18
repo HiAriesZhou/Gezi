@@ -603,7 +603,9 @@ impl<'t> Builder<'t> {
     }
 
     fn close_inline(&mut self) {
-        if let Some(inline) = self.inline.take() {
+        if let Some(inline) = self.inline.take()
+            && (!matches!(inline.kind, InlineKind::Paragraph) || !inline.spans.is_empty())
+        {
             self.push_block(inline.into_block());
         }
     }

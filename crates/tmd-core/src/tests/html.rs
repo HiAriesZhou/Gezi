@@ -63,6 +63,17 @@ fn html_block_with_only_tags_or_comments_leaves_no_row() {
 }
 
 #[test]
+fn standalone_empty_anchor_does_not_add_space_before_heading() {
+    assert_eq!(
+        plain(
+            "Intro\n\n<a id=\"installation-details\"></a>\n\n## Install",
+            80
+        ),
+        plain("Intro\n\n## Install", 80)
+    );
+}
+
+#[test]
 fn html_block_text_wraps_to_width() {
     assert_eq!(plain("<div>one two three</div>", 9), ["one two", "three"]);
 }
