@@ -18,7 +18,7 @@ both clipboard success and failure. Clipboard access requires localhost or HTTPS
 The terminal specimen is actual Gezi 0.1.9 ANSI output generated from
 `site/reading.md` with `--ansi --theme default-dark --width 64` and width 34.
 The page translates ANSI colors to HTML. It is not an interactive browser reader.
-Keep the version label and rendered specimen consistent when updating it.
+The public demo omits the version number. Record its source version here when regenerating it.
 
 ## Deployment
 
