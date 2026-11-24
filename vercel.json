@@ -6,6 +6,14 @@
   "outputDirectory": "site",
   "cleanUrls": true,
   "ignoreCommand": "exit 1",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.gezi.arieszhou.com" }],
+      "destination": "https://gezi.arieszhou.com/:path*",
+      "statusCode": 301
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
