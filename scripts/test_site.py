@@ -50,6 +50,17 @@ class WebsiteTests(unittest.TestCase):
         self.assertEqual(metadata["twitter:card"], "summary_large_image")
         self.assertTrue((SITE / "og-image.png").is_file())
 
+    def test_reader_facts_match_visible_copy(self):
+        blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', self.content)
+        self.assertEqual(len(blocks), 1)
+        facts = json.loads(blocks[0])
+        body = self.content.split("</head>", 1)[1]
+        self.assertEqual(facts["@type"], "SoftwareApplication")
+        self.assertEqual(facts["url"], "https://gezi.arieszhou.com/")
+        self.assertIn(facts["description"], body)
+        self.assertIn(facts["operatingSystem"], body)
+        self.assertIn('<div class="terminal-meta"><span>Renderer output</span>', body)
+
     def test_no_exploration_or_local_paths(self):
         for text in ("design-a/", "design-b/", "Compare directions", "/private/tmp",
                      "/Users/", "localhost", "127.0.0.1"):
